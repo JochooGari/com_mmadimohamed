@@ -678,7 +678,7 @@ export default function PortfolioSite({
                     </div>
                     <div>
                       <h3 className="font-semibold text-slate-900">Email</h3>
-                      <p className="text-slate-600">jean.dupont@example.com</p>
+                      <p className="text-slate-600">contact@mmadimohamed.fr</p>
                     </div>
                   </div>
 
@@ -795,19 +795,19 @@ export default function PortfolioSite({
               <div>
                 <div className="flex items-center justify-center md:justify-start space-x-2 mb-4">
                   <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white font-bold">JD</span>
+                    <span className="text-white font-bold">MM</span>
                   </div>
-                  <span className="font-semibold">Jean Dupont</span>
+                  <span className="font-semibold">MMADI Mohamed</span>
                 </div>
                 <p className="text-slate-400">
-                  Chef de projet Data & Expert Power BI
+                  MMADI Mohamed & Expert Power BI
                 </p>
               </div>
 
               <div>
                 <h3 className="font-semibold mb-4">Contact</h3>
                 <div className="space-y-2 text-slate-400">
-                  <p>jean.dupont@example.com</p>
+                  <p>contact@mmadimohamed.fr</p>
                   <p>+33 6 12 34 56 78</p>
                   <p>Paris, France</p>
                 </div>
@@ -832,7 +832,7 @@ export default function PortfolioSite({
             <Separator className="my-8 bg-slate-800" />
             
             <div className="text-center text-slate-400">
-              <p>&copy; 2024 Jean Dupont. Tous droits réservés.</p>
+              <p>&copy; 2024 MMADI Mohamed. Tous droits réservés.</p>
             </div>
           </div>
         </footer>
