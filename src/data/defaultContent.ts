@@ -68,6 +68,16 @@ export const defaultContent: PortfolioContent = {
       featured: true
     },
     {
+      id: "resource-pharma",
+      title: "Template dashboard Pharma",
+      description: "Collection de dash supply chain pour la pharma.",
+      type: "template",
+      category: "PBIX",
+      fileUrl: "/resource/templates-dashboard-phrama",
+      downloadCount: 0,
+      featured: true
+    },
+    {
       id: "resource-2",
       title: "Templates Dashboard Finance",
       description: "Collection de modèles prêts à l'emploi pour le reporting financier",

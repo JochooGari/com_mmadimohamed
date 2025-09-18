@@ -4,6 +4,7 @@ import EditableText from "./EditableText";
 import { useContent } from "../context/ContentContext";
 import EditorToggle from "./EditorToggle";
 import { Button } from "./ui/button";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 const navigationItems = [
   { id: "accueil", label: "Accueil", href: "#accueil" },
@@ -19,6 +20,8 @@ export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { scrollY } = useScroll();
   const headerOpacity = useTransform(scrollY, [0, 100], [0.95, 1]);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Intersection Observer for active section
   useEffect(() => {
@@ -41,6 +44,23 @@ export default function Header() {
     };
   }, []);
 
+  // Highlight active menu based on route
+  useEffect(() => {
+    if (location.pathname.startsWith('/blog')) {
+      setActiveSection('blog');
+      return;
+    }
+    if (location.pathname.startsWith('/bibliotheque')) {
+      setActiveSection('bibliotheque');
+      return;
+    }
+    if (location.pathname === '/' || location.hash) {
+      // Home, the IntersectionObserver will handle sections
+      return;
+    }
+    setActiveSection('accueil');
+  }, [location.pathname, location.hash]);
+
   const scrollToSection = (sectionId) => {
     const element = document.getElementById(sectionId);
     if (element) {
@@ -49,6 +69,30 @@ export default function Header() {
       window.scrollTo({ top: elementPosition, behavior: "smooth" });
     }
     setIsMenuOpen(false);
+  };
+
+  const handleNav = (id: string) => {
+    if (id === "accueil") {
+      navigate("/");
+      setIsMenuOpen(false);
+      return;
+    }
+    if (id === "expertise") {
+      navigate("/#expertise");
+      setIsMenuOpen(false);
+      return;
+    }
+    if (id === "blog") {
+      navigate("/blog");
+      setIsMenuOpen(false);
+      return;
+    }
+    if (id === "bibliotheque") {
+      navigate("/bibliotheque");
+      setIsMenuOpen(false);
+      return;
+    }
+    scrollToSection(id);
   };
 
   return (
@@ -80,7 +124,7 @@ export default function Header() {
                   className={`text-base font-medium transition-colors duration-200 hover:text-teal-600 ${
                     activeSection === item.id ? "text-teal-600" : "text-gray-700"
                   }`}
-                  onClick={() => scrollToSection(item.id)}
+                  onClick={() => handleNav(item.id)}
                 >
                   {item.label}
                 </button>
@@ -89,7 +133,10 @@ export default function Header() {
           </ul>
           {/* Bouton contact + menu mobile */}
           <div className="flex items-center gap-2">
-            <Button className="hidden md:inline-block" onClick={() => scrollToSection("contact")}>Me contacter</Button>
+            <Button className="hidden md:inline-block" onClick={() => handleNav("contact")}>Me contacter</Button>
+            <Button asChild variant="outline" className="hidden md:inline-block">
+              <Link to="/login">Se connecter</Link>
+            </Button>
             <button
               className="md:hidden p-2 rounded hover:bg-gray-100"
               onClick={() => setIsMenuOpen((v) => !v)}
@@ -108,13 +155,16 @@ export default function Header() {
                   className={`w-full text-left text-base font-medium transition-colors duration-200 hover:text-teal-600 ${
                     activeSection === item.id ? "text-teal-600" : "text-gray-700"
                   }`}
-                  onClick={() => scrollToSection(item.id)}
+                  onClick={() => handleNav(item.id)}
                 >
                   {item.label}
                 </button>
               </li>
             ))}
-            <Button onClick={() => scrollToSection("contact")}>Me contacter</Button>
+            <Button onClick={() => handleNav("contact")}>Me contacter</Button>
+            <Button asChild variant="outline">
+              <Link to="/login">Se connecter</Link>
+            </Button>
           </ul>
         )}
       </nav>

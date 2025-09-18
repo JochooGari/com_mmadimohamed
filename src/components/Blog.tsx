@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Calendar, ArrowRight, ExternalLink } from "lucide-react";
+import { AspectRatio } from "./ui/aspect-ratio";
+import { Link } from "react-router-dom";
+import { slugify } from "../lib/utils";
 
 export default function Blog() {
   const { content, setContent } = useContent();
@@ -51,7 +54,17 @@ export default function Blog() {
               transition={{ duration: 0.8, delay: index * 0.1 }}
               viewport={{ once: true }}
             >
-              <Card className="h-full hover:shadow-lg transition-all duration-300 group cursor-pointer border-0 shadow-md">
+              <Card className="h-full hover:shadow-lg transition-all duration-300 group cursor-pointer border-0 shadow-md overflow-hidden">
+                <Link to={`/blog/${slugify(post.title)}`}>
+                  <AspectRatio ratio={16/9} className="bg-slate-100">
+                    <img
+                      src={post.image && post.image.length ? post.image : `https://picsum.photos/seed/${encodeURIComponent(post.id)}/600/338`}
+                      alt={post.title}
+                      loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                    />
+                  </AspectRatio>
+                </Link>
                 <CardHeader>
                   <div className="flex items-center justify-between mb-2">
                     <Badge variant="secondary" className="bg-teal-50 text-teal-700">
@@ -72,9 +85,11 @@ export default function Blog() {
                   </CardDescription>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">{post.readTime || "-"} de lecture</span>
-                    <Button variant="ghost" size="sm" className="text-teal-600 hover:text-teal-700 p-0">
-                      Lire la suite
-                      <ArrowRight className="w-4 h-4 ml-1" />
+                    <Button asChild variant="ghost" size="sm" className="text-teal-600 hover:text-teal-700 p-0">
+                      <Link to={`/blog/${slugify(post.title)}`}>
+                        Lire la suite
+                        <ArrowRight className="w-4 h-4 ml-1" />
+                      </Link>
                     </Button>
                   </div>
                 </CardContent>
@@ -89,9 +104,8 @@ export default function Blog() {
           viewport={{ once: true }}
           className="text-center mt-12"
         >
-          <Button variant="outline" className="border-teal-600 text-teal-600 hover:bg-teal-50">
-            Voir tous les articles
-            <ExternalLink className="w-4 h-4 ml-2" />
+          <Button asChild variant="outline" className="border-teal-600 text-teal-600 hover:bg-teal-50">
+            <Link to="/blog">Voir tous les articles<ExternalLink className="w-4 h-4 ml-2" /></Link>
           </Button>
         </motion.div>
       </div>

@@ -1,0 +1,548 @@
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { 
+  FileText, 
+  Plus, 
+  Edit3, 
+  Trash2, 
+  Eye, 
+  Save,
+  Search,
+  Filter,
+  Calendar,
+  User,
+  Clock,
+  BarChart3,
+  Bot,
+  AlertCircle
+} from 'lucide-react';
+import { useAdminData } from '../context/AdminDataContext';
+
+type Article = {
+  id: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  status: 'draft' | 'pending' | 'approved' | 'published';
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  tags: string[];
+  readTime?: number;
+  seoScore?: number;
+};
+
+const SAMPLE_ARTICLES: Article[] = [
+  {
+    id: '1',
+    title: 'Guide Power BI : Optimisation des performances',
+    excerpt: 'Découvrez les meilleures pratiques pour améliorer les performances de vos rapports Power BI',
+    content: '# Guide Power BI : Optimisation des performances\n\nPower BI est un outil...',
+    status: 'published',
+    createdBy: 'Agent Ghostwriter',
+    createdAt: '2025-01-15T10:30:00Z',
+    updatedAt: '2025-01-15T14:30:00Z',
+    tags: ['Power BI', 'Performance', 'Guide'],
+    readTime: 8,
+    seoScore: 85
+  },
+  {
+    id: '2',
+    title: 'DAX vs SQL : Quelle approche choisir?',
+    excerpt: 'Comparaison approfondie entre DAX et SQL pour l\'analyse de données',
+    content: '# DAX vs SQL\n\nDans le monde de l\'analyse...',
+    status: 'pending',
+    createdBy: 'Agent Strategist',
+    createdAt: '2025-01-15T09:15:00Z',
+    updatedAt: '2025-01-15T09:15:00Z',
+    tags: ['DAX', 'SQL', 'Analyse'],
+    readTime: 12,
+    seoScore: 72
+  },
+  {
+    id: '3',
+    title: 'Dashboard Marketing : KPIs essentiels',
+    excerpt: 'Les indicateurs clés pour suivre vos performances marketing',
+    content: '# Dashboard Marketing\n\nVoici les KPIs...',
+    status: 'draft',
+    createdBy: 'Content Marketer',
+    createdAt: '2025-01-14T16:45:00Z',
+    updatedAt: '2025-01-15T08:30:00Z',
+    tags: ['Marketing', 'KPI', 'Dashboard'],
+    readTime: 6,
+    seoScore: 68
+  }
+];
+
+export default function AdminArticles() {
+  const admin = useAdminData();
+  const [articles, setArticles] = useState<Article[]>(SAMPLE_ARTICLES);
+  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showForm, setShowForm] = useState(false);
+  
+  const [draft, setDraft] = useState<Partial<Article>>({
+    title: '',
+    excerpt: '',
+    content: '',
+    tags: [],
+    status: 'draft'
+  });
+
+  const filteredArticles = articles.filter(article => {
+    const matchesSearch = article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         article.excerpt.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || article.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'published': return 'bg-green-100 text-green-800';
+      case 'approved': return 'bg-blue-100 text-blue-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'draft': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'published': return 'Publié';
+      case 'approved': return 'Approuvé';
+      case 'pending': return 'En attente';
+      case 'draft': return 'Brouillon';
+      default: return status;
+    }
+  };
+
+  const getSeoScoreColor = (score: number) => {
+    if (score >= 80) return 'text-green-600';
+    if (score >= 60) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const handleSaveArticle = () => {
+    if (!draft.title?.trim()) return;
+    
+    const now = new Date().toISOString();
+    const article: Article = {
+      id: selectedArticle?.id || Date.now().toString(),
+      title: draft.title,
+      excerpt: draft.excerpt || '',
+      content: draft.content || '',
+      status: draft.status as Article['status'] || 'draft',
+      createdBy: draft.createdBy || 'User',
+      createdAt: selectedArticle?.createdAt || now,
+      updatedAt: now,
+      tags: draft.tags || [],
+      readTime: Math.ceil((draft.content?.length || 0) / 1000),
+      seoScore: Math.floor(Math.random() * 40) + 60 // Mock SEO score
+    };
+
+    if (selectedArticle) {
+      setArticles(prev => prev.map(a => a.id === selectedArticle.id ? article : a));
+    } else {
+      setArticles(prev => [article, ...prev]);
+    }
+
+    // Reset form
+    setDraft({});
+    setSelectedArticle(null);
+    setIsEditing(false);
+    setShowForm(false);
+  };
+
+  const handleEditArticle = (article: Article) => {
+    setSelectedArticle(article);
+    setDraft(article);
+    setIsEditing(true);
+    setShowForm(true);
+  };
+
+  const handleDeleteArticle = (id: string) => {
+    setArticles(prev => prev.filter(a => a.id !== id));
+  };
+
+  const generateAIArticle = async () => {
+    // Mock AI generation
+    const aiArticle = {
+      title: 'Article généré par IA : Tendances Data 2025',
+      excerpt: 'Découvrez les principales tendances en matière de données pour 2025',
+      content: '# Tendances Data 2025\n\nLes données continuent de transformer...',
+      tags: ['Data', 'Tendances', '2025'],
+      status: 'draft' as const,
+      createdBy: 'Agent IA'
+    };
+    
+    setDraft(aiArticle);
+    setShowForm(true);
+    setIsEditing(false);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(dateString));
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Gestion des Articles</h1>
+          <p className="text-gray-600 mt-1">Créez, éditez et publiez vos articles de blog</p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <Button variant="outline" onClick={generateAIArticle}>
+            <Bot className="w-4 h-4 mr-2" />
+            Générer avec IA
+          </Button>
+          <Button onClick={() => { setShowForm(true); setDraft({}); setSelectedArticle(null); setIsEditing(false); }}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nouvel Article
+          </Button>
+        </div>
+      </div>
+
+      <Tabs defaultValue="list" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="list">Liste des Articles</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        </TabsList>
+
+        {/* Article List Tab */}
+        <TabsContent value="list" className="space-y-6">
+          {/* Filters */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <Input
+                      placeholder="Rechercher des articles..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Filter className="w-4 h-4 text-gray-500" />
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="all">Tous les statuts</option>
+                    <option value="draft">Brouillons</option>
+                    <option value="pending">En attente</option>
+                    <option value="approved">Approuvés</option>
+                    <option value="published">Publiés</option>
+                  </select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Article Form */}
+          {showForm && (
+            <Card className="border-teal-200 bg-teal-50/50">
+              <CardHeader>
+                <CardTitle>
+                  {isEditing ? 'Modifier l\'article' : 'Nouvel article'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 block mb-1">
+                      Titre
+                    </label>
+                    <Input
+                      placeholder="Titre de l'article"
+                      value={draft.title || ''}
+                      onChange={(e) => setDraft(d => ({ ...d, title: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 block mb-1">
+                      Statut
+                    </label>
+                    <select
+                      value={draft.status || 'draft'}
+                      onChange={(e) => setDraft(d => ({ ...d, status: e.target.value as Article['status'] }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    >
+                      <option value="draft">Brouillon</option>
+                      <option value="pending">En attente de validation</option>
+                      <option value="approved">Approuvé</option>
+                      <option value="published">Publié</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-1">
+                    Extrait
+                  </label>
+                  <Textarea
+                    placeholder="Résumé de l'article (méta description)"
+                    value={draft.excerpt || ''}
+                    onChange={(e) => setDraft(d => ({ ...d, excerpt: e.target.value }))}
+                    rows={2}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-1">
+                    Tags (séparés par des virgules)
+                  </label>
+                  <Input
+                    placeholder="ex: Power BI, Data Analysis, Tutorial"
+                    value={draft.tags?.join(', ') || ''}
+                    onChange={(e) => setDraft(d => ({ 
+                      ...d, 
+                      tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
+                    }))}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-1">
+                    Contenu (Markdown)
+                  </label>
+                  <Textarea
+                    placeholder="# Titre de l'article&#10;&#10;Votre contenu en Markdown..."
+                    value={draft.content || ''}
+                    onChange={(e) => setDraft(d => ({ ...d, content: e.target.value }))}
+                    rows={12}
+                    className="font-mono text-sm"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-3 pt-4">
+                  <Button onClick={handleSaveArticle} className="bg-teal-500 hover:bg-teal-600">
+                    <Save className="w-4 h-4 mr-2" />
+                    {isEditing ? 'Mettre à jour' : 'Créer l\'article'}
+                  </Button>
+                  <Button variant="outline" onClick={() => { setShowForm(false); setDraft({}); setSelectedArticle(null); }}>
+                    Annuler
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Articles Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredArticles.map((article) => (
+              <Card key={article.id} className="hover:shadow-lg transition-shadow duration-200">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-base line-clamp-2 mb-2">
+                        {article.title}
+                      </CardTitle>
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Badge className={getStatusColor(article.status)}>
+                          {getStatusLabel(article.status)}
+                        </Badge>
+                        {article.seoScore && (
+                          <Badge variant="outline" className={getSeoScoreColor(article.seoScore)}>
+                            SEO: {article.seoScore}%
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <FileText className="w-5 h-5 text-teal-500 ml-2" />
+                  </div>
+                </CardHeader>
+
+                <CardContent>
+                  <p className="text-sm text-gray-600 line-clamp-3 mb-4">
+                    {article.excerpt}
+                  </p>
+
+                  <div className="space-y-3">
+                    {article.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {article.tags.slice(0, 3).map((tag, index) => (
+                          <Badge key={index} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {article.tags.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{article.tags.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <div className="flex items-center space-x-3">
+                        <span className="flex items-center">
+                          <User className="w-3 h-3 mr-1" />
+                          {article.createdBy}
+                        </span>
+                        {article.readTime && (
+                          <span className="flex items-center">
+                            <Clock className="w-3 h-3 mr-1" />
+                            {article.readTime} min
+                          </span>
+                        )}
+                      </div>
+                      <span className="flex items-center">
+                        <Calendar className="w-3 h-3 mr-1" />
+                        {formatDate(article.updatedAt)}
+                      </span>
+                    </div>
+
+                    <div className="flex space-x-2 pt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => handleEditArticle(article)}
+                      >
+                        <Edit3 className="w-3 h-3 mr-1" />
+                        Éditer
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        <Eye className="w-3 h-3 mr-1" />
+                        Voir
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={() => handleDeleteArticle(article.id)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Empty State */}
+          {filteredArticles.length === 0 && (
+            <Card className="text-center py-12">
+              <CardContent>
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  {searchTerm ? 'Aucun article trouvé' : 'Aucun article'}
+                </h3>
+                <p className="text-gray-500 mb-6">
+                  {searchTerm 
+                    ? 'Essayez de modifier vos critères de recherche'
+                    : 'Commencez par créer votre premier article'
+                  }
+                </p>
+                {!searchTerm && (
+                  <div className="space-x-3">
+                    <Button onClick={() => { setShowForm(true); setDraft({}); }} className="bg-teal-500 hover:bg-teal-600">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Créer un article
+                    </Button>
+                    <Button variant="outline" onClick={generateAIArticle}>
+                      <Bot className="w-4 h-4 mr-2" />
+                      Générer avec IA
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Analytics Tab */}
+        <TabsContent value="analytics" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-600">Total Articles</p>
+                    <p className="text-2xl font-bold text-gray-900">{articles.length}</p>
+                  </div>
+                  <FileText className="w-8 h-8 text-teal-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-600">Publiés</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {articles.filter(a => a.status === 'published').length}
+                    </p>
+                  </div>
+                  <BarChart3 className="w-8 h-8 text-green-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-600">En attente</p>
+                    <p className="text-2xl font-bold text-yellow-600">
+                      {articles.filter(a => a.status === 'pending').length}
+                    </p>
+                  </div>
+                  <AlertCircle className="w-8 h-8 text-yellow-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-600">Score SEO Moyen</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {Math.round(articles.reduce((acc, a) => acc + (a.seoScore || 0), 0) / articles.length || 0)}%
+                    </p>
+                  </div>
+                  <BarChart3 className="w-8 h-8 text-blue-500" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Performance des Articles</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-12 text-gray-500">
+                <BarChart3 className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p>Analytics détaillées à venir...</p>
+                <p className="text-sm">Connectez Google Analytics pour voir les performances</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
