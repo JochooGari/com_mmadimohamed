@@ -188,7 +188,7 @@ export default function FileUploader({ agentType, onFilesChange }: FileUploaderP
                   {source.extractedData && (
                     <div className="text-xs text-gray-500 mt-1">
                       {source.extractedData.wordCount} mots • 
-                      {source.extractedData.language.toUpperCase()} • 
+                      {(source.extractedData.language ?? 'fr').toUpperCase()} • 
                       {new Date(source.lastUpdated).toLocaleDateString()}
                     </div>
                   )}

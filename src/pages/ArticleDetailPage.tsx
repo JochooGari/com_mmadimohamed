@@ -37,6 +37,8 @@ export default function ArticleDetailPage() {
     if (a) {
       const local: Article = { id: a.id, slug: slug!, title: a.title, excerpt: a.excerpt, content_md: a.content ?? undefined, tags: a.tags };
       setArticle(local);
+      // Éviter l'accès à article.* dans ce render; attendre le prochain render
+      return <section className="container mx-auto px-4 py-10">Chargement...</section>;
     } else {
       return <section className="container mx-auto px-4 py-10">Introuvable</section>;
     }

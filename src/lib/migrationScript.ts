@@ -84,7 +84,7 @@ export class MigrationScript {
         
         // Migrer vers le nouveau système si des données existent
         if (sources.length > 0) {
-          await LocalFileStorage.saveContentSources(agentType, sources);
+          await LocalFileStorage.saveContentSources(agentType, sources as any);
           console.log(`    ✓ ${sources.length} sources migrées`);
         }
         

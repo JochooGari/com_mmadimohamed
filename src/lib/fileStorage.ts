@@ -272,14 +272,13 @@ export class LocalFileStorage {
     }, {} as Record<string, Array<{sourceId: string, name: string, relevance: number}>>);
   }
 
-  private static detectLanguage(content: string): 'fr' | 'en' {
+  private static detectLanguage(content?: string): 'fr' | 'en' {
+    if (!content) return 'fr';
     const frWords = ['le', 'la', 'les', 'de', 'du', 'des', 'et', 'ou', 'avec', 'pour'];
     const enWords = ['the', 'and', 'or', 'with', 'for', 'to', 'of', 'in', 'on', 'at'];
-    
     const words = content.toLowerCase().split(' ');
     const frCount = words.filter(word => frWords.includes(word)).length;
     const enCount = words.filter(word => enWords.includes(word)).length;
-    
     return frCount > enCount ? 'fr' : 'en';
   }
 }

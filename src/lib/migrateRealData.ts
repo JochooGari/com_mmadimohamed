@@ -173,9 +173,9 @@ export async function verifyMigratedData(): Promise<void> {
       console.log('\n📄 Aperçu des sources:');
       sources.slice(0, 5).forEach((source, index) => {
         console.log(`${index + 1}. ${source.name}`);
-        console.log(`   📊 ${source.extractedData.wordCount} mots, ${source.content.length} caractères`);
-        console.log(`   🏷️ Tags: ${source.tags.join(', ')}`);
-        console.log(`   📝 Aperçu: ${source.content.substring(0, 100)}...`);
+        console.log(`   📊 ${(source.extractedData?.wordCount ?? 0)} mots, ${(source.content?.length ?? 0)} caractères`);
+        console.log(`   🏷️ Tags: ${(source.tags ?? []).join(', ')}`);
+        console.log(`   📝 Aperçu: ${(source.content ?? '').substring(0, 100)}...`);
         console.log('');
       });
       

@@ -221,7 +221,17 @@ Réponds toujours de manière professionnelle, précise et basée sur ces donné
 
   // Créer des chunks de contexte pour retrieval
   private static createContextChunks(sources: ContentSource[]) {
-    const chunks = [];
+    type ContextChunk = {
+      id: string;
+      sourceId: string;
+      sourceName: string;
+      content: string;
+      keywords: string[];
+      topics: string[];
+      wordCount: number;
+      relevanceScore: number;
+    };
+    const chunks: ContextChunk[] = [];
     
     for (const source of sources) {
       if (!source.content) continue;
@@ -484,7 +494,14 @@ Réponds toujours de manière professionnelle, précise et basée sur ces donné
 
   // Générer des recommandations de contenu
   private static generateContentRecommendations(contents: MonitoringContent[]) {
-    const recommendations = [];
+    type ContentRecommendation = {
+      type: 'content_gap' | 'trend_opportunity' | 'format_suggestion';
+      topic: string;
+      priority: 'high' | 'medium' | 'low';
+      suggestion: string;
+      evidence: string;
+    };
+    const recommendations: ContentRecommendation[] = [];
     
     // Analyser les gaps de contenu
     const topics = this.extractAllTopics(contents);
