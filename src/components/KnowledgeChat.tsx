@@ -100,7 +100,9 @@ export default function KnowledgeChat({ className = '' }: KnowledgeChatProps) {
       const indexedDBSources = await BrowserFileStorage.getContentSources('linkedin');
       
       // Fallback vers localStorage si IndexedDB est vide
-      let sources, processedData = [];
+      let sources: any[] = [];
+      type ProcessedRecord = { sourceId: string; aiData?: { originalContent?: string; summary?: string; keyInsights?: string[]; suggestedTags?: string[]; chunks?: number; } };
+      let processedData: ProcessedRecord[] = [];
       
       if (indexedDBSources.length > 0) {
         console.log('📁 Utilisation des données IndexedDB:', indexedDBSources.length);
@@ -404,7 +406,7 @@ Vérifiez votre clé dans .env.local (VITE_OPENAI_API_KEY) et redémarrez.`;
         if (source.content.length > 100) {
           // Analyser le contenu de manière intelligente
           const content = source.content.toLowerCase();
-          let insights = [];
+          let insights: string[] = [];
           
           // Recherche de patterns spécifiques liés au business/LinkedIn
           if (content.includes('linkedin') || content.includes('personal brand') || content.includes('brand')) {

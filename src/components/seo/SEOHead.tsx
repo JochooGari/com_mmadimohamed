@@ -31,7 +31,7 @@ export default function SEOHead({
       if (!el) {
         const tagName = selector.startsWith('meta') ? 'meta' : selector.startsWith('link') ? 'link' : 'meta';
         el = document.createElement(tagName) as any;
-        document.head.appendChild(el);
+        document.head.appendChild(el!);
       }
       Object.entries(attrs).forEach(([k, v]) => (el as any).setAttribute(k, v));
       return el;

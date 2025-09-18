@@ -9,12 +9,12 @@ export interface ContentSource {
   lastUpdated: string;
   content?: string;
   extractedData?: {
-    wordCount: number;
-    lineCount: number;
-    size: number;
-    language: 'fr' | 'en';
-    type: string;
-    processedAt: string;
+    wordCount?: number;
+    lineCount?: number;
+    size?: number;
+    language?: 'fr' | 'en';
+    type?: string;
+    processedAt?: string;
   };
 }
 

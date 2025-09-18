@@ -90,7 +90,7 @@ export class MonitoringAgent {
     
     try {
       // Collecter depuis chaque source activée
-      const promises = [];
+      const promises: Array<Promise<void>> = [];
       
       if (this.sources.linkedin.enabled) {
         promises.push(this.collectLinkedInContent());
@@ -429,7 +429,7 @@ export class MonitoringAgent {
 
   // Générer des recommandations
   private generateRecommendations(stats: any): string[] {
-    const recommendations = [];
+    const recommendations: string[] = [];
     
     if (stats.totalItems < 10) {
       recommendations.push('Considérer l\'ajout de nouvelles sources de veille');

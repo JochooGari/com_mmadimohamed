@@ -169,9 +169,9 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
       };
 
       setTestResults(prev => [newResult, ...prev]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Test failed:', error);
-      alert(`Erreur de test: ${error.message}`);
+      alert(`Erreur de test: ${error?.message || String(error)}`);
     } finally {
       setIsRunning(false);
     }

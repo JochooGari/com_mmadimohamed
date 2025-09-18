@@ -263,7 +263,7 @@ export class AIService {
 
   private normalizeResponse(provider: string, data: any, model: string): AIResponse {
     let content = '';
-    let usage = undefined;
+    let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined = undefined;
 
     switch (provider) {
       case 'openai':

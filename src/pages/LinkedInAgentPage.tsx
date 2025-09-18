@@ -275,10 +275,8 @@ export default function LinkedInAgentPage() {
                 tags: processedData.suggestedTags,
                 // Enregistrer le contenu réel pour une persistance fiable
                 // (utilisé par KnowledgeChat et pour la sauvegarde disque)
-                // @ts-expect-error: propriété facultative selon interface locale
                 content,
                 // Quelques métadonnées utiles
-                // @ts-expect-error: propriété facultative selon interface locale
                 extractedData: {
                   wordCount: content.split(/\s+/).length,
                   lineCount: content.split(/\n/).length,

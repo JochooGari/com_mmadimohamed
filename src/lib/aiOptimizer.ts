@@ -1,5 +1,6 @@
 // Utilitaires d'optimisation des données pour l'IA
-import { ContentSource, MonitoringContent } from './fileStorage';
+import { MonitoringContent } from './fileStorage';
+import { ContentSource } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
 
