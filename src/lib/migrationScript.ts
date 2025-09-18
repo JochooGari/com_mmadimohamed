@@ -1,6 +1,7 @@
 // Script de migration du localStorage vers le stockage local
 import { LocalStorage } from './storage';
 import { LocalFileStorage, MonitoringStorage } from './fileStorage';
+import { ContentSource } from './types';
 import { AIOptimizer } from './aiOptimizer';
 
 export class MigrationScript {
@@ -119,7 +120,7 @@ export class MigrationScript {
 
   // Créer des données d'exemple
   private static async createExampleData(agentType: 'linkedin' | 'geo'): Promise<void> {
-    const exampleSources = [
+    const exampleSources: ContentSource[] = [
       {
         id: `example-${agentType}-1`,
         name: `Guide ${agentType === 'linkedin' ? 'LinkedIn Marketing' : 'Marketing Géolocalisé'}`,
