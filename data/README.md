@@ -156,6 +156,13 @@ const stats = await WebFileStorage.getMonitoringStats();
 - Gestion CORS et sécurité
 - Optimisation automatique des données
 
+### **Lancer les APIs en local (Vercel Functions)**
+```bash
+cd magicpath-project
+vercel dev --yes --confirm --port 3000
+```
+Le proxy Vite (défini dans `vite.config.ts`) redirige `^/api/` vers `http://localhost:3000`.
+
 ### **Optimisation IA**
 - `aiOptimizer.ts` - Moteur d'optimisation
 - Extraction de concepts et stratégies

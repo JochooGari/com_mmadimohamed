@@ -32,6 +32,13 @@ SITE_URL=https://ton-domaine   # permet de crawler /sitemap.xml
 VITE_OPENAI_API_KEY=sk-...     # requis pour le Chat IA (pas de fallback)
 ```
 
+Développement local (APIs Vercel)
+```
+cd magicpath-project
+vercel dev --yes --confirm --port 3000
+```
+Le proxy Vite redirige les appels `^/api/` vers `http://localhost:3000`.
+
 Fonctionnement
 - LinkedIn: collecte basique depuis des URLs publiques de posts (titre/description/auteur, métriques si détectables). Déduplication par URL.
 - RSS: parsing basique des items (titre, lien, description, pubDate).

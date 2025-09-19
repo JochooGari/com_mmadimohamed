@@ -175,11 +175,13 @@ Politiques: lecture publique pour contenus publiés ou **URL signée** côté ad
 - `/api/track-download` → incrémente `resources.downloads`.
 - `/api/ai-draft` (option) → génère un brouillon d’article.
  - `/api/monitoring` → lance un cycle de veille (LinkedIn public URLs, RSS, site via sitemap) et retourne les stats.
+ - `/api/admin/seed-test-user` → crée un utilisateur de test Supabase (protégé par `ADMIN_SEED_TOKEN`).
 
 Variables d’env (Vercel):
 ```
 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE (server only)
+SUPABASE_SERVICE_ROLE_KEY (server only)
+ADMIN_SEED_TOKEN (server only)
 RESEND_API_KEY (ou SMTP_*)
 SITE_URL (prod), STAGING_URL (préprod)
 ```
