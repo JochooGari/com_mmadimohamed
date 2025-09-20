@@ -36,8 +36,11 @@ export default async function handler(req: Request) {
   }
 
   if (type === 'resources' || url.pathname.endsWith('sitemap-ressources.xml')) {
-    const { data } = await supabase.from('resources').select('slug, updated_at').eq('published', true).order('updated_at', { ascending: false }).limit(5000);
-    const items = (data ?? []).map((r) => xmlUrl(`${base}/resource/${r.slug}`, r.updated_at)).join('');
+    const { data } = await supabase.from('resources').select('*').eq('published', true).order('updated_at', { ascending: false }).limit(5000);
+    const items = (data ?? []).map((r: any) => xmlUrl(
+      `${base}/resource/${r.slug ?? r.id}`,
+      (r.updated_at ?? r.created_at) as string | undefined
+    )).join('');
     const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${items}</urlset>`;
     return new Response(body, { headers: { 'content-type': 'application/xml', 'cache-control': 'public, s-maxage=21600' } });
   }
