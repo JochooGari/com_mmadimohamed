@@ -190,18 +190,18 @@ export default function VeilleSystem({ className = '' }: { className?: string })
   const [insights, setInsights] = useState<VeilleInsight[]>(() => {
     try {
       const saved = localStorage.getItem('linkedin:veille-insights');
-      return saved ? JSON.parse(saved) : SAMPLE_INSIGHTS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return SAMPLE_INSIGHTS;
+      return [];
     }
   });
 
   const [queries, setQueries] = useState<VeilleQuery[]>(() => {
     try {
       const saved = localStorage.getItem('linkedin:veille-queries');
-      return saved ? JSON.parse(saved) : QUERIES_PRESET;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return QUERIES_PRESET;
+      return [];
     }
   });
 
