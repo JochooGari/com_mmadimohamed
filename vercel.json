@@ -1,17 +1,10 @@
 {
   "rewrites": [
+    { "source": "/robots.txt", "destination": "/api/robots" },
+    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
+    { "source": "/sitemap-articles.xml", "destination": "/api/sitemap?type=articles" },
+    { "source": "/sitemap-ressources.xml", "destination": "/api/sitemap?type=resources" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
-
-{
-  "rewrites": [
-    { "source": "/robots.txt", "destination": "/api/robots" },
-    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
-    { "source": "/sitemap-articles.xml", "destination": "/api/sitemap?type=articles" },
-    { "source": "/sitemap-ressources.xml", "destination": "/api/sitemap?type=resources" }
-  ]
-}
-
-
