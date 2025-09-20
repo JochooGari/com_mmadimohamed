@@ -7,15 +7,20 @@ export default async function handler(req: Request) {
   const id = url.searchParams.get('id');
   if (!id) return new Response('Bad Request', { status: 400 });
 
-  const supabase = createClient(process.env.VITE_SUPABASE_URL as string, process.env.SUPABASE_SERVICE_ROLE as string);
+  const supabase = createClient(
+    (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL) as string,
+    (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE) as string
+  );
   // Get file_url for the resource
   const { data: res, error } = await supabase.from('resources').select('file_url').eq('id', id).maybeSingle();
   if (error || !res?.file_url) return new Response('Not Found', { status: 404 });
 
-  // increment downloads
-  await supabase.rpc('increment_downloads', { resource_id: id }).catch(async () => {
-    await supabase.from('resources').update({ downloads: (undefined as any) }).eq('id', id);
-  });
+  // increment downloads (ignore erreur)
+  try {
+    await supabase.rpc('increment_downloads', { resource_id: id });
+  } catch (e) {
+    // fallback best-effort: ignorer en silence
+  }
 
   // If file_url is a Supabase Storage path (e.g. bucket/path.ext), sign it
   let redirectUrl = res.file_url as string;

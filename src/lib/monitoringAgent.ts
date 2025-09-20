@@ -373,12 +373,13 @@ export class MonitoringAgent {
       date: new Date().toISOString().split('T')[0],
       summary: {
         totalItems: stats.totalItems,
-        newItemsToday: Object.values(stats.byDate).reduce((sum, count) => sum + count, 0),
-        topSources: Object.entries(stats.bySource)
-          .sort(([,a], [,b]) => b - a)
+        newItemsToday: (Object.values(stats.byDate as Record<string, number>) as number[])
+          .reduce((sum: number, count: number) => sum + count, 0),
+        topSources: (Object.entries(stats.bySource as Record<string, number>) as Array<[string, number]>)
+          .sort(([,a], [,b]) => (b as number) - (a as number))
           .slice(0, 5),
-        topKeywords: Object.entries(stats.keywords)
-          .sort(([,a], [,b]) => b - a)
+        topKeywords: (Object.entries(stats.keywords as Record<string, number>) as Array<[string, number]>)
+          .sort(([,a], [,b]) => (b as number) - (a as number))
           .slice(0, 10),
         contentTypes: stats.byType
       },
