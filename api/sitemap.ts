@@ -9,7 +9,14 @@ function xmlUrl(loc: string, lastmod?: string) {
 export default async function handler(req: Request) {
   const url = new URL(req.url);
   const type = url.searchParams.get('type');
-  const base = process.env.SITE_URL || process.env.VERCEL_URL?.startsWith('http') ? (process.env.VERCEL_URL as string) : `https://${process.env.VERCEL_URL}`;
+  // Domaine canonique pour générer des URLs absolues
+  const base =
+    process.env.SITE_URL ||
+    ((process.env.VERCEL_URL
+      ? (process.env.VERCEL_URL.startsWith('http')
+          ? process.env.VERCEL_URL
+          : `https://${process.env.VERCEL_URL}`)
+      : '') as string);
 
   const supabase = createClient(
     (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL) as string,
