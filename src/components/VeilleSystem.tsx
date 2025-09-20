@@ -209,6 +209,8 @@ export default function VeilleSystem({ className = '' }: { className?: string })
   const [searchTerm, setSearchTerm] = useState('');
   const [scoreFilter, setScoreFilter] = useState<string>('all');
   const [isRunningVeille, setIsRunningVeille] = useState(false);
+  const [config, setConfig] = useState<any>({ weights: { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 }, rss: [], websites: [], youtube: [] });
+  const [rows, setRows] = useState<any[]>([]);
 
   // Sauvegarder automatiquement
   useEffect(() => {
@@ -226,6 +228,23 @@ export default function VeilleSystem({ className = '' }: { className?: string })
       console.error('Erreur sauvegarde queries:', error);
     }
   }, [queries]);
+
+  useEffect(() => {
+    // Charger configuration et liste serveur
+    (async () => {
+      try {
+        const cfgRes = await fetch('/api/monitoring?config=1');
+        if (cfgRes.ok) setConfig(await cfgRes.json());
+      } catch {}
+      try {
+        const listRes = await fetch('/api/monitoring?list=1');
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setRows(data.items || []);
+        }
+      } catch {}
+    })();
+  }, []);
 
   const filteredInsights = insights.filter(insight => {
     const matchesSearch = insight.hook.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -265,6 +284,19 @@ export default function VeilleSystem({ className = '' }: { className?: string })
       setIsRunningVeille(false);
     }
   };
+
+  const saveConfig = async () => {
+    try {
+      const r = await fetch('/api/monitoring', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_config', config })
+      });
+      if (!r.ok) { alert('Erreur sauvegarde config'); return; }
+      alert('Paramètres de veille enregistrés');
+    } catch { alert('Impossible de sauvegarder la config'); }
+  };
+
+  const globalScore = (s: any) => (s.engagement*config.weights.engagement + s.business*config.weights.business + s.novelty*config.weights.novelty + s.priority*config.weights.priority);
 
   const getScoreColor = (score: number) => {
     if (score >= 0.8) return 'text-green-600 bg-green-100';
@@ -338,6 +370,48 @@ export default function VeilleSystem({ className = '' }: { className?: string })
           </Button>
         </div>
       </div>
+
+      {/* Paramètres de veille */}
+      <Card>
+        <CardHeader className="pb-3"><CardTitle>Paramètres de veille</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Flux RSS (séparés par des virgules)</p>
+              <Textarea value={(config.rss || []).join(', ')} onChange={e=> setConfig({ ...config, rss: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) })} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700">Sites web (domaines/URLs)</p>
+              <Textarea value={(config.websites || []).join(', ')} onChange={e=> setConfig({ ...config, websites: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) })} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700">YouTube (channels/playlists)</p>
+              <Textarea value={(config.youtube || []).join(', ')} onChange={e=> setConfig({ ...config, youtube: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) })} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label className="text-sm text-gray-600">Pondération Engagement</label>
+              <Input type="number" step="0.05" min="0" max="1" value={config.weights.engagement} onChange={e=> setConfig({ ...config, weights: { ...config.weights, engagement: Number(e.target.value) } })} />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Pondération Business</label>
+              <Input type="number" step="0.05" min="0" max="1" value={config.weights.business} onChange={e=> setConfig({ ...config, weights: { ...config.weights, business: Number(e.target.value) } })} />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Pondération Nouveauté</label>
+              <Input type="number" step="0.05" min="0" max="1" value={config.weights.novelty} onChange={e=> setConfig({ ...config, weights: { ...config.weights, novelty: Number(e.target.value) } })} />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Pondération Priorité</label>
+              <Input type="number" step="0.05" min="0" max="1" value={config.weights.priority} onChange={e=> setConfig({ ...config, weights: { ...config.weights, priority: Number(e.target.value) } })} />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={saveConfig} className="bg-green-600 hover:bg-green-700">Enregistrer</Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -427,153 +501,48 @@ export default function VeilleSystem({ className = '' }: { className?: string })
       {/* Contenu selon l'onglet */}
       {activeTab === 'insights' && (
         <div className="space-y-4">
-          {/* Filtres */}
           <div className="flex gap-4 items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Rechercher dans les insights..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button 
-                variant={scoreFilter === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setScoreFilter('all')}
-              >
-                Tous
-              </Button>
-              <Button 
-                variant={scoreFilter === 'high_priority' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setScoreFilter('high_priority')}
-              >
-                Haute priorité
-              </Button>
-              <Button 
-                variant={scoreFilter === 'high_business' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setScoreFilter('high_business')}
-              >
-                Business
-              </Button>
+              <Input placeholder="Rechercher..." value={searchTerm} onChange={e=> setSearchTerm(e.target.value)} className="pl-10" />
             </div>
           </div>
-
-          {/* Liste des insights */}
-          <div className="grid grid-cols-1 gap-4">
-            {filteredInsights.map((insight) => (
-              <Card key={insight.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-base font-semibold mb-2">
-                        {insight.hook}
-                      </CardTitle>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="bg-blue-100 text-blue-800">{insight.format}</Badge>
-                        <Badge className="bg-purple-100 text-purple-800">{insight.structure}</Badge>
-                        {insight.persona.map(p => (
-                          <Badge key={p} className="bg-gray-100 text-gray-800">{p}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generateSkillFromInsight(insight)}
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        → Skill
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => window.open(insight.source_url, '_blank')}
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Problème:</p>
-                      <p className="text-sm text-gray-600">{insight.probleme}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Résultat:</p>
-                      <p className="text-sm text-gray-600">{insight.resultat}</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Preuve:</p>
-                    <p className="text-sm text-gray-600 italic">{insight.preuve}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">CTA:</p>
-                    <p className="text-sm text-blue-600 font-medium">{insight.cta}</p>
-                  </div>
-
-                  {/* Métriques */}
-                  <div className="flex items-center gap-4 pt-2 border-t">
-                    <div className="flex items-center gap-1">
-                      <Heart className="w-4 h-4 text-red-500" />
-                      <span className="text-sm">{insight.metrics.reactions}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <MessageSquare className="w-4 h-4 text-blue-500" />
-                      <span className="text-sm">{insight.metrics.comments}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Repeat className="w-4 h-4 text-green-500" />
-                      <span className="text-sm">{insight.metrics.reshares}</span>
-                    </div>
-                  </div>
-
-                  {/* Scores */}
-                  <div className="grid grid-cols-4 gap-2 pt-2">
-                    <div className="text-center">
-                      <p className="text-xs text-gray-500">Engagement</p>
-                      <p className={`text-sm font-bold px-2 py-1 rounded ${getScoreColor(insight.scores.engagement)}`}>
-                        {(insight.scores.engagement * 100).toFixed(0)}%
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-gray-500">Business</p>
-                      <p className={`text-sm font-bold px-2 py-1 rounded ${getScoreColor(insight.scores.business_intent)}`}>
-                        {(insight.scores.business_intent * 100).toFixed(0)}%
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-gray-500">Nouveauté</p>
-                      <p className={`text-sm font-bold px-2 py-1 rounded ${getScoreColor(insight.scores.novelty)}`}>
-                        {(insight.scores.novelty * 100).toFixed(0)}%
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-gray-500">Priorité</p>
-                      <p className={`text-sm font-bold px-2 py-1 rounded ${getScoreColor(insight.scores.priority)}`}>
-                        {(insight.scores.priority * 100).toFixed(0)}%
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center text-xs text-gray-500 pt-2">
-                    <span>{insight.auteur} · {new Date(insight.date).toLocaleDateString('fr-FR')}</span>
-                    <span>Mots-clés: {insight.mots_cles.join(', ')}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="overflow-auto border rounded-lg">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left">Titre</th>
+                  <th className="px-3 py-2 text-left">Catégorie</th>
+                  <th className="px-3 py-2 text-right">Engagement</th>
+                  <th className="px-3 py-2 text-right">Business</th>
+                  <th className="px-3 py-2 text-right">Nouveauté</th>
+                  <th className="px-3 py-2 text-right">Priorité</th>
+                  <th className="px-3 py-2 text-right">Score</th>
+                  <th className="px-3 py-2 text-left">Source</th>
+                  <th className="px-3 py-2 text-left">Date</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.filter(r => (r.title||'').toLowerCase().includes(searchTerm.toLowerCase())).map((r:any) => (
+                  <tr key={r.id} className="border-t">
+                    <td className="px-3 py-2 max-w-[360px] truncate">{r.title}</td>
+                    <td className="px-3 py-2">{r.type}</td>
+                    <td className="px-3 py-2 text-right">{Math.round(r.scores.engagement*100)}%</td>
+                    <td className="px-3 py-2 text-right">{Math.round(r.scores.business*100)}%</td>
+                    <td className="px-3 py-2 text-right">{Math.round(r.scores.novelty*100)}%</td>
+                    <td className="px-3 py-2 text-right">{Math.round(r.scores.priority*100)}%</td>
+                    <td className="px-3 py-2 text-right font-semibold">{Math.round(globalScore(r.scores)*100)}%</td>
+                    <td className="px-3 py-2">{r.source}</td>
+                    <td className="px-3 py-2">{r.date ? new Date(r.date).toLocaleDateString('fr-FR') : ''}</td>
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="outline" size="sm" onClick={()=> r.url && window.open(r.url,'_blank')}>Ouvrir</Button>
+                      <Button variant="ghost" size="sm" onClick={()=> generateSkillFromInsight({ id:r.id, hook:r.title, format:'texte', structure:'', persona:[], auteur:'', date:r.date||'', source_url:r.url||'', probleme:'', resultat:'', preuve:'', cta:'', metrics:{ reactions:0, comments:0, reshares:0}, scores:{ engagement:r.scores.engagement, business_intent:r.scores.business, novelty:r.scores.novelty, priority:r.scores.priority }, extraits:[], mots_cles:[], licence_ok:true, notes:'' } as any)}>→ Skill</Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

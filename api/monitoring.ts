@@ -23,6 +23,24 @@ async function getObjectJSON<T = any>(bucket: string, path: string): Promise<T |
   try { return JSON.parse(text); } catch { return null; }
 }
 
+async function listObjects(bucket: string, prefix: string) {
+  const supabase = getSupabase();
+  if (!supabase) return [] as any[];
+  const { data } = await supabase.storage.from(bucket).list(prefix, { limit: 100, offset: 0 });
+  return data || [];
+}
+
+async function getConfig() {
+  const def = {
+    weights: { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 },
+    rss: [],
+    websites: [],
+    youtube: []
+  };
+  const cfg = await getObjectJSON('monitoring', 'config.json');
+  return { ...def, ...(cfg || {}) };
+}
+
 async function updateIndex(content: any) {
   const indexPath = 'monitoring_index.json';
   let index = await getObjectJSON('monitoring', indexPath);
@@ -95,10 +113,53 @@ export default async function handler(req: any, res: any) {
         const stats = await getMonitoringStats();
         return res.json({ success: true, stats });
       }
+      if (action === 'save_config') {
+        const cfg = req.body?.config;
+        if (!cfg || typeof cfg !== 'object') return res.status(400).json({ error: 'config missing' });
+        await putObject('monitoring', 'config.json', JSON.stringify(cfg, null, 2));
+        return res.json({ ok: true });
+      }
       return res.status(400).json({ error: 'Unknown action' });
     }
 
     if (req.method === 'GET') {
+      const url = new URL(req.url, 'http://x');
+      if (url.searchParams.get('config') === '1') {
+        const cfg = await getConfig();
+        return res.json(cfg);
+      }
+      if (url.searchParams.get('list') === '1') {
+        const cfg = await getConfig();
+        // lister les objets sous sources/
+        const entries = await listObjects('monitoring', 'sources');
+        const supabase = getSupabase();
+        const rows: any[] = [];
+        for (const e of entries) {
+          if (!e?.name?.endsWith('.json')) continue;
+          const { data } = await supabase.storage.from('monitoring').download(`sources/${e.name}`);
+          if (!data) continue;
+          const text = await (data as any).text();
+          try {
+            const obj = JSON.parse(text);
+            const engagement = Math.min(1, ((obj.metadata?.engagement?.likes || 20) + (obj.metadata?.engagement?.comments || 5)) / 200);
+            const business = /roi|revenue|pipeline|deal|cash|daf|cfo|case/i.test(obj.content || '') ? 0.9 : 0.6;
+            const novelty = Math.min(1, (obj.content || '').split(/\b/).length / 2000);
+            const priority = 0.5 + (business - 0.5) * 0.5 + (engagement - 0.5) * 0.3;
+            const w = cfg.weights || { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 };
+            const global = engagement*w.engagement + business*w.business + novelty*w.novelty + priority*w.priority;
+            rows.push({
+              id: obj.id,
+              title: obj.title,
+              type: obj.type,
+              source: obj.source,
+              date: obj.publishedAt,
+              scores: { engagement, business, novelty, priority, global }
+            });
+          } catch {}
+        }
+        rows.sort((a,b)=> (b.scores.global - a.scores.global));
+        return res.json({ items: rows });
+      }
       const stats = await getMonitoringStats();
       return res.json(stats);
     }
