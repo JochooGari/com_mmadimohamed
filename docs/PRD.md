@@ -290,9 +290,9 @@ Routes additionnelles
 ### Étape 4 — API Vercel (1 j)
 - `/api/robots.ts`, `/api/sitemap.ts`, `/api/contact.ts` (+ `/api/track-download.ts`).
 
-IA Draft (MVP local)
-- `/api/ai-draft`: génère `strategist` (angles, mots‑clés, briefs) + `ghostwriter` (blog SEO + draft_md). Mock déterministe pour usage local; sauvegarde optionnelle en base si Service Role présent.
-- Évolution: brancher OpenAI (ajout `OPENAI_API_KEY` côté serveur) pour des brouillons réels.
+IA Draft & Chat (serveur)
+- `/api/ai-draft`: génère `strategist` (angles, mots‑clés, briefs) + `ghostwriter` (blog SEO + draft_md).
+- `/api/ai-proxy`: proxy serveur vers OpenAI/Anthropic/Google/Mistral/Perplexity (clés non exposées côté client).
 
 Exemple robots minimal:
 ```
@@ -359,7 +359,8 @@ plausible('contact_submit');
 
 ## Environnements & variables
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (facultatifs en local)
-- `SUPABASE_SERVICE_ROLE` (server‑only, optionnel)
+- `SUPABASE_SERVICE_ROLE_KEY` (server‑only)
+- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_AI_API_KEY`, `MISTRAL_API_KEY`, `PERPLEXITY_API_KEY` (server‑only)
 - `RESEND_API_KEY` (optionnel)
 - `SITE_URL`
 - `VITE_PLAUSIBLE_DOMAIN`

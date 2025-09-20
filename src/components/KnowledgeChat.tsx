@@ -540,7 +540,7 @@ export default function KnowledgeChat({ className = '' }: KnowledgeChatProps) {
           response += `**${index + 1}. ${source.title}**\n`;
           // Extraire des insights spécifiques du contenu
           const content = source.content.toLowerCase();
-          const insights = [];
+          const insights: string[] = [];
           
           if (content.includes('linkedin') && content.includes('organic')) {
             insights.push("🌱 Méthodes de croissance organique sur LinkedIn");
