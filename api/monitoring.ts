@@ -43,6 +43,27 @@ async function getConfig() {
   return { ...def, ...(cfg || {}) };
 }
 
+type Status = {
+  startedAt?: string;
+  finishedAt?: string;
+  lastRunAt?: string;
+  message?: string;
+  success?: boolean;
+  itemsProcessed?: number;
+  sourcesProcessed?: number;
+};
+
+async function getStatus(): Promise<Status> {
+  return (await getObjectJSON<Status>('monitoring', 'status.json')) || {};
+}
+
+async function setStatus(patch: Partial<Status>) {
+  const current = await getStatus();
+  const merged = { ...current, ...patch } as Status;
+  await putObject('monitoring', 'status.json', JSON.stringify(merged, null, 2));
+  return merged;
+}
+
 async function updateIndex(content: any) {
   const indexPath = 'monitoring_index.json';
   let index = await getObjectJSON('monitoring', indexPath);
@@ -71,6 +92,7 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'POST') {
       const { action } = req.body || {};
       if (action === 'run_now') {
+        await setStatus({ startedAt: new Date().toISOString(), success: undefined, message: 'Veille en cours...', itemsProcessed: 0, sourcesProcessed: 0 });
         // Collecte minimale: sitemap du site + 5 pages max
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
         if (!base) return res.status(500).json({ error: 'Missing SITE_URL/VERCEL_URL' });
@@ -85,6 +107,7 @@ export default async function handler(req: any, res: any) {
         } catch {}
         if (targets.length === 0) targets = [base];
 
+        let processed = 0;
         for (const url of targets) {
           try {
             const r = await fetch(url);
@@ -110,10 +133,12 @@ export default async function handler(req: any, res: any) {
             };
             await putObject('monitoring', `sources/${obj.type}_${obj.id}.json`, JSON.stringify(obj, null, 2));
             await updateIndex(obj);
+            processed++;
           } catch {}
         }
         const stats = await getMonitoringStats();
-        return res.json({ success: true, stats });
+        await setStatus({ finishedAt: new Date().toISOString(), lastRunAt: new Date().toISOString(), success: true, message: 'Veille terminée', itemsProcessed: processed, sourcesProcessed: targets.length });
+        return res.json({ success: true, processed, targets: targets.length, stats });
       }
       if (action === 'save_config') {
         const cfg = req.body?.config;
@@ -126,6 +151,7 @@ export default async function handler(req: any, res: any) {
         const rssSet = new Set<string>(cfg.rss || []);
         const ytSet = new Set<string>(cfg.youtube || []);
         const webList: string[] = Array.isArray(cfg.websites) ? cfg.websites : [];
+        let discovered = 0;
         for (const w of webList) {
           try {
             const u = new URL(w);
@@ -137,11 +163,13 @@ export default async function handler(req: any, res: any) {
             // YouTube links on page
             const ytLinks = Array.from(html.matchAll(/href=["']https?:\/\/(?:www\.)?youtube\.com\/[^"']+["']/gi)).map(m => m[0].slice(6, -1));
             ytLinks.forEach(l => ytSet.add(l));
+            discovered += feedLinks.length + ytLinks.length;
           } catch {}
         }
         const updated = { ...cfg, rss: Array.from(rssSet), youtube: Array.from(ytSet) };
         await putObject('monitoring', 'config.json', JSON.stringify(updated, null, 2));
-        return res.json({ ok: true, rss: updated.rss.length, youtube: updated.youtube.length });
+        await setStatus({ message: `Découverte: +${discovered} flux/chaînes`, success: true });
+        return res.json({ ok: true, rss: updated.rss.length, youtube: updated.youtube.length, discovered });
       }
       return res.status(400).json({ error: 'Unknown action' });
     }
@@ -183,6 +211,10 @@ export default async function handler(req: any, res: any) {
         }
         rows.sort((a,b)=> (b.scores.global - a.scores.global));
         return res.json({ items: rows });
+      }
+      if (url.searchParams.get('status') === '1') {
+        const st = await getStatus();
+        return res.json(st);
       }
       const stats = await getMonitoringStats();
       return res.json(stats);

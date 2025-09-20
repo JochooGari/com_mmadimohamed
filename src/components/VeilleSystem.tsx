@@ -249,6 +249,7 @@ export default function VeilleSystem({ className = '' }: { className?: string })
   const [isRunningVeille, setIsRunningVeille] = useState(false);
   const [config, setConfig] = useState<any>({ weights: { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 }, rss: [], websites: [], youtube: [], objective: '', autoDiscovery: true });
   const [rows, setRows] = useState<any[]>([]);
+  const [status, setStatus] = useState<any>({});
 
   // Sauvegarder automatiquement
   useEffect(() => {
@@ -280,6 +281,10 @@ export default function VeilleSystem({ className = '' }: { className?: string })
           const data = await listRes.json();
           setRows(data.items || []);
         }
+      } catch {}
+      try {
+        const st = await fetch('/api/monitoring?status=1');
+        if (st.ok) setStatus(await st.json());
       } catch {}
     })();
   }, []);
@@ -313,7 +318,9 @@ export default function VeilleSystem({ className = '' }: { className?: string })
       }
       const result = await response.json();
       console.log('Veille run result:', result);
-      alert('Veille lancée. Vérifie data/monitoring (sources, optimized).');
+      const st = await fetch('/api/monitoring?status=1').then(r=> r.ok ? r.json() : null).catch(()=>null);
+      if (st) setStatus(st);
+      alert(`Veille terminée: ${result.processed || st?.itemsProcessed || 0} docs, ${result.targets || st?.sourcesProcessed || 0} sources.`);
       // Pas d’injection d’insights mock: les résultats sont persistés dans data/monitoring
     } catch (e) {
       console.error('Erreur exécution veille:', e);
@@ -449,6 +456,17 @@ export default function VeilleSystem({ className = '' }: { className?: string })
           </div>
         </CardContent>
       </Card>
+
+      {/* Bandeau statut */}
+      <div className="flex items-center gap-3 text-sm text-gray-700">
+        <Badge className={status?.success ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
+          {status?.success ? 'OK' : '—'}
+        </Badge>
+        <span>Dernière exécution: {status?.lastRunAt ? new Date(status.lastRunAt).toLocaleString('fr-FR') : '—'}</span>
+        <span>Docs: {status?.itemsProcessed ?? 0}</span>
+        <span>Sources: {status?.sourcesProcessed ?? 0}</span>
+        <span className="text-gray-500">{status?.message || ''}</span>
+      </div>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
