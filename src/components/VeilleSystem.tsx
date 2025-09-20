@@ -328,6 +328,14 @@ export default function VeilleSystem({ className = '' }: { className?: string })
               </>
             )}
           </Button>
+          <Button
+            variant="outline"
+            title="Planifié chaque jour à 06:00 UTC via Vercel Cron"
+            onClick={() => window.open('https://vercel.com', '_blank')}
+          >
+            <Calendar className="w-4 h-4 mr-2" />
+            Cron: 06:00 UTC
+          </Button>
         </div>
       </div>
 

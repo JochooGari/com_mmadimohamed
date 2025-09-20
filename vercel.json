@@ -6,5 +6,8 @@
     { "source": "/sitemap-ressources.xml", "destination": "/api/sitemap?type=resources" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/cron/daily-monitoring", "schedule": "0 6 * * *" }
   ]
 }
