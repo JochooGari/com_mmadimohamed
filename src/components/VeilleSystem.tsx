@@ -23,6 +23,44 @@ import {
   Repeat,
   CheckCircle
 } from 'lucide-react';
+// Tag input léger pour gérer des listes d'URLs modernes
+function TagInput({ label, values, onChange, placeholder }: { label: string; values: string[]; onChange: (vals: string[]) => void; placeholder?: string }) {
+  const [draft, setDraft] = React.useState('');
+  const add = (raw: string) => {
+    const parts = raw.split(/[\n,;\s]+/).map(s => s.trim()).filter(Boolean);
+    if (parts.length === 0) return;
+    const set = new Set([...(values || []), ...parts]);
+    onChange(Array.from(set));
+    setDraft('');
+  };
+  return (
+    <div>
+      <p className="text-sm font-medium text-gray-700 mb-1">{label}</p>
+      <div className="flex flex-wrap gap-2 p-2 border rounded-md bg-white">
+        {(values || []).map((v) => (
+          <span key={v} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
+            {v}
+            <button className="ml-1 text-gray-500 hover:text-gray-700" onClick={() => onChange(values.filter(x => x !== v))}>×</button>
+          </span>
+        ))}
+        <input
+          className="flex-1 min-w-[160px] outline-none text-sm"
+          placeholder={placeholder || 'Ajouter et appuyer sur Entrée'}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(draft); }
+          }}
+          onBlur={() => draft && add(draft)}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData('text');
+            if (text) { e.preventDefault(); add(text); }
+          }}
+        />
+      </div>
+    </div>
+  );
+}
 
 // Types pour la veille
 interface VeilleInsight {
@@ -376,18 +414,9 @@ export default function VeilleSystem({ className = '' }: { className?: string })
         <CardHeader className="pb-3"><CardTitle>Paramètres de veille</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <p className="text-sm font-medium text-gray-700">Flux RSS (séparés par des virgules)</p>
-              <Textarea placeholder={"Une URL par ligne ou séparées par des virgules"} value={(config.rss || []).join('\n')} onChange={e=> setConfig({ ...config, rss: e.target.value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean) })} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700">Sites web (domaines/URLs)</p>
-              <Textarea placeholder={"ex: https://mckinsey.com"} value={(config.websites || []).join('\n')} onChange={e=> setConfig({ ...config, websites: e.target.value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean) })} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700">YouTube (channels/playlists)</p>
-              <Textarea placeholder={"ex: https://www.youtube.com/@channel"} value={(config.youtube || []).join('\n')} onChange={e=> setConfig({ ...config, youtube: e.target.value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean) })} />
-            </div>
+            <TagInput label="Flux RSS" values={config.rss || []} onChange={(vals)=> setConfig({ ...config, rss: vals })} placeholder="Colle plusieurs URLs, Entrée pour ajouter" />
+            <TagInput label="Sites web" values={config.websites || []} onChange={(vals)=> setConfig({ ...config, websites: vals })} placeholder="Domaines/URLs" />
+            <TagInput label="YouTube" values={config.youtube || []} onChange={(vals)=> setConfig({ ...config, youtube: vals })} placeholder="Chaînes/Playlists" />
           </div>
           <div>
             <p className="text-sm font-medium text-gray-700">Contexte / Objectif de veille</p>
