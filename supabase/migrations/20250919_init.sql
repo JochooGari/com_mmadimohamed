@@ -106,3 +106,5 @@ create index if not exists idx_articles_tags on public.articles using gin(tags);
 create index if not exists idx_resources_tags on public.resources using gin(tags);
 
 
+
+

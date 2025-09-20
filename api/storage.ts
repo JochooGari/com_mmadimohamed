@@ -2,8 +2,33 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
+
+function getServerSupabase() {
+  const url = process.env.SUPABASE_URL as string | undefined;
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE) as string | undefined;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+async function putObject(bucket: string, objectPath: string, body: string | Blob, contentType: string) {
+  const supabase = getServerSupabase();
+  if (!supabase) return { ok: false };
+  const { error } = await supabase.storage.from(bucket).upload(objectPath, body as any, { upsert: true, contentType });
+  if (error) throw error;
+  return { ok: true };
+}
+
+async function getObjectJSON<T = any>(bucket: string, objectPath: string): Promise<T | null> {
+  const supabase = getServerSupabase();
+  if (!supabase) return null;
+  const { data, error } = await supabase.storage.from(bucket).download(objectPath);
+  if (error || !data) return null;
+  const text = await (data as any).text();
+  try { return JSON.parse(text) as T; } catch { return null; }
+}
 
 // Assurer que les dossiers existent
 async function ensureDirectoryExists(dirPath: string) {
@@ -49,6 +74,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse, agent: string,
     // Récupérer les stats de monitoring
     const indexFile = path.join(DATA_DIR, 'monitoring', 'monitoring_index.json');
     try {
+      // Essayer Supabase Storage en production
+      const json = await getObjectJSON('monitoring', 'monitoring_index.json');
+      if (json) return res.json(json);
       const data = await fs.promises.readFile(indexFile, 'utf8');
       return res.json(JSON.parse(data));
     } catch {
@@ -110,12 +138,15 @@ async function saveSources(res: VercelResponse, agentType: string, sources: any[
   
   await ensureDirectoryExists(inputsPath);
   await fs.promises.writeFile(sourcesFile, JSON.stringify(sources, null, 2));
+  // Supabase Storage (production)
+  try { await putObject('agents', `${agentType}/inputs/sources.json`, JSON.stringify(sources, null, 2), 'application/json'); } catch {}
   
   // Sauvegarder chaque source individuellement
   for (const source of sources) {
     if (source.content) {
       const sourceFile = path.join(inputsPath, `source_${source.id}.txt`);
       await fs.promises.writeFile(sourceFile, source.content);
+      try { await putObject('agents', `${agentType}/inputs/source_${source.id}.txt`, source.content, 'text/plain'); } catch {}
     }
   }
   
@@ -136,6 +167,7 @@ async function saveConfig(res: VercelResponse, agentType: string, config: any) {
   
   await ensureDirectoryExists(configPath);
   await fs.promises.writeFile(configFile, JSON.stringify(configWithTimestamp, null, 2));
+  try { await putObject('agents', `${agentType}/inputs/config.json`, JSON.stringify(configWithTimestamp, null, 2), 'application/json'); } catch {}
   
   return res.json({ success: true });
 }
@@ -146,6 +178,7 @@ async function saveCampaigns(res: VercelResponse, agentType: string, campaigns: 
   
   await ensureDirectoryExists(campaignPath);
   await fs.promises.writeFile(campaignFile, JSON.stringify(campaigns, null, 2));
+  try { await putObject('agents', `${agentType}/inputs/campaigns.json`, JSON.stringify(campaigns, null, 2), 'application/json'); } catch {}
   
   return res.json({ success: true, count: campaigns.length });
 }
@@ -160,11 +193,13 @@ async function saveMonitoring(res: VercelResponse, content: any) {
   // Sauvegarder le contenu brut
   const sourceFile = path.join(sourcesPath, `${content.type}_${content.id}.json`);
   await fs.promises.writeFile(sourceFile, JSON.stringify(content, null, 2));
+  try { await putObject('monitoring', `sources/${content.type}_${content.id}.json`, JSON.stringify(content, null, 2), 'application/json'); } catch {}
   
   // Créer la version optimisée
   const optimizedContent = await optimizeContentForAI(content);
   const optimizedFile = path.join(optimizedPath, `optimized_${content.id}.json`);
   await fs.promises.writeFile(optimizedFile, JSON.stringify(optimizedContent, null, 2));
+  try { await putObject('monitoring', `optimized/optimized_${content.id}.json`, JSON.stringify(optimizedContent, null, 2), 'application/json'); } catch {}
   
   // Mettre à jour l'index
   await updateMonitoringIndex(content);
@@ -206,6 +241,7 @@ async function optimizeData(res: VercelResponse, agentType: string) {
   
   const optimizedFile = path.join(outputPath, 'ai_optimized.json');
   await fs.promises.writeFile(optimizedFile, JSON.stringify(optimizedData, null, 2));
+  try { await putObject('agents', `${agentType}/outputs/ai_optimized.json`, JSON.stringify(optimizedData, null, 2), 'application/json'); } catch {}
   
   return res.json({ success: true });
 }

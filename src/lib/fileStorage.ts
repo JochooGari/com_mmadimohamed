@@ -2,6 +2,7 @@
 import { ContentSource, Agent, Campaign } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 export class LocalFileStorage {
   private static basePath = path.join(process.cwd(), 'data');
@@ -287,6 +288,28 @@ export class LocalFileStorage {
 export class MonitoringStorage {
   private static basePath = path.join(process.cwd(), 'data', 'monitoring');
 
+  private static getServerSupabase() {
+    const url = process.env.SUPABASE_URL as string | undefined;
+    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE) as string | undefined;
+    if (!url || !key) return null;
+    return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  }
+
+  private static async putObject(bucket: string, objectPath: string, body: string, contentType: string) {
+    const supabase = this.getServerSupabase();
+    if (!supabase) return;
+    await supabase.storage.from(bucket).upload(objectPath, body as any, { upsert: true, contentType });
+  }
+
+  private static async getObjectJSON<T = any>(bucket: string, objectPath: string): Promise<T | null> {
+    const supabase = this.getServerSupabase();
+    if (!supabase) return null;
+    const { data } = await supabase.storage.from(bucket).download(objectPath);
+    if (!data) return null;
+    const text = await (data as any).text();
+    try { return JSON.parse(text) as T; } catch { return null; }
+  }
+
   // Types de contenu supportés
   static supportedContentTypes = {
     article: 'Articles web',
@@ -308,11 +331,13 @@ export class MonitoringStorage {
     // Sauvegarder le contenu brut
     const sourceFile = path.join(sourcesPath, `${content.type}_${content.id}.json`);
     await fs.promises.writeFile(sourceFile, JSON.stringify(content, null, 2));
+    await this.putObject('monitoring', `sources/${content.type}_${content.id}.json`, JSON.stringify(content, null, 2), 'application/json');
     
     // Créer la version optimisée pour l'IA
     const optimizedContent = await this.optimizeContentForAI(content);
     const optimizedFile = path.join(optimizedPath, `optimized_${content.id}.json`);
     await fs.promises.writeFile(optimizedFile, JSON.stringify(optimizedContent, null, 2));
+    await this.putObject('monitoring', `optimized/optimized_${content.id}.json`, JSON.stringify(optimizedContent, null, 2), 'application/json');
     
     // Mettre à jour l'index
     await this.updateMonitoringIndex(content);
@@ -529,8 +554,12 @@ export class MonitoringStorage {
     
     let index: MonitoringIndex;
     try {
-      const data = await fs.promises.readFile(indexFile, 'utf8');
-      index = JSON.parse(data);
+      const fromStorage = await this.getObjectJSON<MonitoringIndex>('monitoring', 'monitoring_index.json');
+      if (fromStorage) index = fromStorage;
+      else {
+        const data = await fs.promises.readFile(indexFile, 'utf8');
+        index = JSON.parse(data);
+      }
     } catch {
       index = {
         lastUpdated: '',
@@ -564,7 +593,9 @@ export class MonitoringStorage {
       index.keywords[keyword] = (index.keywords[keyword] || 0) + 1;
     });
     
-    await fs.promises.writeFile(indexFile, JSON.stringify(index, null, 2));
+    const payload = JSON.stringify(index, null, 2);
+    await fs.promises.writeFile(indexFile, payload);
+    await this.putObject('monitoring', 'monitoring_index.json', payload, 'application/json');
   }
 
   // Récupérer les statistiques de veille
@@ -572,6 +603,8 @@ export class MonitoringStorage {
     const indexFile = path.join(this.basePath, 'monitoring_index.json');
     
     try {
+      const fromStorage = await this.getObjectJSON<MonitoringIndex>('monitoring', 'monitoring_index.json');
+      if (fromStorage) return fromStorage;
       const data = await fs.promises.readFile(indexFile, 'utf8');
       return JSON.parse(data);
     } catch {

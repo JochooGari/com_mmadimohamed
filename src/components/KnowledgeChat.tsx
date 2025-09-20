@@ -553,7 +553,7 @@ Vérifiez votre clé dans .env.local (VITE_OPENAI_API_KEY) et redémarrez.`;
           response += `**${index + 1}. ${source.title}**\n`;
           // Extraire des insights spécifiques du contenu
           const content = source.content.toLowerCase();
-          const insights: string[] = [];
+          const insights = [];
           
           if (content.includes('linkedin') && content.includes('organic')) {
             insights.push("🌱 Méthodes de croissance organique sur LinkedIn");
