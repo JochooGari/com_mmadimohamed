@@ -166,6 +166,7 @@ Politiques: lecture publique pour contenus publiés ou **URL signée** côté ad
 ### Front
 - Vite + React + TypeScript + Tailwind + `react-router-dom` + `shadcn/ui`.
 - Routes publiques: `/`, `/bibliotheque`, `/blog`, `/resource/:slug`, `/blog/:slug`, `/politique`.
+ - Déploiement SPA: `vercel.json` réécrit toutes les routes client vers `index.html` (fallback SPA) tout en préservant `/api/*` et `robots/sitemaps`.
 
 ### BFF (Vercel Functions, TypeScript, dossier `/api`)
 - `/api/sitemap` → génère l’index et sous‑sitemaps depuis Supabase (cache 6h).
