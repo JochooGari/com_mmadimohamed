@@ -35,7 +35,9 @@ async function getConfig() {
     weights: { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 },
     rss: [],
     websites: [],
-    youtube: []
+    youtube: [],
+    objective: '',
+    autoDiscovery: true
   };
   const cfg = await getObjectJSON('monitoring', 'config.json');
   return { ...def, ...(cfg || {}) };
@@ -118,6 +120,28 @@ export default async function handler(req: any, res: any) {
         if (!cfg || typeof cfg !== 'object') return res.status(400).json({ error: 'config missing' });
         await putObject('monitoring', 'config.json', JSON.stringify(cfg, null, 2));
         return res.json({ ok: true });
+      }
+      if (action === 'discover_sources') {
+        const cfg = await getConfig();
+        const rssSet = new Set<string>(cfg.rss || []);
+        const ytSet = new Set<string>(cfg.youtube || []);
+        const webList: string[] = Array.isArray(cfg.websites) ? cfg.websites : [];
+        for (const w of webList) {
+          try {
+            const u = new URL(w);
+            const r = await fetch(u.origin);
+            const html = await r.text();
+            // RSS <link rel="alternate" type="application/rss+xml" href="...">
+            const feedLinks = Array.from(html.matchAll(/<link[^>]+type=["']application\/rss\+xml["'][^>]*href=["']([^"']+)/gi)).map(m => m[1]);
+            feedLinks.forEach(f => rssSet.add(f));
+            // YouTube links on page
+            const ytLinks = Array.from(html.matchAll(/href=["']https?:\/\/(?:www\.)?youtube\.com\/[^"']+["']/gi)).map(m => m[0].slice(6, -1));
+            ytLinks.forEach(l => ytSet.add(l));
+          } catch {}
+        }
+        const updated = { ...cfg, rss: Array.from(rssSet), youtube: Array.from(ytSet) };
+        await putObject('monitoring', 'config.json', JSON.stringify(updated, null, 2));
+        return res.json({ ok: true, rss: updated.rss.length, youtube: updated.youtube.length });
       }
       return res.status(400).json({ error: 'Unknown action' });
     }

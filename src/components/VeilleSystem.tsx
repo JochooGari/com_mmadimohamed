@@ -209,7 +209,7 @@ export default function VeilleSystem({ className = '' }: { className?: string })
   const [searchTerm, setSearchTerm] = useState('');
   const [scoreFilter, setScoreFilter] = useState<string>('all');
   const [isRunningVeille, setIsRunningVeille] = useState(false);
-  const [config, setConfig] = useState<any>({ weights: { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 }, rss: [], websites: [], youtube: [] });
+  const [config, setConfig] = useState<any>({ weights: { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 }, rss: [], websites: [], youtube: [], objective: '', autoDiscovery: true });
   const [rows, setRows] = useState<any[]>([]);
 
   // Sauvegarder automatiquement
@@ -378,15 +378,23 @@ export default function VeilleSystem({ className = '' }: { className?: string })
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <p className="text-sm font-medium text-gray-700">Flux RSS (séparés par des virgules)</p>
-              <Textarea value={(config.rss || []).join(', ')} onChange={e=> setConfig({ ...config, rss: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) })} />
+              <Textarea placeholder={"Une URL par ligne ou séparées par des virgules"} value={(config.rss || []).join('\n')} onChange={e=> setConfig({ ...config, rss: e.target.value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean) })} />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700">Sites web (domaines/URLs)</p>
-              <Textarea value={(config.websites || []).join(', ')} onChange={e=> setConfig({ ...config, websites: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) })} />
+              <Textarea placeholder={"ex: https://mckinsey.com"} value={(config.websites || []).join('\n')} onChange={e=> setConfig({ ...config, websites: e.target.value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean) })} />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700">YouTube (channels/playlists)</p>
-              <Textarea value={(config.youtube || []).join(', ')} onChange={e=> setConfig({ ...config, youtube: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) })} />
+              <Textarea placeholder={"ex: https://www.youtube.com/@channel"} value={(config.youtube || []).join('\n')} onChange={e=> setConfig({ ...config, youtube: e.target.value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean) })} />
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-700">Contexte / Objectif de veille</p>
+            <Textarea placeholder={"Décris l’objectif business pour guider l’IA (ex: Leads CFO France, sujets Finance + Data)."} value={config.objective} onChange={e=> setConfig({ ...config, objective: e.target.value })} />
+            <div className="mt-2 text-sm text-gray-600 flex items-center gap-2">
+              <input id="autoD" type="checkbox" checked={!!config.autoDiscovery} onChange={e=> setConfig({ ...config, autoDiscovery: e.target.checked })} />
+              <label htmlFor="autoD">Activer la découverte automatique quotidienne (RSS/YouTube depuis les sites)</label>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

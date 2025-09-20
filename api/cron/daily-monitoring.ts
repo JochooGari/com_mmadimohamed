@@ -13,6 +13,13 @@ export default async function handler(req: any, res: any) {
       return res.status(500).json({ error: 'Missing SITE_URL/VERCEL_URL' });
     }
 
+    // 1) Découverte de sources auto
+    await fetch(`${base}/api/monitoring`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'discover_sources' })
+    }).catch(()=>{});
+
+    // 2) Lancer la veille
     const r = await fetch(`${base}/api/monitoring`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
