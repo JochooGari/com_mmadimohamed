@@ -16,7 +16,6 @@ import {
   Search
 } from 'lucide-react';
 import { BrowserFileStorage } from '../lib/browserStorage';
-import { aiService, getApiKey } from '../lib/aiProviders';
 
 interface ChatMessage {
   id: string;
@@ -265,19 +264,7 @@ export default function KnowledgeChat({ className = '' }: KnowledgeChatProps) {
   const generateResponse = async (query: string, relevantSources: KnowledgeSource[]): Promise<string> => {
     console.log('🤖 Génération réponse avec', relevantSources.length, 'sources');
     
-    // 1) Exiger OpenAI: si la clé n'est pas définie, informer clairement l'utilisateur (pas de fallback)
-    const openaiKey = getApiKey('openai');
-    if (!openaiKey) {
-      return `❌ Clé API OpenAI manquante.
-
-Veuillez ajouter votre clé dans le fichier .env.local:
-
-VITE_OPENAI_API_KEY=sk-...
-
-Puis redémarrez le serveur de développement et réessayez.`;
-    }
-
-    // 2) Appel RAG réel via OpenAI avec contexte sources
+    // 1) Appel RAG réel via OpenAI via endpoint serveur (clé NON exposée)
     try {
       const context = relevantSources
         .map((s, i) => `### Source ${i + 1}: ${s.title || s.name}\n${(s.content || '').slice(0, 2000)}`)
@@ -286,28 +273,28 @@ Puis redémarrez le serveur de développement et réessayez.`;
       const systemPrompt = `Tu es un assistant IA expert LinkedIn. Réponds en français, de façon concise et actionnable. Tu t'appuies STRICTEMENT sur les documents fournis (sources internes et veille). Lorsque la question est générale, fais une synthèse structurée à partir des sources. Cite explicitement les éléments tirés des documents (sans URL).`;
 
       const userPrompt = `Question: ${query}\n\nContexte (extraits des documents):\n${context}\n\nConsignes:\n- Si la question demande des points clés, fournis 3 à 5 points concrets basés sur les extraits.\n- Si la question demande un résumé, fournis un résumé court par document puis une synthèse.\n- Si l'information manque, dis-le clairement.`;
-
-      const ai = await aiService.generateCompletion('openai', {
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.2,
-        maxTokens: 800
+      const resp = await fetch('/api/ai-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.2,
+          maxTokens: 800
+        })
       });
-
-      if (ai?.content && ai.content.trim().length > 0) {
-        return ai.content.trim();
+      const ai = await resp.json();
+      if (!resp.ok) {
+        const reason = ai?.error || resp.statusText;
+        return `❌ Erreur d'appel IA: ${reason}`;
       }
+      if (ai?.content && typeof ai.content === 'string') return ai.content.trim();
     } catch (err: any) {
       const message = typeof err?.message === 'string' ? err.message : 'Erreur inconnue';
-      // Message explicite si problème d’authentification
-      if (/unauthorized|401|invalid api key|missing api key/i.test(message)) {
-        return `❌ Erreur d'authentification OpenAI.
-
-Vérifiez votre clé dans .env.local (VITE_OPENAI_API_KEY) et redémarrez.`;
-      }
       return `❌ Erreur lors de l'appel OpenAI: ${message}`;
     }
 
