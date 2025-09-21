@@ -30,6 +30,22 @@ async function listObjects(bucket: string, prefix: string) {
   return data || [];
 }
 
+function idFromUrl(url: string) {
+  try { return Buffer.from(url).toString('base64').replace(/=+$/, ''); } catch { return ''; }
+}
+
+async function getExistingIdsSet(): Promise<Set<string>> {
+  const entries = await listObjects('monitoring', 'sources');
+  const set = new Set<string>();
+  for (const e of entries) {
+    const name = e?.name || '';
+    // pattern: type_<id>.json
+    const m = name.match(/^[^_]+_(.+)\.json$/);
+    if (m && m[1]) set.add(m[1]);
+  }
+  return set;
+}
+
 async function getConfig() {
   const def = {
     weights: { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 },
@@ -117,6 +133,7 @@ export default async function handler(req: any, res: any) {
         const rssList: string[] = Array.isArray(cfg.rss) ? cfg.rss : [];
         const websites: string[] = Array.isArray(cfg.websites) ? cfg.websites : [];
         const youtubeList: string[] = Array.isArray(cfg.youtube) ? cfg.youtube : [];
+        const existingIds = await getExistingIdsSet();
 
         const targets: string[] = [];
         // 1) Sitemap (limité)
@@ -129,15 +146,22 @@ export default async function handler(req: any, res: any) {
           }
         } catch {}
 
-        // 2) RSS → extraire 2-3 liens par flux
+        // 2) RSS → extraire de nouveaux liens par flux
         for (const feedUrl of rssList) {
           try {
             const r = await fetch(feedUrl);
             if (!r.ok) continue;
             const xml = await r.text();
-            const itemLinks = Array.from(xml.matchAll(/<item>[\s\S]*?<link>([^<]+)<\/link>[\s\S]*?<\/item>/gi)).map(m => m[1]).slice(0,3);
-            const atomLinks = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]).slice(0,3);
-            targets.push(...itemLinks, ...atomLinks);
+            const itemLinks = Array.from(xml.matchAll(/<item>[\s\S]*?<link>([^<]+)<\/link>[\s\S]*?<\/item>/gi)).map(m => m[1]);
+            const atomLinks = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]);
+            const all = [...itemLinks, ...atomLinks];
+            let added = 0;
+            for (const u of all) {
+              const id = idFromUrl(u);
+              if (!id || existingIds.has(id)) continue;
+              targets.push(u);
+              added++; if (added >= 5) break; // max 5 nouveaux liens par flux
+            }
           } catch {}
         }
 
@@ -152,16 +176,16 @@ export default async function handler(req: any, res: any) {
               const feed = `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`;
               const r = await fetch(feed); if (r.ok) {
                 const xml = await r.text();
-                const vids = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]).slice(0,2);
-                targets.push(...vids);
+                const vids = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]).slice(0,5);
+                for (const v of vids) { const id = idFromUrl(v); if (id && !existingIds.has(id)) targets.push(v); }
               }
             } else if (/youtube\.com\/user\//i.test(y)) {
               const user = y.split('/').pop() || '';
               const feed = `https://www.youtube.com/feeds/videos.xml?user=${user}`;
               const r = await fetch(feed); if (r.ok) {
                 const xml = await r.text();
-                const vids = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]).slice(0,2);
-                targets.push(...vids);
+                const vids = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]).slice(0,5);
+                for (const v of vids) { const id = idFromUrl(v); if (id && !existingIds.has(id)) targets.push(v); }
               }
             }
           } catch {}
@@ -171,6 +195,8 @@ export default async function handler(req: any, res: any) {
         const seen = new Set<string>();
         for (const url of targets) {
           if (!url || seen.has(url)) continue;
+          const id = idFromUrl(url);
+          if (!id || existingIds.has(id)) continue; // déjà collecté dans un run précédent
           seen.add(url);
           try {
             const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -185,7 +211,7 @@ export default async function handler(req: any, res: any) {
               .trim();
             const body = description || text.slice(0, 1400);
             const obj = {
-              id: Buffer.from(url).toString('base64').replace(/=+$/, ''),
+              id,
               title: title || 'Page',
               content: body,
               type: /\/blog\//.test(url) ? 'article' : 'document',
@@ -242,6 +268,7 @@ export default async function handler(req: any, res: any) {
         const cfg = await getConfig();
         const rssSet = new Set<string>(cfg.rss || []);
         const ytSet = new Set<string>(cfg.youtube || []);
+        const webSet = new Set<string>(cfg.websites || []);
         const webList: string[] = Array.isArray(cfg.websites) ? cfg.websites : [];
         let discovered = 0;
         for (const w of webList) {
@@ -283,7 +310,7 @@ export default async function handler(req: any, res: any) {
                 try {
                   const json = JSON.parse(text);
                   const add = (arr:any, set:Set<string>) => { if (Array.isArray(arr)) arr.forEach((u:string)=> { if (typeof u === 'string' && /^https?:\/\//i.test(u)) set.add(u); }); };
-                  add(json.websites, rssSet); // on ajoute aux flux à découvrir plus tard
+                  add(json.websites, webSet);
                   add(json.rss, rssSet);
                   add(json.youtube, ytSet);
                 } catch {}
@@ -291,7 +318,7 @@ export default async function handler(req: any, res: any) {
             }
           }
         } catch {}
-        const updated = { ...cfg, rss: Array.from(rssSet), youtube: Array.from(ytSet) };
+        const updated = { ...cfg, rss: Array.from(rssSet), youtube: Array.from(ytSet), websites: Array.from(webSet) };
         await putObject('monitoring', 'config.json', JSON.stringify(updated, null, 2));
         await setStatus({ message: `Découverte: +${discovered} flux/chaînes`, success: true });
         return res.json({ ok: true, rss: updated.rss.length, youtube: updated.youtube.length, discovered });
