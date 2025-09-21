@@ -37,7 +37,17 @@ async function getConfig() {
     websites: [],
     youtube: [],
     objective: '',
-    autoDiscovery: true
+    autoDiscovery: true,
+    businessCriteria: {
+      topicKeywords: ['roi','revenue','pipeline','market','benchmark','classement','pricing','case study','B2B','SaaS'],
+      conversionKeywords: ['download','inscription','subscribe','contact','demo','webinar','trial','lead','conversion'],
+      leadMagnetKeywords: ['guide','template','checklist','whitepaper','ebook','rapport','étude','liste','classement','ranking'],
+      weights: { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 }
+    },
+    aiResearch: true,
+    aiProvider: 'perplexity',
+    aiModel: 'llama-3.1-sonar-large-128k-online',
+    scoringPrompt: ''
   };
   const cfg = await getObjectJSON('monitoring', 'config.json');
   return { ...def, ...(cfg || {}) };
@@ -213,6 +223,39 @@ export default async function handler(req: any, res: any) {
             discovered += feedLinks.length + ytLinks.length;
           } catch {}
         }
+        // Découverte via IA (Perplexity) si activée
+        try {
+          if (cfg.aiResearch) {
+            const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
+            if (base) {
+              const prompt = cfg.scoringPrompt && cfg.scoringPrompt.length > 10
+                ? cfg.scoringPrompt
+                : `Tu es un agent de veille. Objectif: ${cfg.objective || 'veille marketing/IA B2B'}. Propose jusqu'à 10 URLs pertinentes (web/RSS/YouTube) qui permettront de générer contenus et lead magnets orientés conversion. Favorise thématiques business (ROI, pipeline, benchmark, classement), CTA/Conversion (demo, essai, webinar, download), lead magnets (guide, template, checklist). Renvoie UNIQUEMENT un JSON compact {"websites":[],"rss":[],"youtube":[]} sans texte.`;
+              const body = {
+                provider: cfg.aiProvider || 'perplexity',
+                model: cfg.aiModel || 'llama-3.1-sonar-large-128k-online',
+                messages: [
+                  { role: 'system', content: 'You output ONLY compact JSON. No prose.' },
+                  { role: 'user', content: prompt }
+                ],
+                temperature: 0.2,
+                maxTokens: 500
+              } as any;
+              const r = await fetch(`${base}/api/ai-proxy`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+              if (r.ok) {
+                const data = await r.json();
+                const text = (data?.content || data?.text || data?.choices?.[0]?.message?.content || '').trim();
+                try {
+                  const json = JSON.parse(text);
+                  const add = (arr:any, set:Set<string>) => { if (Array.isArray(arr)) arr.forEach((u:string)=> { if (typeof u === 'string' && /^https?:\/\//i.test(u)) set.add(u); }); };
+                  add(json.websites, rssSet); // on ajoute aux flux à découvrir plus tard
+                  add(json.rss, rssSet);
+                  add(json.youtube, ytSet);
+                } catch {}
+              }
+            }
+          }
+        } catch {}
         const updated = { ...cfg, rss: Array.from(rssSet), youtube: Array.from(ytSet) };
         await putObject('monitoring', 'config.json', JSON.stringify(updated, null, 2));
         await setStatus({ message: `Découverte: +${discovered} flux/chaînes`, success: true });

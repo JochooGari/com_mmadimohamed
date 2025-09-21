@@ -500,6 +500,39 @@ export default function VeilleSystem({ className = '' }: { className?: string })
         </CardContent>
       </Card>
 
+      {/* Recherche AI (Perplexity) + Prompt configurable */}
+      <Card>
+        <CardHeader className="pb-3"><CardTitle>Scoring & Recherche (IA)</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2 text-sm">
+            <input id="aiResearch" type="checkbox" checked={!!config.aiResearch} onChange={e=> setConfig({ ...config, aiResearch: e.target.checked })} />
+            <label htmlFor="aiResearch">Activer la découverte de sources via IA (Perplexity)</label>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-sm text-gray-600">Fournisseur</label>
+              <Input value={config.aiProvider || 'perplexity'} onChange={e=> setConfig({ ...config, aiProvider: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Modèle</label>
+              <Input value={config.aiModel || 'llama-3.1-sonar-large-128k-online'} onChange={e=> setConfig({ ...config, aiModel: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm text-gray-600">Prompt Scoring & Recherche (utilisé par l'IA)</label>
+            <Textarea
+              className="min-h-[120px]"
+              placeholder={`Calcule un score global = 0.4*Engagement + 0.3*Business + 0.2*Nouveauté + 0.1*Priorité. Business = w_topic*thématique + w_conv*conversion + w_lm*lead-magnet, w normalisés. Signaux thématiques: {topicKeywords}, conversion: {conversionKeywords}, lead-magnet: {leadMagnetKeywords}. Nouveauté favorise les contenus <7j et les mots 'nouveau/annonce/update/lancement'. Priorité favorise 'algorithme LinkedIn', 'nouvel outil/feature', et combine Business/Engagement. Pour la découverte, propose jusqu'à 10 URLs (web/RSS/YouTube) pertinentes pour ${config.objective || 'la veille business/IA B2B'}. Renvoie UNIQUEMENT un JSON {"websites":[],"rss":[],"youtube":[]}.`}
+              value={config.scoringPrompt || ''}
+              onChange={e=> setConfig({ ...config, scoringPrompt: e.target.value })}
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={saveConfig} className="bg-green-600 hover:bg-green-700">Enregistrer</Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Bandeau statut */}
       <div className="flex items-center gap-3 text-sm text-gray-700">
         <Badge className={status?.success ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
