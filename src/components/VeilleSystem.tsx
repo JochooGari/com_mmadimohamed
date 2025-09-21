@@ -530,10 +530,6 @@ export default function VeilleSystem({ className = '' }: { className?: string })
             <input id="aiResearch" type="checkbox" checked={!!config.aiResearch} onChange={e=> setConfig({ ...config, aiResearch: e.target.checked })} />
             <label htmlFor="aiResearch">Activer la découverte de sources via IA (Perplexity)</label>
           </div>
-          <div className="flex items-center gap-2 text-sm">
-            <input id="aiOptimize" type="checkbox" checked={config.aiOptimize !== false} onChange={e=> setConfig({ ...config, aiOptimize: e.target.checked })} />
-            <label htmlFor="aiOptimize">Optimiser les documents avec l'IA (résumé/scoring) par défaut</label>
-          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="text-sm text-gray-600">Fournisseur</label>

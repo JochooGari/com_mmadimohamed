@@ -61,7 +61,6 @@ async function getConfig() {
       weights: { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 }
     },
     aiResearch: true,
-    aiOptimize: true,
     aiProvider: 'perplexity',
     aiModel: 'llama-3.1-sonar-large-128k-online',
     scoringPrompt: '',
@@ -129,14 +128,24 @@ export default async function handler(req: any, res: any) {
         // Avant collecte: découverte via IA si activée
         try {
           if (cfg.aiResearch) {
-            await fetch(`${base}/api/monitoring`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'discover_sources' }) }).catch(()=>{});
+            const dr = await fetch(`${base}/api/monitoring`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'discover_sources' }) });
+            if (!dr.ok) {
+              const t = await dr.text().catch(()=> '');
+              await setStatus({ message: `Erreur découverte IA: ${t || dr.status}`, success: false });
+              return res.status(500).json({ error: 'AI discovery failed', details: t || dr.status });
+            }
           }
-        } catch {}
-        const rssList: string[] = Array.isArray(cfg.rss) ? cfg.rss : [];
-        const websites: string[] = Array.isArray(cfg.websites) ? cfg.websites : [];
-        const youtubeList: string[] = Array.isArray(cfg.youtube) ? cfg.youtube : [];
-        const maxNewPerFeed = Number(cfg.maxNewPerFeed) || 5;
-        const maxNewPerRun = Number(cfg.maxNewPerRun) || 50;
+        } catch (e:any) {
+          await setStatus({ message: `Erreur découverte IA: ${e?.message||'unknown'}`, success: false });
+          return res.status(500).json({ error: 'AI discovery failed', details: e?.message });
+        }
+        // recharger la config après découverte
+        const cfg2 = await getConfig();
+        const rssList: string[] = Array.isArray(cfg2.rss) ? cfg2.rss : [];
+        const websites: string[] = Array.isArray(cfg2.websites) ? cfg2.websites : [];
+        const youtubeList: string[] = Array.isArray(cfg2.youtube) ? cfg2.youtube : [];
+        const maxNewPerFeed = Number(cfg2.maxNewPerFeed) || 5;
+        const maxNewPerRun = Number(cfg2.maxNewPerRun) || 50;
         const existingIds = await getExistingIdsSet();
 
         const targets: string[] = [];
@@ -199,6 +208,8 @@ export default async function handler(req: any, res: any) {
         }
 
         let processed = 0;
+        let optimizedOk = 0;
+        let optimizedFailed = 0;
         const seen = new Set<string>();
         for (const url of targets.slice(0, maxNewPerRun)) {
           if (!url || seen.has(url)) continue;
@@ -229,41 +240,42 @@ export default async function handler(req: any, res: any) {
             };
             await putObject('monitoring', `sources/${obj.type}_${obj.id}.json`, JSON.stringify(obj, null, 2));
             await updateIndex(obj);
-            // Optimisation IA (résumé/scoring) si activée
+            // Optimisation IA obligatoire (no fallback)
             try {
-              if (cfg.aiOptimize) {
-                const sys = 'You output ONLY compact JSON. No prose.';
-                const prompt = cfg.scoringPrompt && cfg.scoringPrompt.length > 10
-                  ? cfg.scoringPrompt
-                  : `Analyse le document suivant et renvoie un JSON {"summary":"...","bullets":["..."],"scores":{"engagement":0..1,"business":0..1,"novelty":0..1,"priority":0..1}}. Favorise Business (thématique/CTA/lead-magnet), Nouveauté (fraîcheur + signaux), Priorité (stratégique).`;
-                const body = {
-                  provider: cfg.aiProvider || 'perplexity',
-                  model: cfg.aiModel || 'llama-3.1-sonar-large-128k-online',
-                  messages: [
-                    { role: 'system', content: sys },
-                    { role: 'user', content: `${prompt}\n\nTITRE: ${obj.title}\nSOURCE: ${obj.url}\nTEXTE:\n${obj.content}` }
-                  ],
-                  temperature: 0.2,
-                  maxTokens: 500
-                } as any;
-                const r2 = await fetch(`${base}/api/ai-proxy`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-                if (r2.ok) {
-                  const d2 = await r2.json();
-                  const text2 = (d2?.content || d2?.text || d2?.choices?.[0]?.message?.content || '').trim();
-                  try {
-                    const j = JSON.parse(text2);
-                    await putObject('monitoring', `optimized/optimized_${obj.id}.json`, JSON.stringify({ id: obj.id, url: obj.url, ...j, optimizedAt: new Date().toISOString() }, null, 2));
-                  } catch {}
-                }
-              }
-            } catch {}
+              const sys = 'You output ONLY compact JSON. No prose.';
+              const basePrompt = (cfg2.scoringPrompt && cfg2.scoringPrompt.length > 0) ? cfg2.scoringPrompt : 'Score et résume le document pour la veille. Utilise les pondérations fournies.';
+              const jsonRule = 'Renvoie UNIQUEMENT un JSON compact {"summary":"...","bullets":["..."],"scores":{"engagement":0..1,"business":0..1,"novelty":0..1,"priority":0..1}} sans aucun texte.';
+              const prompt = `${basePrompt}\n\nContexte pondérations: topic=${(cfg2.businessCriteria?.weights?.topic??0.5)}, conversion=${(cfg2.businessCriteria?.weights?.conversion??0.3)}, leadMagnet=${(cfg2.businessCriteria?.weights?.leadMagnet??0.2)}.\nThématiques=${(cfg2.businessCriteria?.topicKeywords||[]).join(', ')}.\nConversion=${(cfg2.businessCriteria?.conversionKeywords||[]).join(', ')}.\nLeadMagnet=${(cfg2.businessCriteria?.leadMagnetKeywords||[]).join(', ')}.\n${jsonRule}`;
+              const body = {
+                provider: cfg2.aiProvider || 'perplexity',
+                model: cfg2.aiModel || 'llama-3.1-sonar-large-128k-online',
+                messages: [
+                  { role: 'system', content: sys },
+                  { role: 'user', content: `${prompt}\n\nTITRE: ${obj.title}\nSOURCE: ${obj.url}\nTEXTE:\n${obj.content}` }
+                ],
+                temperature: 0.2,
+                maxTokens: 800
+              } as any;
+              const r2 = await fetch(`${base}/api/ai-proxy`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+              if (!r2.ok) throw new Error(`ai-proxy status ${r2.status}`);
+              const d2 = await r2.json();
+              const text2 = (d2?.content || d2?.text || d2?.choices?.[0]?.message?.content || '').trim();
+              const j = JSON.parse(text2);
+              await putObject('monitoring', `optimized/optimized_${obj.id}.json`, JSON.stringify({ id: obj.id, url: obj.url, ...j, optimizedAt: new Date().toISOString() }, null, 2));
+              optimizedOk++;
+            } catch (e:any) {
+              optimizedFailed++;
+            }
             processed++;
           } catch {}
         }
         const stats = await getMonitoringStats();
         const sourcesCount = (websites?.length || 0) + (rssList?.length || 0) + (youtubeList?.length || 0);
-        await setStatus({ finishedAt: new Date().toISOString(), lastRunAt: new Date().toISOString(), success: true, message: 'Veille terminée', itemsProcessed: processed, sourcesProcessed: sourcesCount });
-        return res.json({ success: true, processed, targets: sourcesCount, stats });
+        const success = optimizedFailed === 0;
+        const message = success ? 'Veille terminée (IA OK)' : `Veille partielle: optimisations échouées ${optimizedFailed}`;
+        await setStatus({ finishedAt: new Date().toISOString(), lastRunAt: new Date().toISOString(), success, message, itemsProcessed: processed, sourcesProcessed: sourcesCount });
+        if (!success) return res.status(500).json({ success: false, processed, optimizedOk, optimizedFailed });
+        return res.json({ success: true, processed, optimizedOk, targets: sourcesCount, stats });
       }
       if (action === 'save_config') {
         const cfg = req.body?.config;
@@ -341,7 +353,7 @@ export default async function handler(req: any, res: any) {
       }
       if (url.searchParams.get('list') === '1') {
         const cfg = await getConfig();
-        // lister les objets sous sources/
+        // lister les objets sous sources/ mais n'afficher que ceux avec un optimized correspondant
         const entries = await listObjects('monitoring', 'sources');
         const supabase = getSupabase();
         const map = new Map<string, any>();
@@ -378,6 +390,9 @@ export default async function handler(req: any, res: any) {
           const text = await (data as any).text();
           try {
             const obj = JSON.parse(text);
+            // Exiger un optimized; sinon ignorer cet item (no fallback)
+            const optProbe = await supabase.storage.from('monitoring').download(`optimized/optimized_${obj.id}.json`);
+            if (!optProbe?.data) continue;
             const content = obj.content || '';
             const engagement = Math.min(1, ((obj.metadata?.engagement?.likes || 20) + (obj.metadata?.engagement?.comments || 5)) / 200);
             // Business = pondération thématique + conversion + lead magnet
@@ -395,18 +410,15 @@ export default async function handler(req: any, res: any) {
             const priority = nrm(0.5*strategic + 0.3*business + 0.2*engagement);
             const w = cfg.weights || { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 };
             const global = engagement*w.engagement + business*w.business + novelty*w.novelty + priority*w.priority;
-            // Si optimisation IA existe, surcharge partielle des scores
+            // Lire les scores IA (obligatoire)
             try {
-              const { data: optData } = await supabase.storage.from('monitoring').download(`optimized/optimized_${obj.id}.json`);
-              if (optData) {
-                const t2 = await (optData as any).text();
-                const jo = JSON.parse(t2);
-                if (jo?.scores) {
-                  if (typeof jo.scores.engagement === 'number') engagement = jo.scores.engagement;
-                  if (typeof jo.scores.business === 'number') business = jo.scores.business;
-                  if (typeof jo.scores.novelty === 'number') novelty = jo.scores.novelty;
-                  if (typeof jo.scores.priority === 'number') priority = jo.scores.priority;
-                }
+              const t2 = await (optProbe.data as any).text();
+              const jo = JSON.parse(t2);
+              if (jo?.scores) {
+                if (typeof jo.scores.engagement === 'number') engagement = jo.scores.engagement;
+                if (typeof jo.scores.business === 'number') business = jo.scores.business;
+                if (typeof jo.scores.novelty === 'number') novelty = jo.scores.novelty;
+                if (typeof jo.scores.priority === 'number') priority = jo.scores.priority;
               }
             } catch {}
 
