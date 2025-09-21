@@ -233,6 +233,20 @@ export default async function handler(req: any, res: any) {
         const entries = await listObjects('monitoring', 'sources');
         const supabase = getSupabase();
         const map = new Map<string, any>();
+        const bc = cfg.businessCriteria || {};
+        const topicKw: string[] = bc.topicKeywords || ['roi','revenue','pipeline','benchmark','market','classement','pricing','case study','b2b','saas'];
+        const convKw: string[] = bc.conversionKeywords || ['download','inscription','subscribe','contact','demo','webinar','trial','lead','cta','conversion'];
+        const lmKw: string[] = bc.leadMagnetKeywords || ['guide','template','checklist','whitepaper','ebook','rapport','étude','liste','classement','ranking'];
+        const bw = bc.weights || { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 };
+        const bwSum = (bw.topic||0) + (bw.conversion||0) + (bw.leadMagnet||0) || 1;
+        const nrm = (n:number)=> Math.max(0, Math.min(1, n));
+        const kwScore = (text:string, kws:string[]) => {
+          if (!text) return 0;
+          if (!kws || kws.length === 0) return 0;
+          const lower = text.toLowerCase();
+          const hits = kws.reduce((acc, k) => acc + (lower.includes(k.toLowerCase()) ? 1 : 0), 0);
+          return nrm(hits / Math.max(3, Math.ceil(kws.length/2)));
+        };
         for (const e of entries) {
           if (!e?.name?.endsWith('.json')) continue;
           const { data } = await supabase.storage.from('monitoring').download(`sources/${e.name}`);
@@ -240,10 +254,21 @@ export default async function handler(req: any, res: any) {
           const text = await (data as any).text();
           try {
             const obj = JSON.parse(text);
+            const content = obj.content || '';
             const engagement = Math.min(1, ((obj.metadata?.engagement?.likes || 20) + (obj.metadata?.engagement?.comments || 5)) / 200);
-            const business = /roi|revenue|pipeline|deal|cash|daf|cfo|case/i.test(obj.content || '') ? 0.9 : 0.6;
-            const novelty = Math.min(1, (obj.content || '').split(/\b/).length / 2000);
-            const priority = 0.5 + (business - 0.5) * 0.5 + (engagement - 0.5) * 0.3;
+            // Business = pondération thématique + conversion + lead magnet
+            const topicScore = kwScore(content, topicKw);
+            const convScore = kwScore(content, convKw);
+            const lmScore = kwScore(content, lmKw);
+            const business = nrm((topicScore * (bw.topic||0) + convScore * (bw.conversion||0) + lmScore * (bw.leadMagnet||0)) / bwSum);
+            // Nouveauté = fraicheur + mots "nouveau, annonce, lancement"
+            const days = (() => { try { const d = new Date(obj.publishedAt); return isNaN(d as any) ? 999 : Math.max(0, (Date.now() - d.getTime())/86400000); } catch { return 999; } })();
+            const freshness = days < 1 ? 1 : days < 7 ? 0.8 : days < 30 ? 0.6 : days < 90 ? 0.4 : 0.2;
+            const trendScore = kwScore(content, ['nouveau','new','annonce','update','changement','algorithme','lancement','beta']);
+            const novelty = nrm((freshness*0.7 + trendScore*0.3));
+            // Priorité = stratégique (algorithme, nouveaux outils) + combinaison business/engagement
+            const strategic = kwScore(content, ['algorithme linkedin','nouvel outil','feature','update linkedin','beta','lancement']);
+            const priority = nrm(0.5*strategic + 0.3*business + 0.2*engagement);
             const w = cfg.weights || { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 };
             const global = engagement*w.engagement + business*w.business + novelty*w.novelty + priority*w.priority;
             const row = {

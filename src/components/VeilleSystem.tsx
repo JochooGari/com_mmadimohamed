@@ -247,7 +247,16 @@ export default function VeilleSystem({ className = '' }: { className?: string })
   const [searchTerm, setSearchTerm] = useState('');
   const [scoreFilter, setScoreFilter] = useState<string>('all');
   const [isRunningVeille, setIsRunningVeille] = useState(false);
-  const [config, setConfig] = useState<any>({ weights: { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 }, rss: [], websites: [], youtube: [], objective: '', autoDiscovery: true });
+  const [config, setConfig] = useState<any>({
+    weights: { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 },
+    rss: [], websites: [], youtube: [], objective: '', autoDiscovery: true,
+    businessCriteria: {
+      topicKeywords: ['roi','revenue','pipeline','market','benchmark','classement','pricing','case study','B2B','SaaS'],
+      conversionKeywords: ['download','inscription','subscribe','contact','demo','webinar','trial','lead','conversion'],
+      leadMagnetKeywords: ['guide','template','checklist','whitepaper','ebook','rapport','étude','liste','classement','ranking'],
+      weights: { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 }
+    }
+  });
   const [rows, setRows] = useState<any[]>([]);
   const [status, setStatus] = useState<any>({});
 
@@ -461,6 +470,33 @@ export default function VeilleSystem({ className = '' }: { className?: string })
           <div className="flex justify-end">
             <Button onClick={saveConfig} className="bg-green-600 hover:bg-green-700">Enregistrer</Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Critères business avancés */}
+      <Card>
+        <CardHeader className="pb-3"><CardTitle>Critères Business (pondération interne)</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <TagInput label="Thématiques business (mots-clés)" values={config.businessCriteria?.topicKeywords || []} onChange={(vals)=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), topicKeywords: vals, weights: config.businessCriteria?.weights || { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 }, conversionKeywords: config.businessCriteria?.conversionKeywords || [], leadMagnetKeywords: config.businessCriteria?.leadMagnetKeywords || [] } })} placeholder="Ex: ROI, pipeline, benchmark, classement..." />
+            <TagInput label="Conversion/CTA (mots-clés)" values={config.businessCriteria?.conversionKeywords || []} onChange={(vals)=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), conversionKeywords: vals, weights: config.businessCriteria?.weights || { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 }, topicKeywords: config.businessCriteria?.topicKeywords || [], leadMagnetKeywords: config.businessCriteria?.leadMagnetKeywords || [] } })} placeholder="Ex: demo, essai, inscription, webinar, download..." />
+            <TagInput label="Lead magnet (mots-clés)" values={config.businessCriteria?.leadMagnetKeywords || []} onChange={(vals)=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), leadMagnetKeywords: vals, weights: config.businessCriteria?.weights || { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 }, topicKeywords: config.businessCriteria?.topicKeywords || [], conversionKeywords: config.businessCriteria?.conversionKeywords || [] } })} placeholder="Ex: guide, template, checklist, ebook, rapport..." />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-sm text-gray-600">Poids Thématique</label>
+              <Input type="number" step="0.05" min="0" max="1" value={config.businessCriteria?.weights?.topic ?? 0.5} onChange={e=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), weights: { ...(config.businessCriteria?.weights||{}), topic: Number(e.target.value) } } })} />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Poids Conversion</label>
+              <Input type="number" step="0.05" min="0" max="1" value={config.businessCriteria?.weights?.conversion ?? 0.3} onChange={e=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), weights: { ...(config.businessCriteria?.weights||{}), conversion: Number(e.target.value) } } })} />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Poids Lead Magnet</label>
+              <Input type="number" step="0.05" min="0" max="1" value={config.businessCriteria?.weights?.leadMagnet ?? 0.2} onChange={e=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), weights: { ...(config.businessCriteria?.weights||{}), leadMagnet: Number(e.target.value) } } })} />
+            </div>
+          </div>
+          <div className="text-xs text-gray-500">Astuce: la somme n'a pas besoin de faire 1, les poids sont normalisés côté serveur.</div>
         </CardContent>
       </Card>
 
