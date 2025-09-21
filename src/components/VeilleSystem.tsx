@@ -320,6 +320,13 @@ export default function VeilleSystem({ className = '' }: { className?: string })
       console.log('Veille run result:', result);
       const st = await fetch('/api/monitoring?status=1').then(r=> r.ok ? r.json() : null).catch(()=>null);
       if (st) setStatus(st);
+      try {
+        const listRes = await fetch('/api/monitoring?list=1');
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setRows(data.items || []);
+        }
+      } catch {}
       alert(`Veille terminée: ${result.processed || st?.itemsProcessed || 0} docs, ${result.targets || st?.sourcesProcessed || 0} sources.`);
       // Pas d’injection d’insights mock: les résultats sont persistés dans data/monitoring
     } catch (e) {
