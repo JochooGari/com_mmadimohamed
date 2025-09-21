@@ -495,32 +495,6 @@ export default function VeilleSystem({ className = '' }: { className?: string })
         </CardContent>
       </Card>
 
-      {/* Critères business avancés */}
-      <Card>
-        <CardHeader className="pb-3"><CardTitle>Critères Business (pondération interne)</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <TagInput label="Thématiques business (mots-clés)" values={config.businessCriteria?.topicKeywords || []} onChange={(vals)=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), topicKeywords: vals, weights: config.businessCriteria?.weights || { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 }, conversionKeywords: config.businessCriteria?.conversionKeywords || [], leadMagnetKeywords: config.businessCriteria?.leadMagnetKeywords || [] } })} placeholder="Ex: ROI, pipeline, benchmark, classement..." />
-            <TagInput label="Conversion/CTA (mots-clés)" values={config.businessCriteria?.conversionKeywords || []} onChange={(vals)=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), conversionKeywords: vals, weights: config.businessCriteria?.weights || { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 }, topicKeywords: config.businessCriteria?.topicKeywords || [], leadMagnetKeywords: config.businessCriteria?.leadMagnetKeywords || [] } })} placeholder="Ex: demo, essai, inscription, webinar, download..." />
-            <TagInput label="Lead magnet (mots-clés)" values={config.businessCriteria?.leadMagnetKeywords || []} onChange={(vals)=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), leadMagnetKeywords: vals, weights: config.businessCriteria?.weights || { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 }, topicKeywords: config.businessCriteria?.topicKeywords || [], conversionKeywords: config.businessCriteria?.conversionKeywords || [] } })} placeholder="Ex: guide, template, checklist, ebook, rapport..." />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label className="text-sm text-gray-600">Poids Thématique</label>
-              <Input type="number" step="0.05" min="0" max="1" value={config.businessCriteria?.weights?.topic ?? 0.5} onChange={e=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), weights: { ...(config.businessCriteria?.weights||{}), topic: Number(e.target.value) } } })} />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600">Poids Conversion</label>
-              <Input type="number" step="0.05" min="0" max="1" value={config.businessCriteria?.weights?.conversion ?? 0.3} onChange={e=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), weights: { ...(config.businessCriteria?.weights||{}), conversion: Number(e.target.value) } } })} />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600">Poids Lead Magnet</label>
-              <Input type="number" step="0.05" min="0" max="1" value={config.businessCriteria?.weights?.leadMagnet ?? 0.2} onChange={e=> setConfig({ ...config, businessCriteria: { ...(config.businessCriteria||{}), weights: { ...(config.businessCriteria?.weights||{}), leadMagnet: Number(e.target.value) } } })} />
-            </div>
-          </div>
-          <div className="text-xs text-gray-500">Astuce: la somme n'a pas besoin de faire 1, les poids sont normalisés côté serveur.</div>
-        </CardContent>
-      </Card>
 
       {/* Recherche AI (Perplexity) + Prompt configurable */}
       <Card>
@@ -541,10 +515,10 @@ export default function VeilleSystem({ className = '' }: { className?: string })
             </div>
           </div>
           <div>
-            <label className="text-sm text-gray-600">Prompt Scoring & Recherche (utilisé par l'IA)</label>
+              <label className="text-sm text-gray-600">Prompt Scoring & Recherche (utilisé par l'IA)</label>
             <Textarea
               className="min-h-[120px]"
-              placeholder={`Calcule un score global = 0.4*Engagement + 0.3*Business + 0.2*Nouveauté + 0.1*Priorité. Business = w_topic*thématique + w_conv*conversion + w_lm*lead-magnet, w normalisés. Signaux thématiques: {topicKeywords}, conversion: {conversionKeywords}, lead-magnet: {leadMagnetKeywords}. Nouveauté favorise les contenus <7j et les mots 'nouveau/annonce/update/lancement'. Priorité favorise 'algorithme LinkedIn', 'nouvel outil/feature', et combine Business/Engagement. Pour la découverte, propose jusqu'à 10 URLs (web/RSS/YouTube) pertinentes pour ${config.objective || 'la veille business/IA B2B'}. Renvoie UNIQUEMENT un JSON {"websites":[],"rss":[],"youtube":[]}.`}
+              placeholder={`Calcule des sous-scores (0..1) Engagement/Business/Nouveauté/Priorité et un score global = 0.4*Engagement + 0.3*Business + 0.2*Nouveauté + 0.1*Priorité. Filtre contenus trop génériques; priorise CFO/CMO (SaaS/BI/FinTech). Pour la découverte, propose jusqu'à 10 URLs (web/RSS/YouTube) pertinentes pour ${config.objective || 'la veille business/IA B2B'}. Réponds uniquement en JSON.`}
               value={config.scoringPrompt || ''}
               onChange={e=> setConfig({ ...config, scoringPrompt: e.target.value })}
             />
@@ -685,15 +659,15 @@ export default function VeilleSystem({ className = '' }: { className?: string })
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-3 py-2 text-left">Titre</th>
-                  <th className="px-3 py-2 text-left">Catégorie</th>
-                  <th className="px-3 py-2 text-left">Topic</th>
+                  <th className="px-3 py-2 text-left">Source (titre/résumé)</th>
+                  <th className="px-3 py-2 text-left">Secteur</th>
                   <th className="px-3 py-2 text-right">Engagement</th>
                   <th className="px-3 py-2 text-right">Business</th>
                   <th className="px-3 py-2 text-right">Nouveauté</th>
                   <th className="px-3 py-2 text-right">Priorité</th>
-                  <th className="px-3 py-2 text-right">Score</th>
-                  <th className="px-3 py-2 text-left">Source</th>
+                  <th className="px-3 py-2 text-right">Score global</th>
+                  <th className="px-3 py-2 text-left">Signaux métiers</th>
+                  <th className="px-3 py-2 text-left">Justification principale</th>
                   <th className="px-3 py-2 text-left">Ajouté</th>
                   <th className="px-3 py-2" />
                 </tr>
@@ -701,15 +675,15 @@ export default function VeilleSystem({ className = '' }: { className?: string })
               <tbody>
                 {rows.filter(r => (r.title||'').toLowerCase().includes(searchTerm.toLowerCase())).map((r:any) => (
                   <tr key={r.id} className="border-t">
-                    <td className="px-3 py-2 max-w-[360px] truncate">{r.title}</td>
-                    <td className="px-3 py-2">{r.type}</td>
-                    <td className="px-3 py-2">{r.topic || ''}</td>
+                    <td className="px-3 py-2 max-w-[360px] truncate"><a className="text-blue-600 hover:underline" href={r.url} target="_blank" rel="noreferrer">{r.title}</a></td>
+                    <td className="px-3 py-2">{r.sector || ''}</td>
                     <td className="px-3 py-2 text-right">{Math.round(r.scores.engagement*100)}%</td>
                     <td className="px-3 py-2 text-right">{Math.round(r.scores.business*100)}%</td>
                     <td className="px-3 py-2 text-right">{Math.round(r.scores.novelty*100)}%</td>
                     <td className="px-3 py-2 text-right">{Math.round(r.scores.priority*100)}%</td>
                     <td className="px-3 py-2 text-right font-semibold">{Math.round(globalScore(r.scores)*100)}%</td>
-                    <td className="px-3 py-2">{r.source}</td>
+                    <td className="px-3 py-2">{Array.isArray(r.signals) ? r.signals.join(', ') : ''}</td>
+                    <td className="px-3 py-2 max-w-[360px] truncate">{r.justification || ''}</td>
                     <td className="px-3 py-2">{r.addedAt ? new Date(r.addedAt).toLocaleDateString('fr-FR') : (r.date ? new Date(r.date).toLocaleDateString('fr-FR') : '')}</td>
                     <td className="px-3 py-2 text-right">
                       <Button variant="outline" size="sm" onClick={()=> r.url && window.open(r.url,'_blank')}>Ouvrir</Button>

@@ -54,12 +54,6 @@ async function getConfig() {
     youtube: [],
     objective: '',
     autoDiscovery: true,
-    businessCriteria: {
-      topicKeywords: ['roi','revenue','pipeline','market','benchmark','classement','pricing','case study','B2B','SaaS'],
-      conversionKeywords: ['download','inscription','subscribe','contact','demo','webinar','trial','lead','conversion'],
-      leadMagnetKeywords: ['guide','template','checklist','whitepaper','ebook','rapport','étude','liste','classement','ranking'],
-      weights: { topic: 0.5, conversion: 0.3, leadMagnet: 0.2 }
-    },
     aiResearch: true,
     aiProvider: 'perplexity',
     aiModel: 'llama-3.1-sonar-large-128k-online',
@@ -243,9 +237,11 @@ export default async function handler(req: any, res: any) {
             // Optimisation IA obligatoire (no fallback)
             try {
               const sys = 'You output ONLY compact JSON. No prose.';
-              const basePrompt = (cfg2.scoringPrompt && cfg2.scoringPrompt.length > 0) ? cfg2.scoringPrompt : 'Score et résume le document pour la veille. Utilise les pondérations fournies.';
-              const jsonRule = 'Renvoie UNIQUEMENT un JSON compact {"summary":"...","bullets":["..."],"scores":{"engagement":0..1,"business":0..1,"novelty":0..1,"priority":0..1}} sans aucun texte.';
-              const prompt = `${basePrompt}\n\nContexte pondérations: topic=${(cfg2.businessCriteria?.weights?.topic??0.5)}, conversion=${(cfg2.businessCriteria?.weights?.conversion??0.3)}, leadMagnet=${(cfg2.businessCriteria?.weights?.leadMagnet??0.2)}.\nThématiques=${(cfg2.businessCriteria?.topicKeywords||[]).join(', ')}.\nConversion=${(cfg2.businessCriteria?.conversionKeywords||[]).join(', ')}.\nLeadMagnet=${(cfg2.businessCriteria?.leadMagnetKeywords||[]).join(', ')}.\n${jsonRule}`;
+              const basePrompt = (cfg2.scoringPrompt && cfg2.scoringPrompt.length > 0)
+                ? cfg2.scoringPrompt
+                : 'Analyse et score le document pour la veille CFO/CMO. Retourne uniquement le JSON demandé.';
+              const jsonRule = 'Renvoie UNIQUEMENT un JSON compact {"title":"...","url":"...","sector":"...","signals":["..."],"summary":"...","bullets":["..."],"scores":{"engagement":0..1,"business":0..1,"novelty":0..1,"priority":0..1,"global":0..1}} sans aucun texte.';
+              const prompt = `${basePrompt}\n\n${jsonRule}`;
               const body = {
                 provider: cfg2.aiProvider || 'perplexity',
                 model: cfg2.aiModel || 'llama-3.1-sonar-large-128k-online',
@@ -393,44 +389,25 @@ export default async function handler(req: any, res: any) {
             // Exiger un optimized; sinon ignorer cet item (no fallback)
             const optProbe = await supabase.storage.from('monitoring').download(`optimized/optimized_${obj.id}.json`);
             if (!optProbe?.data) continue;
-            const content = obj.content || '';
-            const engagement = Math.min(1, ((obj.metadata?.engagement?.likes || 20) + (obj.metadata?.engagement?.comments || 5)) / 200);
-            // Business = pondération thématique + conversion + lead magnet
-            const topicScore = kwScore(content, topicKw);
-            const convScore = kwScore(content, convKw);
-            const lmScore = kwScore(content, lmKw);
-            const business = nrm((topicScore * (bw.topic||0) + convScore * (bw.conversion||0) + lmScore * (bw.leadMagnet||0)) / bwSum);
-            // Nouveauté = fraicheur + mots "nouveau, annonce, lancement"
-            const days = (() => { try { const d = new Date(obj.publishedAt); return isNaN(d as any) ? 999 : Math.max(0, (Date.now() - d.getTime())/86400000); } catch { return 999; } })();
-            const freshness = days < 1 ? 1 : days < 7 ? 0.8 : days < 30 ? 0.6 : days < 90 ? 0.4 : 0.2;
-            const trendScore = kwScore(content, ['nouveau','new','annonce','update','changement','algorithme','lancement','beta']);
-            const novelty = nrm((freshness*0.7 + trendScore*0.3));
-            // Priorité = stratégique (algorithme, nouveaux outils) + combinaison business/engagement
-            const strategic = kwScore(content, ['algorithme linkedin','nouvel outil','feature','update linkedin','beta','lancement']);
-            const priority = nrm(0.5*strategic + 0.3*business + 0.2*engagement);
-            const w = cfg.weights || { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 };
-            const global = engagement*w.engagement + business*w.business + novelty*w.novelty + priority*w.priority;
-            // Lire les scores IA (obligatoire)
-            try {
-              const t2 = await (optProbe.data as any).text();
-              const jo = JSON.parse(t2);
-              if (jo?.scores) {
-                if (typeof jo.scores.engagement === 'number') engagement = jo.scores.engagement;
-                if (typeof jo.scores.business === 'number') business = jo.scores.business;
-                if (typeof jo.scores.novelty === 'number') novelty = jo.scores.novelty;
-                if (typeof jo.scores.priority === 'number') priority = jo.scores.priority;
-              }
-            } catch {}
-
+            // Lire les scores IA et métadonnées
+            const t2 = await (optProbe.data as any).text();
+            const jo = JSON.parse(t2);
+            const engagement = Number(jo?.scores?.engagement) || 0;
+            const business = Number(jo?.scores?.business) || 0;
+            const novelty = Number(jo?.scores?.novelty) || 0;
+            const priority = Number(jo?.scores?.priority) || 0;
+            const global = Number(jo?.scores?.global ?? (0.4*engagement + 0.3*business + 0.2*novelty + 0.1*priority));
             const row = {
               id: obj.id,
-              title: obj.title,
+              title: jo?.title || obj.title,
               type: obj.type,
               source: obj.source,
               date: obj.publishedAt,
               url: obj.url,
               addedAt: obj.collectedAt || obj.publishedAt,
-              topic: classifyTopic(obj.title, obj.source),
+              sector: jo?.sector || classifyTopic(obj.title, obj.source),
+              signals: Array.isArray(jo?.signals) ? jo.signals : [],
+              justification: jo?.justification?.business || jo?.justification?.priority || jo?.justification?.engagement || '',
               scores: { engagement, business, novelty, priority, global }
             };
             const key = obj.url || obj.id;
