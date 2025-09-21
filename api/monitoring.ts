@@ -93,24 +93,70 @@ export default async function handler(req: any, res: any) {
       const { action } = req.body || {};
       if (action === 'run_now') {
         await setStatus({ startedAt: new Date().toISOString(), success: undefined, message: 'Veille en cours...', itemsProcessed: 0, sourcesProcessed: 0 });
-        // Collecte minimale: sitemap du site + 5 pages max
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
         if (!base) return res.status(500).json({ error: 'Missing SITE_URL/VERCEL_URL' });
-        let targets: string[] = [];
+
+        const cfg = await getConfig();
+        const rssList: string[] = Array.isArray(cfg.rss) ? cfg.rss : [];
+        const websites: string[] = Array.isArray(cfg.websites) ? cfg.websites : [];
+        const youtubeList: string[] = Array.isArray(cfg.youtube) ? cfg.youtube : [];
+
+        const targets: string[] = [];
+        // 1) Sitemap (limité)
         try {
           const sm = await fetch(`${base}/sitemap.xml`);
           if (sm.ok) {
             const xml = await sm.text();
             const locs = Array.from(xml.matchAll(/<loc>([^<]+)<\/loc>/gi)).map(m => m[1]);
-            targets = locs.filter(u => /\/blog\//.test(u) || /\/resource\//.test(u)).slice(0, 5);
+            targets.push(...locs.filter(u => /\/blog\//.test(u) || /\/resource\//.test(u)).slice(0, 5));
           }
         } catch {}
-        if (targets.length === 0) targets = [base];
+
+        // 2) RSS → extraire 2-3 liens par flux
+        for (const feedUrl of rssList) {
+          try {
+            const r = await fetch(feedUrl);
+            if (!r.ok) continue;
+            const xml = await r.text();
+            const itemLinks = Array.from(xml.matchAll(/<item>[\s\S]*?<link>([^<]+)<\/link>[\s\S]*?<\/item>/gi)).map(m => m[1]).slice(0,3);
+            const atomLinks = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]).slice(0,3);
+            targets.push(...itemLinks, ...atomLinks);
+          } catch {}
+        }
+
+        // 3) Websites explicites
+        targets.push(...websites);
+
+        // 4) YouTube → convertir en flux XML puis en liens vidéo (2)
+        for (const y of youtubeList) {
+          try {
+            if (/youtube\.com\/(?:channel)\//i.test(y)) {
+              const id = y.split('/').pop() || '';
+              const feed = `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`;
+              const r = await fetch(feed); if (r.ok) {
+                const xml = await r.text();
+                const vids = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]).slice(0,2);
+                targets.push(...vids);
+              }
+            } else if (/youtube\.com\/user\//i.test(y)) {
+              const user = y.split('/').pop() || '';
+              const feed = `https://www.youtube.com/feeds/videos.xml?user=${user}`;
+              const r = await fetch(feed); if (r.ok) {
+                const xml = await r.text();
+                const vids = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]).slice(0,2);
+                targets.push(...vids);
+              }
+            }
+          } catch {}
+        }
 
         let processed = 0;
+        const seen = new Set<string>();
         for (const url of targets) {
+          if (!url || seen.has(url)) continue;
+          seen.add(url);
           try {
-            const r = await fetch(url);
+            const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
             if (!r.ok) continue;
             const html = await r.text();
             const title = (html.match(/<title>([^<]+)<\/title>/i)?.[1] || '').trim();
@@ -137,8 +183,9 @@ export default async function handler(req: any, res: any) {
           } catch {}
         }
         const stats = await getMonitoringStats();
-        await setStatus({ finishedAt: new Date().toISOString(), lastRunAt: new Date().toISOString(), success: true, message: 'Veille terminée', itemsProcessed: processed, sourcesProcessed: targets.length });
-        return res.json({ success: true, processed, targets: targets.length, stats });
+        const sourcesCount = (websites?.length || 0) + (rssList?.length || 0) + (youtubeList?.length || 0);
+        await setStatus({ finishedAt: new Date().toISOString(), lastRunAt: new Date().toISOString(), success: true, message: 'Veille terminée', itemsProcessed: processed, sourcesProcessed: sourcesCount });
+        return res.json({ success: true, processed, targets: sourcesCount, stats });
       }
       if (action === 'save_config') {
         const cfg = req.body?.config;
