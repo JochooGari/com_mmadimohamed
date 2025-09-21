@@ -379,10 +379,10 @@ export default function VeilleSystem({ className = '' }: { className?: string })
     alert('Skill créée avec succès dans la Knowledge Base !');
   };
 
-  const totalInsights = insights.length;
-  const highPriorityInsights = insights.filter(i => i.scores.priority >= 0.8).length;
-  const avgEngagement = insights.reduce((sum, i) => sum + i.scores.engagement, 0) / totalInsights;
-  const avgBusinessIntent = insights.reduce((sum, i) => sum + i.scores.business_intent, 0) / totalInsights;
+  const totalInsights = rows.length;
+  const highPriorityInsights = rows.filter(i => i.scores.priority >= 0.8).length;
+  const avgEngagement = totalInsights ? (rows.reduce((sum, i) => sum + i.scores.engagement, 0) / totalInsights) : 0;
+  const avgBusinessIntent = totalInsights ? (rows.reduce((sum, i) => sum + i.scores.business, 0) / totalInsights) : 0;
 
   return (
     <div className={`space-y-6 ${className}`}>

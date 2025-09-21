@@ -168,7 +168,7 @@ export default async function handler(req: any, res: any) {
               .trim();
             const body = description || text.slice(0, 1400);
             const obj = {
-              id: `web_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+              id: Buffer.from(url).toString('base64').replace(/=+$/, ''),
               title: title || 'Page',
               content: body,
               type: /\/blog\//.test(url) ? 'article' : 'document',
@@ -232,7 +232,7 @@ export default async function handler(req: any, res: any) {
         // lister les objets sous sources/
         const entries = await listObjects('monitoring', 'sources');
         const supabase = getSupabase();
-        const rows: any[] = [];
+        const map = new Map<string, any>();
         for (const e of entries) {
           if (!e?.name?.endsWith('.json')) continue;
           const { data } = await supabase.storage.from('monitoring').download(`sources/${e.name}`);
@@ -246,16 +246,20 @@ export default async function handler(req: any, res: any) {
             const priority = 0.5 + (business - 0.5) * 0.5 + (engagement - 0.5) * 0.3;
             const w = cfg.weights || { engagement: 0.4, business: 0.3, novelty: 0.2, priority: 0.1 };
             const global = engagement*w.engagement + business*w.business + novelty*w.novelty + priority*w.priority;
-            rows.push({
+            const row = {
               id: obj.id,
               title: obj.title,
               type: obj.type,
               source: obj.source,
               date: obj.publishedAt,
+              url: obj.url,
               scores: { engagement, business, novelty, priority, global }
-            });
+            };
+            const key = obj.url || obj.id;
+            if (!map.has(key)) map.set(key, row);
           } catch {}
         }
+        const rows = Array.from(map.values());
         rows.sort((a,b)=> (b.scores.global - a.scores.global));
         return res.json({ items: rows });
       }
