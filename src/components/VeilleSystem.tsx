@@ -259,6 +259,8 @@ export default function VeilleSystem({ className = '' }: { className?: string })
   });
   const [rows, setRows] = useState<any[]>([]);
   const [status, setStatus] = useState<any>({});
+  const [sortBy, setSortBy] = useState<string>('global_desc');
+  const [topicFilterUI, setTopicFilterUI] = useState<string>('');
 
   // Sauvegarder automatiquement
   useEffect(() => {
@@ -285,7 +287,7 @@ export default function VeilleSystem({ className = '' }: { className?: string })
         if (cfgRes.ok) setConfig(await cfgRes.json());
       } catch {}
       try {
-        const listRes = await fetch('/api/monitoring?list=1');
+        const listRes = await fetch(`/api/monitoring?list=1&limit=50&sort=${encodeURIComponent(sortBy)}${topicFilterUI ? `&topic=${encodeURIComponent(topicFilterUI)}`:''}`);
         if (listRes.ok) {
           const data = await listRes.json();
           setRows(data.items || []);
@@ -297,6 +299,18 @@ export default function VeilleSystem({ className = '' }: { className?: string })
       } catch {}
     })();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const listRes = await fetch(`/api/monitoring?list=1&limit=50&sort=${encodeURIComponent(sortBy)}${topicFilterUI ? `&topic=${encodeURIComponent(topicFilterUI)}`:''}`);
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setRows(data.items || []);
+        }
+      } catch {}
+    })();
+  }, [sortBy, topicFilterUI]);
 
   const filteredInsights = insights.filter(insight => {
     const matchesSearch = insight.hook.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -465,6 +479,14 @@ export default function VeilleSystem({ className = '' }: { className?: string })
             <div>
               <label className="text-sm text-gray-600">Pondération Priorité</label>
               <Input type="number" step="0.05" min="0" max="1" value={config.weights.priority} onChange={e=> setConfig({ ...config, weights: { ...config.weights, priority: Number(e.target.value) } })} />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Max nouveaux / flux</label>
+              <Input type="number" min="1" max="50" value={config.maxNewPerFeed ?? 5} onChange={e=> setConfig({ ...config, maxNewPerFeed: Number(e.target.value) })} />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Max nouveaux / run</label>
+              <Input type="number" min="10" max="200" value={config.maxNewPerRun ?? 50} onChange={e=> setConfig({ ...config, maxNewPerRun: Number(e.target.value) })} />
             </div>
           </div>
           <div className="flex justify-end">
@@ -641,6 +663,27 @@ export default function VeilleSystem({ className = '' }: { className?: string })
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input placeholder="Rechercher..." value={searchTerm} onChange={e=> setSearchTerm(e.target.value)} className="pl-10" />
             </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">Trier</label>
+              <select className="border rounded px-2 py-1 text-sm" value={sortBy} onChange={e=> setSortBy(e.target.value)}>
+                <option value="global_desc">Score global ↓</option>
+                <option value="score_asc">Score global ↑</option>
+                <option value="date_desc">Date d'ajout ↓</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">Topic</label>
+              <select className="border rounded px-2 py-1 text-sm" value={topicFilterUI} onChange={e=> setTopicFilterUI(e.target.value)}>
+                <option value="">Tous</option>
+                <option value="linkedin">LinkedIn</option>
+                <option value="seo">SEO</option>
+                <option value="finance">Finance</option>
+                <option value="growth">Growth</option>
+                <option value="ai">AI</option>
+                <option value="general">Général</option>
+              </select>
+            </div>
+            <div className="text-xs text-gray-500">Max 50 entrées</div>
           </div>
           <div className="overflow-auto border rounded-lg">
             <table className="min-w-full text-sm">
@@ -648,13 +691,14 @@ export default function VeilleSystem({ className = '' }: { className?: string })
                 <tr>
                   <th className="px-3 py-2 text-left">Titre</th>
                   <th className="px-3 py-2 text-left">Catégorie</th>
+                  <th className="px-3 py-2 text-left">Topic</th>
                   <th className="px-3 py-2 text-right">Engagement</th>
                   <th className="px-3 py-2 text-right">Business</th>
                   <th className="px-3 py-2 text-right">Nouveauté</th>
                   <th className="px-3 py-2 text-right">Priorité</th>
                   <th className="px-3 py-2 text-right">Score</th>
                   <th className="px-3 py-2 text-left">Source</th>
-                  <th className="px-3 py-2 text-left">Date</th>
+                  <th className="px-3 py-2 text-left">Ajouté</th>
                   <th className="px-3 py-2" />
                 </tr>
               </thead>
@@ -663,13 +707,14 @@ export default function VeilleSystem({ className = '' }: { className?: string })
                   <tr key={r.id} className="border-t">
                     <td className="px-3 py-2 max-w-[360px] truncate">{r.title}</td>
                     <td className="px-3 py-2">{r.type}</td>
+                    <td className="px-3 py-2">{r.topic || ''}</td>
                     <td className="px-3 py-2 text-right">{Math.round(r.scores.engagement*100)}%</td>
                     <td className="px-3 py-2 text-right">{Math.round(r.scores.business*100)}%</td>
                     <td className="px-3 py-2 text-right">{Math.round(r.scores.novelty*100)}%</td>
                     <td className="px-3 py-2 text-right">{Math.round(r.scores.priority*100)}%</td>
                     <td className="px-3 py-2 text-right font-semibold">{Math.round(globalScore(r.scores)*100)}%</td>
                     <td className="px-3 py-2">{r.source}</td>
-                    <td className="px-3 py-2">{r.date ? new Date(r.date).toLocaleDateString('fr-FR') : ''}</td>
+                    <td className="px-3 py-2">{r.addedAt ? new Date(r.addedAt).toLocaleDateString('fr-FR') : (r.date ? new Date(r.date).toLocaleDateString('fr-FR') : '')}</td>
                     <td className="px-3 py-2 text-right">
                       <Button variant="outline" size="sm" onClick={()=> r.url && window.open(r.url,'_blank')}>Ouvrir</Button>
                       <Button variant="ghost" size="sm" onClick={()=> generateSkillFromInsight({ id:r.id, hook:r.title, format:'texte', structure:'', persona:[], auteur:'', date:r.date||'', source_url:r.url||'', probleme:'', resultat:'', preuve:'', cta:'', metrics:{ reactions:0, comments:0, reshares:0}, scores:{ engagement:r.scores.engagement, business_intent:r.scores.business, novelty:r.scores.novelty, priority:r.scores.priority }, extraits:[], mots_cles:[], licence_ok:true, notes:'' } as any)}>→ Skill</Button>

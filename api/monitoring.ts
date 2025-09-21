@@ -64,7 +64,9 @@ async function getConfig() {
     aiOptimize: true,
     aiProvider: 'perplexity',
     aiModel: 'llama-3.1-sonar-large-128k-online',
-    scoringPrompt: ''
+    scoringPrompt: '',
+    maxNewPerFeed: 5,
+    maxNewPerRun: 50
   };
   const cfg = await getObjectJSON('monitoring', 'config.json');
   return { ...def, ...(cfg || {}) };
@@ -133,6 +135,8 @@ export default async function handler(req: any, res: any) {
         const rssList: string[] = Array.isArray(cfg.rss) ? cfg.rss : [];
         const websites: string[] = Array.isArray(cfg.websites) ? cfg.websites : [];
         const youtubeList: string[] = Array.isArray(cfg.youtube) ? cfg.youtube : [];
+        const maxNewPerFeed = Number(cfg.maxNewPerFeed) || 5;
+        const maxNewPerRun = Number(cfg.maxNewPerRun) || 50;
         const existingIds = await getExistingIdsSet();
 
         const targets: string[] = [];
@@ -160,8 +164,9 @@ export default async function handler(req: any, res: any) {
               const id = idFromUrl(u);
               if (!id || existingIds.has(id)) continue;
               targets.push(u);
-              added++; if (added >= 5) break; // max 5 nouveaux liens par flux
+              added++; if (added >= maxNewPerFeed || targets.length >= maxNewPerRun) break; // limite par flux et par run
             }
+            if (targets.length >= maxNewPerRun) break;
           } catch {}
         }
 
@@ -176,16 +181,18 @@ export default async function handler(req: any, res: any) {
               const feed = `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`;
               const r = await fetch(feed); if (r.ok) {
                 const xml = await r.text();
-                const vids = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]).slice(0,5);
-                for (const v of vids) { const id = idFromUrl(v); if (id && !existingIds.has(id)) targets.push(v); }
+                const vids = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]);
+                let yadded = 0;
+                for (const v of vids) { const id = idFromUrl(v); if (id && !existingIds.has(id)) { targets.push(v); yadded++; if (yadded >= maxNewPerFeed || targets.length >= maxNewPerRun) break; } }
               }
             } else if (/youtube\.com\/user\//i.test(y)) {
               const user = y.split('/').pop() || '';
               const feed = `https://www.youtube.com/feeds/videos.xml?user=${user}`;
               const r = await fetch(feed); if (r.ok) {
                 const xml = await r.text();
-                const vids = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]).slice(0,5);
-                for (const v of vids) { const id = idFromUrl(v); if (id && !existingIds.has(id)) targets.push(v); }
+                const vids = Array.from(xml.matchAll(/<entry>[\s\S]*?<link[^>]*href=["']([^"']+)["'][\s\S]*?<\/entry>/gi)).map(m => m[1]);
+                let yadded = 0;
+                for (const v of vids) { const id = idFromUrl(v); if (id && !existingIds.has(id)) { targets.push(v); yadded++; if (yadded >= maxNewPerFeed || targets.length >= maxNewPerRun) break; } }
               }
             }
           } catch {}
@@ -193,7 +200,7 @@ export default async function handler(req: any, res: any) {
 
         let processed = 0;
         const seen = new Set<string>();
-        for (const url of targets) {
+        for (const url of targets.slice(0, maxNewPerRun)) {
           if (!url || seen.has(url)) continue;
           const id = idFromUrl(url);
           if (!id || existingIds.has(id)) continue; // déjà collecté dans un run précédent
@@ -352,6 +359,18 @@ export default async function handler(req: any, res: any) {
           const hits = kws.reduce((acc, k) => acc + (lower.includes(k.toLowerCase()) ? 1 : 0), 0);
           return nrm(hits / Math.max(3, Math.ceil(kws.length/2)));
         };
+        const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
+        const sort = (url.searchParams.get('sort') || 'global_desc').toLowerCase();
+        const topicFilterParam = (url.searchParams.get('topic') || '').toLowerCase();
+        const classifyTopic = (title: string, source: string) => {
+          const s = `${title || ''} ${source || ''}`.toLowerCase();
+          if (/linkedin|algorithme/.test(s)) return 'linkedin';
+          if (/seo|semrush|ahrefs|ranking|backlink/.test(s)) return 'seo';
+          if (/finance|cfo|daf|budget|cash/.test(s)) return 'finance';
+          if (/growth|acquisition|leads|pipeline/.test(s)) return 'growth';
+          if (/ai| ia |machine learning|ml/.test(s)) return 'ai';
+          return 'general';
+        };
         for (const e of entries) {
           if (!e?.name?.endsWith('.json')) continue;
           const { data } = await supabase.storage.from('monitoring').download(`sources/${e.name}`);
@@ -398,15 +417,20 @@ export default async function handler(req: any, res: any) {
               source: obj.source,
               date: obj.publishedAt,
               url: obj.url,
+              addedAt: obj.collectedAt || obj.publishedAt,
+              topic: classifyTopic(obj.title, obj.source),
               scores: { engagement, business, novelty, priority, global }
             };
             const key = obj.url || obj.id;
             if (!map.has(key)) map.set(key, row);
           } catch {}
         }
-        const rows = Array.from(map.values());
-        rows.sort((a,b)=> (b.scores.global - a.scores.global));
-        return res.json({ items: rows });
+        let rows = Array.from(map.values());
+        if (topicFilterParam) rows = rows.filter(r => (r.topic || '').toLowerCase() === topicFilterParam);
+        if (sort === 'date_desc') rows.sort((a,b)=> new Date(b.addedAt||b.date||0).getTime() - new Date(a.addedAt||a.date||0).getTime());
+        else if (sort === 'score_asc') rows.sort((a,b)=> (a.scores.global - b.scores.global));
+        else rows.sort((a,b)=> (b.scores.global - a.scores.global));
+        return res.json({ items: rows.slice(0, limit) });
       }
       if (url.searchParams.get('status') === '1') {
         const st = await getStatus();
