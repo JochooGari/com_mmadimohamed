@@ -45,6 +45,7 @@ import KnowledgeChat from '@/components/KnowledgeChat';
 import SkillsKB from '@/components/SkillsKB';
 import VeilleSystem from '@/components/VeilleSystem';
 import PostGenerator from '@/components/PostGenerator';
+import Connectors from '@/components/Connectors';
 import mammoth from 'mammoth';
 import { BrowserFileStorage } from '@/lib/browserStorage';
 import { WebFileStorage } from '@/lib/webStorage';
@@ -737,6 +738,7 @@ export default function LinkedInAgentPage() {
             <Zap className="h-4 w-4" />
             Générateur
           </TabsTrigger>
+          <TabsTrigger value="connectors">Connecteurs</TabsTrigger>
           <TabsTrigger value="campaign" className="flex items-center gap-2">
             <Target className="h-4 w-4" />
             Campagne
@@ -1599,6 +1601,11 @@ export default function LinkedInAgentPage() {
         {/* Onglet Générateur de Posts */}
         <TabsContent value="generator">
           <PostGenerator />
+        </TabsContent>
+
+        {/* Onglet Connecteurs */}
+        <TabsContent value="connectors">
+          <Connectors />
         </TabsContent>
 
         {/* Onglet Campagne */}

@@ -52,6 +52,8 @@ interface GeneratedPost {
     reshares: number;
     leads_generated: number;
   };
+  approved?: boolean;
+  publishedAt?: string;
 }
 
 const TEMPLATES = {
@@ -130,6 +132,7 @@ export default function PostGenerator({ className = '' }: { className?: string }
   });
 
   const [selectedPost, setSelectedPost] = useState<GeneratedPost | null>(null);
+  const [publishing, setPublishing] = useState<string | null>(null);
 
   // Sauvegarder automatiquement
   useEffect(() => {
@@ -279,6 +282,29 @@ export default function PostGenerator({ className = '' }: { className?: string }
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('Post copié dans le presse-papiers !');
+  };
+
+  const approvePost = (postId: string) => {
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, approved: true } : p));
+  };
+
+  const publishToLinkedIn = async (post: GeneratedPost, variant: '120'|'180'|'300') => {
+    try {
+      setPublishing(post.id);
+      const content = variant === '120' ? post.variante_120 : variant === '180' ? post.variante_180 : post.variante_300;
+      const r = await fetch('/api/connectors', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'publish_linkedin', content, meta: { subject: post.brief.sujet_principal, template: post.brief.template } })
+      });
+      const t = await r.text();
+      if (!r.ok) throw new Error(t || `HTTP ${r.status}`);
+      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, publishedAt: new Date().toISOString() } : p));
+      alert('Publication LinkedIn: ' + t);
+    } catch (e:any) {
+      alert('Publication échouée: ' + (e?.message || 'inconnue'));
+    } finally {
+      setPublishing(null);
+    }
   };
 
   const ratePost = (postId: string, rating: 'up' | 'down') => {
@@ -529,6 +555,14 @@ export default function PostGenerator({ className = '' }: { className?: string }
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => approvePost(post.id)}
+                    className={post.approved ? 'border-green-600 text-green-700' : ''}
+                  >
+                    {post.approved ? '✔ Approuvé' : 'Soumettre / Approuver'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setSelectedPost(selectedPost?.id === post.id ? null : post)}
                   >
                     <Eye className="w-3 h-3 mr-1" />
@@ -590,14 +624,25 @@ export default function PostGenerator({ className = '' }: { className?: string }
                     <div key={index} className="border rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="font-medium text-sm">{variant.label}</h4>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(variant.content)}
-                        >
-                          <Copy className="w-3 h-3 mr-1" />
-                          Copier
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => copyToClipboard(variant.content)}
+                          >
+                            <Copy className="w-3 h-3 mr-1" />
+                            Copier
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700"
+                            disabled={!post.approved || !!publishing}
+                            onClick={() => publishToLinkedIn(post, index === 0 ? '120' : index === 1 ? '180' : '300')}
+                          >
+                            {publishing === post.id ? <RefreshCw className="w-3 h-3 mr-1 animate-spin" /> : null}
+                            Publier sur LinkedIn
+                          </Button>
+                        </div>
                       </div>
                       <div className="bg-white border rounded p-3">
                         <pre className="whitespace-pre-wrap text-sm font-sans">
@@ -605,7 +650,7 @@ export default function PostGenerator({ className = '' }: { className?: string }
                         </pre>
                       </div>
                       <div className="text-xs text-gray-500 mt-2">
-                        {variant.content.length} caractères · {variant.content.split(' ').length} mots
+                        {variant.content.length} caractères · {variant.content.split(' ').length} mots {post.publishedAt ? `· Publié: ${new Date(post.publishedAt).toLocaleString('fr-FR')}` : ''}
                       </div>
                     </div>
                   ))}
