@@ -63,21 +63,27 @@ export default async function handler(req: any, res: any) {
         const logs:any[] = [];
         // 1) OpenAI draft
         const sys1 = 'You write publication-quality French long-form. Respect locked sections; return only edited sections JSON.';
-        const usr1 = `Topic: ${topic}\nOutline: ${outline}\nLocked: ${JSON.stringify(locked).slice(0,1000)}\nEditable: ${JSON.stringify(editable).slice(0,2000)}\nReturn JSON {"sections":[{"id":"...","title":"...","html":"..."}]}`;
+        const usr1 = (models?.openai && (req.body?.prompts?.openai||'').trim().length>0)
+          ? req.body.prompts.openai
+          : `Sujet: ${topic}\nOutline: ${outline}\nLocked: ${JSON.stringify(locked).slice(0,1000)}\nEditable: ${JSON.stringify(editable).slice(0,2000)}\nLivrable JSON strict: {"sections":[{"id":"...","title":"...","html":"..."}]}`;
         const openaiModel = models.openai || 'gpt-4-turbo';
         const openai = await callAI('openai', openaiModel, [ {role:'system', content: sys1}, {role:'user', content: usr1} ]).catch(e=>({ error:String(e)}));
         logs.push({ step:'openai_draft', summary: openai?.usage || null, model: openaiModel });
         const draftText = (openai?.content || openai?.choices?.[0]?.message?.content || '').trim();
         // 2) Claude review
         const sys2 = 'You are a senior French editor. Improve clarity/consistency; preserve structure; return JSON sections only.';
-        const usr2 = `Review and improve these sections JSON. Keep locked untouched. Return {"sections":[{"id":"...","html":"..."}],"notes":["..."]}\n\n${draftText}`;
+        const usr2 = (req.body?.prompts?.anthropic||'').trim().length>0
+          ? req.body.prompts.anthropic.replace('{draft}', draftText)
+          : `Review and improve these sections JSON. Keep locked untouched. Return {"sections":[{"id":"...","html":"..."}],"notes":["..."]}\n\n${draftText}`;
         const anthropicModel = models.anthropic || 'claude-3-sonnet';
         const claude = await callAI('anthropic', anthropicModel, [ {role:'system', content: sys2}, {role:'user', content: usr2} ]).catch(e=>({ error:String(e)}));
         logs.push({ step:'claude_review', summary: claude?.usage || null, model: anthropicModel });
         const reviewText = (claude?.content || '').trim() || draftText;
         // 3) Perplexity scoring
         const sys3 = 'You output ONLY compact JSON. No prose. No markdown.';
-        const usr3 = `Compute SEO/GEO (0..100) + strengths/weaknesses/fixes. Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} for article sections JSON:\n${reviewText}`;
+        const usr3 = (req.body?.prompts?.perplexity||'').trim().length>0
+          ? req.body.prompts.perplexity.replace('{article}', reviewText)
+          : `Compute SEO/GEO (0..100) + strengths/weaknesses/fixes. Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} for article sections JSON:\n${reviewText}`;
         const ppxModel = models.perplexity || 'sonar';
         const ppx = await callAI('perplexity', ppxModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
         logs.push({ step:'perplexity_score', summary: ppx?.usage || null, model: ppxModel });

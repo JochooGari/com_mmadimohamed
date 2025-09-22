@@ -20,6 +20,11 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
     anthropic: 'claude-3-sonnet',
     perplexity: 'sonar'
   });
+  const [prompts, setPrompts] = React.useState<{ openai: string; anthropic: string; perplexity: string }>({
+    openai: '',
+    anthropic: '',
+    perplexity: ''
+  });
 
   const importTemplate = async () => {
     setIsWorking(true);
@@ -62,7 +67,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
   const runChain = async () => {
     setIsWorking(true);
     try {
-      const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'chain_draft', topic, locked: lockedIds, editable: sections, outline:'H1/H2/H3', models }) });
+      const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'chain_draft', topic, locked: lockedIds, editable: sections, outline:'H1/H2/H3', models, prompts }) });
       const d = await r.json();
       setLogs(d.logs || []);
       setChainPreview({ draft: d.draft, review: d.review });
@@ -128,6 +133,38 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
                   {['sonar','sonar-pro','llama-3.1-sonar-large-128k-online'].map(m=> (<SelectItem key={m} value={m}>{m}</SelectItem>))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold">Prompts personnalisés (optionnels)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-sm text-gray-600">OpenAI (draft) – User prompt</label>
+                <Textarea
+                  className="min-h-[90px]"
+                  placeholder="Collez ici votre consigne de rédaction (structure H1/H2/H3, CTA, FAQ, JSON-LD...)"
+                  value={prompts.openai}
+                  onChange={(e)=> setPrompts(prev=> ({ ...prev, openai: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600">Anthropic (review) – User prompt</label>
+                <Textarea
+                  className="min-h-[90px]"
+                  placeholder="Consignes d'édition: clarté, cohérence, ton, consolidation, conserver Hn, sections verrouillées..."
+                  value={prompts.anthropic}
+                  onChange={(e)=> setPrompts(prev=> ({ ...prev, anthropic: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600">Perplexity (score) – User prompt</label>
+                <Textarea
+                  className="min-h-[90px]"
+                  placeholder="Précisez vos critères/poids SEO & GEO, format JSON attendu, exigences de traçabilité..."
+                  value={prompts.perplexity}
+                  onChange={(e)=> setPrompts(prev=> ({ ...prev, perplexity: e.target.value }))}
+                />
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
