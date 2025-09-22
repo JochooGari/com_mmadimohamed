@@ -81,7 +81,16 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
       const d = await r.json();
       setLogs(d.logs || []);
       setChainPreview({ draft: d.draft, review: d.review });
-      // Optionally parse review JSON to sections if provided
+      // Parse review JSON -> sections and inject in editor
+      try {
+        const j = JSON.parse(d.review || '{}');
+        if (Array.isArray(j.sections) && j.sections.length > 0) {
+          const mapped = j.sections.map((s:any, i:number)=> ({ id: s.id || `sec-${i}`, title: s.title || `Section ${i+1}`, html: String(s.html||'') }));
+          setSections(mapped);
+        } else if (typeof j.html === 'string' && j.html.trim().length > 0) {
+          setSections([{ id: 'article', title: topic || 'Article', html: j.html }]);
+        }
+      } catch {}
     } catch(e:any){ alert('Erreur chaîne: ' + (e?.message||'unknown')); } finally { setIsWorking(false); }
   };
 
