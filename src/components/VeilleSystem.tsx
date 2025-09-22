@@ -511,7 +511,7 @@ export default function VeilleSystem({ className = '' }: { className?: string })
             </div>
             <div>
               <label className="text-sm text-gray-600">Modèle</label>
-              <Input value={config.aiModel || 'llama-3.1-sonar-large-128k-online'} onChange={e=> setConfig({ ...config, aiModel: e.target.value })} />
+              <Input value={config.aiModel || 'sonar-pro'} onChange={e=> setConfig({ ...config, aiModel: e.target.value })} />
             </div>
           </div>
           <div>

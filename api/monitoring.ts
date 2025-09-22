@@ -56,7 +56,7 @@ async function getConfig() {
     autoDiscovery: true,
     aiResearch: true,
     aiProvider: 'perplexity',
-    aiModel: 'llama-3.1-sonar-large-128k-online',
+    aiModel: 'sonar-pro',
     scoringPrompt: '',
     maxNewPerFeed: 5,
     maxNewPerRun: 50
@@ -255,8 +255,25 @@ export default async function handler(req: any, res: any) {
               const r2 = await fetch(`${base}/api/ai-proxy`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
               if (!r2.ok) throw new Error(`ai-proxy status ${r2.status}`);
               const d2 = await r2.json();
-              const text2 = (d2?.content || d2?.text || d2?.choices?.[0]?.message?.content || '').trim();
-              const j = JSON.parse(text2);
+              let text2 = (d2?.content || d2?.text || d2?.choices?.[0]?.message?.content || '').trim();
+              // Tolérance: retirer éventuels fences ``` ou ```json
+              if (/^```/.test(text2)) {
+                text2 = text2.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+              }
+              // Si toujours non parseable, essayer d'extraire le premier objet JSON
+              let j: any;
+              try {
+                j = JSON.parse(text2);
+              } catch {
+                const first = text2.indexOf('{');
+                const last = text2.lastIndexOf('}');
+                if (first >= 0 && last > first) {
+                  const sub = text2.slice(first, last + 1);
+                  j = JSON.parse(sub);
+                } else {
+                  throw new Error('invalid JSON from AI');
+                }
+              }
               await putObject('monitoring', `optimized/optimized_${obj.id}.json`, JSON.stringify({ id: obj.id, url: obj.url, ...j, optimizedAt: new Date().toISOString() }, null, 2));
               optimizedOk++;
             } catch (e:any) {
@@ -310,7 +327,7 @@ export default async function handler(req: any, res: any) {
                 : `Tu es un agent de veille. Objectif: ${cfg.objective || 'veille marketing/IA B2B'}. Propose jusqu'à 10 URLs pertinentes (web/RSS/YouTube) qui permettront de générer contenus et lead magnets orientés conversion. Favorise thématiques business (ROI, pipeline, benchmark, classement), CTA/Conversion (demo, essai, webinar, download), lead magnets (guide, template, checklist). Renvoie UNIQUEMENT un JSON compact {"websites":[],"rss":[],"youtube":[]} sans texte.`;
               const body = {
                 provider: cfg.aiProvider || 'perplexity',
-                model: cfg.aiModel || 'llama-3.1-sonar-large-128k-online',
+                model: cfg.aiModel || 'sonar-pro',
                 messages: [
                   { role: 'system', content: 'You output ONLY compact JSON. No prose.' },
                   { role: 'user', content: prompt }
