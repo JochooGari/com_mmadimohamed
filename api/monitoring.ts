@@ -318,12 +318,12 @@ export default async function handler(req: any, res: any) {
           } catch {}
         }
         const stats = await getMonitoringStats();
-        const sourcesCount = (websites?.length || 0) + (rssList?.length || 0) + (youtubeList?.length || 0);
+        const targetsProcessed = seen.size;
         const success = optimizedFailed === 0;
         const message = success ? 'Veille terminée (IA OK)' : `Veille partielle: optimisations échouées ${optimizedFailed}`;
-        await setStatus({ finishedAt: new Date().toISOString(), lastRunAt: new Date().toISOString(), success, message, itemsProcessed: processed, sourcesProcessed: sourcesCount });
-        if (!success) return res.status(500).json({ success: false, processed, optimizedOk, optimizedFailed });
-        return res.json({ success: true, processed, optimizedOk, targets: sourcesCount, stats });
+        await setStatus({ finishedAt: new Date().toISOString(), lastRunAt: new Date().toISOString(), success, message, itemsProcessed: optimizedOk, sourcesProcessed: targetsProcessed });
+        if (!success) return res.status(500).json({ success: false, processed, optimizedOk, optimizedFailed, targetsProcessed });
+        return res.json({ success: true, processed, optimizedOk, targetsProcessed, stats });
       }
       if (action === 'save_config') {
         const cfg = req.body?.config;

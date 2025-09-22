@@ -375,7 +375,9 @@ export default function VeilleSystem({ className = '' }: { className?: string })
         setRows([]);
         setListError('Erreur de chargement de la liste');
       }
-      alert(`Veille terminée: ${result.processed || st?.itemsProcessed || 0} docs, ${result.targets || st?.sourcesProcessed || 0} sources.`);
+      const insightsCount = (result.optimizedOk ?? st?.itemsProcessed ?? 0);
+      const exploredCount = (result.targetsProcessed ?? st?.sourcesProcessed ?? 0);
+      alert(`Veille terminée: ${insightsCount} insights, ${exploredCount} sources explorées.`);
       // Pas d’injection d’insights mock: les résultats sont persistés dans data/monitoring
     } catch (e) {
       console.error('Erreur exécution veille:', e);
