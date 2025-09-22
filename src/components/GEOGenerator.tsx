@@ -127,10 +127,10 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
     const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'cta_generate', topic }) });
     if (r.ok) setCtas((await r.json()).ctas || []);
   };
-  const [liveScore, setLiveScore] = React.useState<{seo?:number; geo?:number; fixes?:string[]}>({});
+  const [liveScore, setLiveScore] = React.useState<{scores?: {seo?:number; geo?:number}; fixes?:string[]}>({});
   const refreshScore = async () => {
     const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'score_live', html: sections.map(s=>s.html).join('\n') }) });
-    if (r.ok) setLiveScore((await r.json()).scores ? (await r.json()) : await r.json());
+    if (r.ok) setLiveScore(await r.json());
   };
   const [faq, setFaq] = React.useState<any>({ faq:[], jsonld:null });
   const generateFAQ = async () => {
