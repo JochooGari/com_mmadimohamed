@@ -19,6 +19,26 @@ async function getJSON<T=any>(bucket: string, path: string): Promise<T|null> {
   try { return JSON.parse(txt); } catch { return null; }
 }
 
+function extractOutline(html: string) {
+  const getText = (re: RegExp) => {
+    const arr: { title:string; level:number; id:string }[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      const title = (m[1] || '').replace(/<[^>]+>/g,'').trim();
+      const level = m[0].toLowerCase().startsWith('<h1') ? 1 : m[0].toLowerCase().startsWith('<h2') ? 2 : 3;
+      const id = `${title.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${arr.length}`.replace(/^-|-$|--+/g,'-');
+      if (title) arr.push({ title, level, id });
+    }
+    return arr;
+  };
+  const h1 = (html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || '').replace(/<[^>]+>/g,'').trim();
+  const sections = [
+    ...getText(/<h2[^>]*>([\s\S]*?)<\/h2>/gi),
+    ...getText(/<h3[^>]*>([\s\S]*?)<\/h3>/gi)
+  ];
+  return { h1, sections };
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -37,9 +57,14 @@ export default async function handler(req: any, res: any) {
           } catch {}
         }
         const id = Date.now().toString();
-        const record = { id, html: String(html||''), url: String(url||''), createdAt: new Date().toISOString() };
+        const outline = extractOutline(String(html||''));
+        const record = { id, html: String(html||''), url: String(url||''), outline, createdAt: new Date().toISOString() };
         await put('agents', `geo/templates/${id}.json`, JSON.stringify(record, null, 2));
-        return res.json({ ok: true, id });
+        // update index
+        const idx = (await getJSON<any>('agents','geo/templates/index.json')) || { items: [] };
+        idx.items.unshift({ id, title: outline.h1 || 'Template', createdAt: record.createdAt, url: record.url });
+        await put('agents','geo/templates/index.json', JSON.stringify(idx, null, 2));
+        return res.json({ ok: true, id, outline });
       }
       if (action === 'list_templates') {
         // Simplified: store an index file

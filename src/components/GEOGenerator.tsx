@@ -32,6 +32,10 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
     try {
       const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'import_template', html: templateHtml, url: templateUrl }) });
       if (!r.ok) throw new Error(await r.text());
+      const d = await r.json();
+      if (d?.outline?.sections?.length) {
+        setSections(d.outline.sections.map((s:any)=> ({ id: s.id, title: s.title, html: '' })));
+      }
       alert('Template importé');
     } catch(e:any){ alert('Erreur import: ' + (e?.message||'unknown')); } finally { setIsWorking(false); }
   };
