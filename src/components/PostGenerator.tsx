@@ -119,6 +119,8 @@ export default function PostGenerator({ className = '' }: { className?: string }
   });
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [aiProvider, setAiProvider] = useState<string>('perplexity');
+  const [aiModel, setAiModel] = useState<string>('sonar');
   const [currentBrief, setCurrentBrief] = useState<Partial<PostBrief>>({
     audience: 'DAF/Finance',
     angle: 'probleme',
@@ -137,6 +139,20 @@ export default function PostGenerator({ className = '' }: { className?: string }
       console.error('Erreur sauvegarde posts:', error);
     }
   }, [posts]);
+
+  // Charger le provider/modèle depuis la config de veille
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/monitoring?config=1');
+        if (r.ok) {
+          const c = await r.json();
+          if (c?.aiProvider) setAiProvider(c.aiProvider);
+          if (c?.aiModel) setAiModel(c.aiModel);
+        }
+      } catch {}
+    })();
+  }, []);
 
   const generatePost = async () => {
     if (!currentBrief.sujet_principal?.trim()) {
@@ -157,32 +173,71 @@ export default function PostGenerator({ className = '' }: { className?: string }
 
     setIsGenerating(true);
 
-    // Charger Skills KB
-    const skills = JSON.parse(localStorage.getItem('linkedin:skills-kb') || '[]');
-    const topics = JSON.parse(localStorage.getItem('linkedin:sources') || '[]');
+    // Contexte: sources internes + veille optimisée (top 5)
+    let contextBlocks: string[] = [];
+    try {
+      const [internalRes, veilleRes] = await Promise.all([
+        fetch('/api/storage?agent=linkedin&type=sources').then(r => r.ok ? r.json() : [] as any).catch(()=>[]),
+        fetch('/api/monitoring?list=1&limit=5&sort=global_desc').then(r => r.ok ? r.json() : { items: [] }).catch(()=>({ items: [] }))
+      ]);
+      const internals: any[] = Array.isArray(internalRes) ? internalRes : [];
+      if (internals.length > 0) {
+        const snips = internals.slice(0, 5).map((s:any) => `- ${s.name || s.id || ''}: ${String(s.content || s.summary || '').slice(0,180)}`);
+        contextBlocks.push(`Sources internes:\n${snips.join('\n')}`);
+      }
+      const rows: any[] = Array.isArray((veilleRes as any)?.items) ? (veilleRes as any).items : [];
+      if (rows.length > 0) {
+        const snips = rows.slice(0, 5).map((r:any) => `- ${r.title || ''} (${r.sector || ''}) ${Math.round((r.scores?.global||0)*100)}% → ${r.url}`);
+        contextBlocks.push(`Veille optimisée:\n${snips.join('\n')}`);
+      }
+    } catch {}
 
-    // Simuler la génération avec les skills
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Prompt IA: 3 variantes en JSON uniquement
+    const sys = 'You output ONLY compact JSON. No prose. Never use markdown.';
+    const briefText = `Audience: ${currentBrief.audience}\nAngle: ${currentBrief.angle}\nTemplate: ${currentBrief.template}\nSujet: ${currentBrief.sujet_principal}`;
+    const user = `Tu es un expert en ghostwriting LinkedIn B2B. Crée 3 variantes de post (${currentBrief.preuve_incluse ? 'inclure au moins 1 preuve/chiffre' : 'sans contrainte de preuve'}) pour le sujet ci-dessous. Style clair, concret, CTA à la fin. Retourne UNIQUEMENT un JSON:\n{\"variant_120\":\"...\",\"variant_180\":\"...\",\"variant_300\":\"...\"}\n\nBrief:\n${briefText}\n\nContexte (à utiliser seulement si pertinent):\n${contextBlocks.join('\n')}`;
 
-    const skillsUtilises = skills
-      .filter((s: any) => s.poids > 0.7)
-      .slice(0, 4)
-      .map((s: any) => s.skill_id);
+    try {
+      const r = await fetch('/api/ai-proxy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: aiProvider, model: aiModel, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], temperature: 0.5, maxTokens: 700 })
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(()=> '');
+        throw new Error(`AI error ${r.status}: ${t}`);
+      }
+      const data = await r.json();
+      let text = (data?.content || data?.text || data?.choices?.[0]?.message?.content || '').trim();
+      if (/^```/.test(text)) text = text.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+      let json: any;
+      try { json = JSON.parse(text); } catch {
+        const first = text.indexOf('{'); const last = text.lastIndexOf('}');
+        if (first >= 0 && last > first) json = JSON.parse(text.slice(first, last+1));
+        else throw new Error('Réponse IA non JSON');
+      }
 
-    const newPost: GeneratedPost = {
-      id: `post_${Date.now()}`,
-      brief: currentBrief as PostBrief,
-      variante_120: generateVariant(currentBrief, 120, skills, topics),
-      variante_180: generateVariant(currentBrief, 180, skills, topics),
-      variante_300: generateVariant(currentBrief, 300, skills, topics),
-      scores: calculateScores(currentBrief),
-      skills_utilises: skillsUtilises,
-      created_at: new Date().toISOString()
-    };
+      // Charger Skills pour enrichir les métadonnées
+      const skills = JSON.parse(localStorage.getItem('linkedin:skills-kb') || '[]');
+      const skillsUtilises = skills.filter((s: any) => s.poids > 0.7).slice(0, 4).map((s: any) => s.skill_id);
 
-    setPosts(prev => [newPost, ...prev]);
-    setSelectedPost(newPost);
-    setIsGenerating(false);
+      const newPost: GeneratedPost = {
+        id: `post_${Date.now()}`,
+        brief: currentBrief as PostBrief,
+        variante_120: String(json?.variant_120 || ''),
+        variante_180: String(json?.variant_180 || ''),
+        variante_300: String(json?.variant_300 || ''),
+        scores: calculateScores(currentBrief),
+        skills_utilises: skillsUtilises,
+        created_at: new Date().toISOString()
+      };
+
+      setPosts(prev => [newPost, ...prev]);
+      setSelectedPost(newPost);
+    } catch (e:any) {
+      alert(`Erreur génération IA: ${e?.message || 'inconnue'}`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const generateVariant = (brief: Partial<PostBrief>, length: number, skills: any[], topics: any[]): string => {
