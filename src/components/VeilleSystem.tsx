@@ -258,6 +258,7 @@ export default function VeilleSystem({ className = '' }: { className?: string })
     }
   });
   const [rows, setRows] = useState<any[]>([]);
+  const [listError, setListError] = useState<string>('');
   const [status, setStatus] = useState<any>({});
   const [sortBy, setSortBy] = useState<string>('global_desc');
   const [topicFilterUI, setTopicFilterUI] = useState<string>('');
@@ -287,12 +288,20 @@ export default function VeilleSystem({ className = '' }: { className?: string })
         if (cfgRes.ok) setConfig(await cfgRes.json());
       } catch {}
       try {
+        setListError('');
         const listRes = await fetch(`/api/monitoring?list=1&limit=50&sort=${encodeURIComponent(sortBy)}${topicFilterUI ? `&topic=${encodeURIComponent(topicFilterUI)}`:''}`);
         if (listRes.ok) {
           const data = await listRes.json();
           setRows(data.items || []);
+        } else {
+          const text = await listRes.text().catch(()=> 'Erreur de liste');
+          setRows([]);
+          setListError(text);
         }
-      } catch {}
+      } catch (e:any) {
+        setRows([]);
+        setListError('Erreur de chargement de la liste');
+      }
       try {
         const st = await fetch('/api/monitoring?status=1');
         if (st.ok) setStatus(await st.json());
@@ -303,12 +312,20 @@ export default function VeilleSystem({ className = '' }: { className?: string })
   useEffect(() => {
     (async () => {
       try {
+        setListError('');
         const listRes = await fetch(`/api/monitoring?list=1&limit=50&sort=${encodeURIComponent(sortBy)}${topicFilterUI ? `&topic=${encodeURIComponent(topicFilterUI)}`:''}`);
         if (listRes.ok) {
           const data = await listRes.json();
           setRows(data.items || []);
+        } else {
+          const text = await listRes.text().catch(()=> 'Erreur de liste');
+          setRows([]);
+          setListError(text);
         }
-      } catch {}
+      } catch (e:any) {
+        setRows([]);
+        setListError('Erreur de chargement de la liste');
+      }
     })();
   }, [sortBy, topicFilterUI]);
 
@@ -344,12 +361,20 @@ export default function VeilleSystem({ className = '' }: { className?: string })
       const st = await fetch('/api/monitoring?status=1').then(r=> r.ok ? r.json() : null).catch(()=>null);
       if (st) setStatus(st);
       try {
+        setListError('');
         const listRes = await fetch('/api/monitoring?list=1');
         if (listRes.ok) {
           const data = await listRes.json();
           setRows(data.items || []);
+        } else {
+          const text = await listRes.text().catch(()=> 'Erreur de liste');
+          setRows([]);
+          setListError(text);
         }
-      } catch {}
+      } catch {
+        setRows([]);
+        setListError('Erreur de chargement de la liste');
+      }
       alert(`Veille terminée: ${result.processed || st?.itemsProcessed || 0} docs, ${result.targets || st?.sourcesProcessed || 0} sources.`);
       // Pas d’injection d’insights mock: les résultats sont persistés dans data/monitoring
     } catch (e) {
@@ -539,6 +564,11 @@ export default function VeilleSystem({ className = '' }: { className?: string })
         <span>Sources: {status?.sourcesProcessed ?? 0}</span>
         <span className="text-gray-500">{status?.message || ''}</span>
       </div>
+      {listError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+          {listError}
+        </div>
+      )}
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

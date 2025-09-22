@@ -440,44 +440,11 @@ export default async function handler(req: any, res: any) {
             if (!map.has(key)) map.set(key, row);
           } catch {}
         }
-        // Fallback/complément: scanner directement optimized/ si aucune entrée trouvée (ou pour compléter)
-        if (map.size === 0) {
-          const optimizedEntries = await listObjects('monitoring', 'optimized');
-          for (const e of optimizedEntries) {
-            if (!e?.name?.startsWith('optimized_') || !e?.name?.endsWith('.json')) continue;
-            const { data } = await supabase.storage.from('monitoring').download(`optimized/${e.name}`);
-            if (!data) continue;
-            try {
-              const text = await (data as any).text();
-              const jo = JSON.parse(text);
-              const id = jo?.id || e.name.replace(/^optimized_|\.json$/g, '');
-              const urlStr = jo?.url || '';
-              const host = (()=>{ try { return new URL(urlStr).host; } catch { return ''; } })();
-              const engagement = normalize01(Number(jo?.scores?.engagement) || 0);
-              const business = normalize01(Number(jo?.scores?.business) || 0);
-              const novelty = normalize01(Number(jo?.scores?.novelty) || 0);
-              const priority = normalize01(Number(jo?.scores?.priority) || 0);
-              const globalRaw = Number(jo?.scores?.global ?? (0.4*engagement + 0.3*business + 0.2*novelty + 0.1*priority));
-              const global = normalize01(globalRaw);
-              const row = {
-                id,
-                title: jo?.title || urlStr,
-                type: 'document',
-                source: host,
-                date: jo?.date || '',
-                url: urlStr,
-                addedAt: jo?.optimizedAt || jo?.collectedAt || '',
-                sector: jo?.sector || classifyTopic(jo?.title || '', host || ''),
-                signals: Array.isArray(jo?.signals) ? jo.signals : [],
-                justification: jo?.justification?.business || jo?.justification?.priority || jo?.justification?.engagement || '',
-                scores: { engagement, business, novelty, priority, global }
-              };
-              const key = urlStr || id;
-              if (!map.has(key)) map.set(key, row);
-            } catch {}
-          }
-        }
+        // Si aucun item, renvoyer une erreur explicite (pas de fallback)
         let rows = Array.from(map.values());
+        if (rows.length === 0) {
+          return res.status(404).json({ error: 'Aucun résultat optimisé disponible. L’IA doit réussir le scoring. Vérifiez PERPLEXITY_API_KEY, le modèle (sonar-pro), et le prompt.' });
+        }
         if (topicFilterParam) rows = rows.filter(r => (r.topic || '').toLowerCase() === topicFilterParam);
         if (sort === 'date_desc') rows.sort((a,b)=> new Date(b.addedAt||b.date||0).getTime() - new Date(a.addedAt||a.date||0).getTime());
         else if (sort === 'score_asc') rows.sort((a,b)=> (a.scores.global - b.scores.global));
