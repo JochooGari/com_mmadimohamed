@@ -366,8 +366,8 @@ export default async function handler(req: any, res: any) {
       }
       if (url.searchParams.get('list') === '1') {
         const cfg = await getConfig();
-        // lister les objets sous sources/ mais n'afficher que ceux avec un optimized correspondant
-        const entries = await listObjects('monitoring', 'sources');
+        // Lire UNIQUEMENT les résultats optimisés par l'IA
+        const entries = await listObjects('monitoring', 'optimized');
         const supabase = getSupabase();
         const map = new Map<string, any>();
         const bc = cfg.businessCriteria || {};
@@ -405,18 +405,15 @@ export default async function handler(req: any, res: any) {
         };
 
         for (const e of entries) {
-          if (!e?.name?.endsWith('.json')) continue;
-          const { data } = await supabase.storage.from('monitoring').download(`sources/${e.name}`);
+          if (!e?.name?.startsWith('optimized_') || !e?.name?.endsWith('.json')) continue;
+          const { data } = await supabase.storage.from('monitoring').download(`optimized/${e.name}`);
           if (!data) continue;
-          const text = await (data as any).text();
           try {
-            const obj = JSON.parse(text);
-            // Exiger un optimized; sinon ignorer cet item (no fallback)
-            const optProbe = await supabase.storage.from('monitoring').download(`optimized/optimized_${obj.id}.json`);
-            if (!optProbe?.data) continue;
-            // Lire les scores IA et métadonnées
-            const t2 = await (optProbe.data as any).text();
-            const jo = JSON.parse(t2);
+            const text = await (data as any).text();
+            const jo = JSON.parse(text);
+            const id = jo?.id || e.name.replace(/^optimized_|\.json$/g, '');
+            const urlStr = jo?.url || '';
+            const host = (()=>{ try { return new URL(urlStr).host; } catch { return ''; } })();
             const engagement = normalize01(Number(jo?.scores?.engagement) || 0);
             const business = normalize01(Number(jo?.scores?.business) || 0);
             const novelty = normalize01(Number(jo?.scores?.novelty) || 0);
@@ -424,19 +421,19 @@ export default async function handler(req: any, res: any) {
             const globalRaw = Number(jo?.scores?.global ?? (0.4*engagement + 0.3*business + 0.2*novelty + 0.1*priority));
             const global = normalize01(globalRaw);
             const row = {
-              id: obj.id,
-              title: jo?.title || obj.title,
-              type: obj.type,
-              source: obj.source,
-              date: obj.publishedAt,
-              url: obj.url,
-              addedAt: obj.collectedAt || obj.publishedAt,
-              sector: jo?.sector || classifyTopic(obj.title, obj.source),
+              id,
+              title: jo?.title || urlStr,
+              type: 'document',
+              source: host,
+              date: jo?.date || '',
+              url: urlStr,
+              addedAt: jo?.optimizedAt || jo?.collectedAt || '',
+              sector: jo?.sector || classifyTopic(jo?.title || '', host || ''),
               signals: Array.isArray(jo?.signals) ? jo.signals : [],
               justification: jo?.justification?.business || jo?.justification?.priority || jo?.justification?.engagement || '',
               scores: { engagement, business, novelty, priority, global }
             };
-            const key = obj.url || obj.id;
+            const key = urlStr || id;
             if (!map.has(key)) map.set(key, row);
           } catch {}
         }
