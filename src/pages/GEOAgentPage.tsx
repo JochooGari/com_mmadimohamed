@@ -197,7 +197,7 @@ export default function GEOAgentPage() {
           </TabsTrigger>
           <TabsTrigger value="generation" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
-            Génération
+            Générateur
           </TabsTrigger>
           <TabsTrigger value="optimization" className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4" />
@@ -591,7 +591,7 @@ export default function GEOAgentPage() {
           </div>
         </TabsContent>
 
-        {/* Onglet Génération */}
+        {/* Onglet Générateur */}
         <TabsContent value="generation">
           <GEOGenerator className="mb-6" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1061,35 +1061,9 @@ export default function GEOAgentPage() {
           </div>
         </TabsContent>
 
-        {/* Onglet Test Réel */}
+        {/* Onglet Test Réel (même UI que Générateur) */}
         <TabsContent value="test">
-          <AgentTester 
-            agentType="geo"
-            defaultPrompts={{
-              system: `Tu es un expert en GEO (Generative Optimization Engine). Tu crées du contenu optimisé pour être cité par les moteurs IA (Perplexity, AI Overviews, Copilot).
-
-Règles:
-- Réponse directe ≤60 mots en début
-- Chaque affirmation chiffrée = 1 source fiable (.org/.gov)
-- Structure H2/H3 en questions
-- JSON-LD FAQPage
-- Pas d'hallucination`,
-              user: `Crée un article GEO optimisé sur "{input}" pour répondre aux requêtes des DAF/ESN.
-
-Structure requise:
-1. Réponse directe ≤60 mots
-2. 3 sections H2 en questions
-3. Tableau comparatif
-4. FAQ (3 Q/A)
-5. Sources citées
-
-Public: Dirigeants B2B cherchant des solutions concrètes.`
-            }}
-            onConfigSave={(config) => {
-              console.log('Configuration GEO sauvegardée:', config);
-              // Ici vous pouvez sauvegarder la config dans votre backend
-            }}
-          />
+          <GEOGenerator />
         </TabsContent>
 
         {/* Onglet Configuration */}
