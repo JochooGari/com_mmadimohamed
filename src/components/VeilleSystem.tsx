@@ -470,6 +470,21 @@ export default function VeilleSystem({ className = '' }: { className?: string })
           </Button>
         </div>
       </div>
+      {(listError || status?.lastRunAt || status?.message) && (
+        <div className="mt-2 space-y-1">
+          {listError && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+              {listError}
+            </div>
+          )}
+          <div className="text-xs text-gray-700 flex flex-wrap items-center gap-3">
+            <span>État: {status?.success === true ? 'OK' : (status?.success === false ? 'Erreur' : '—')}</span>
+            <span>Dernier lancement: {status?.lastRunAt ? new Date(status.lastRunAt).toLocaleString('fr-FR') : '—'}</span>
+            <span>Cron quotidien: 06:00 UTC</span>
+            {status?.message && <span className="text-gray-500">{status.message}</span>}
+          </div>
+        </div>
+      )}
 
       {/* Paramètres de veille */}
       <Card>
