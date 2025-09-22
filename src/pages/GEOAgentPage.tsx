@@ -42,6 +42,7 @@ import {
   Activity
 } from 'lucide-react';
 import AgentTester from '@/components/AgentTester';
+import GEOGenerator from '@/components/GEOGenerator';
 
 interface GEOCampaign {
   id: string;
@@ -592,6 +593,7 @@ export default function GEOAgentPage() {
 
         {/* Onglet Génération */}
         <TabsContent value="generation">
+          <GEOGenerator className="mb-6" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Pipeline GEO */}
             <Card>
