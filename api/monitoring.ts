@@ -143,6 +143,41 @@ export default async function handler(req: any, res: any) {
         const existingIds = await getExistingIdsSet();
 
         const targets: string[] = [];
+        // 0) Découverte directe de documents via IA (Perplexity) avant tout autre source
+        try {
+          if (cfg2.aiResearch) {
+            const docPrompt = (cfg2.scoringPrompt && cfg2.scoringPrompt.length > 10)
+              ? `${cfg2.scoringPrompt}\n\nSortie JSON ONLY: {\"urls\":[\"https://...\"]}. Priorise <30j, haute pertinence business, ROI, cas d'usage, benchmarks. Max ${maxNewPerRun}.`
+              : `Tu es un agent de recherche. Objectif: ${cfg2.objective || 'veille marketing/IA B2B'}. Retourne UNIQUEMENT un JSON compact {\"urls\":[...] } listant jusqu'à ${maxNewPerRun} URLs d'articles/rapports récents (<=30 jours si possible) hautement pertinents (business/ROI/lead magnet/benchmarks).`;
+            const body0 = {
+              provider: cfg2.aiProvider || 'perplexity',
+              model: cfg2.aiModel || 'sonar-pro',
+              messages: [
+                { role: 'system', content: 'You output ONLY compact JSON. No prose.' },
+                { role: 'user', content: docPrompt }
+              ],
+              temperature: 0.1,
+              maxTokens: 600
+            } as any;
+            const r0 = await fetch(`${base}/api/ai-proxy`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body0) });
+            if (r0.ok) {
+              const d0 = await r0.json();
+              let t0 = (d0?.content || d0?.text || d0?.choices?.[0]?.message?.content || '').trim();
+              if (/^```/i.test(t0)) t0 = t0.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+              try {
+                const j0 = JSON.parse(t0);
+                const arr = Array.isArray(j0?.urls) ? j0.urls : [];
+                for (const u of arr) {
+                  if (typeof u !== 'string' || !/^https?:\/\//i.test(u)) continue;
+                  const id = idFromUrl(u);
+                  if (!id || existingIds.has(id)) continue;
+                  targets.push(u);
+                  if (targets.length >= maxNewPerRun) break;
+                }
+              } catch {}
+            }
+          }
+        } catch {}
         // 1) Sitemap (limité)
         try {
           const sm = await fetch(`${base}/sitemap.xml`);
