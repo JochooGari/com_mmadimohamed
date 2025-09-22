@@ -53,7 +53,7 @@ export default async function handler(req: any, res: any) {
         return res.json({ scores: { seo: 85, geo: 86 }, strengths:['structure'], weaknesses:['few sources'], fixes:['add sources'] });
       }
       if (action === 'chain_draft') {
-        const { topic = 'Sujet', locked = [], editable = [], outline = 'H1/H2/H3' } = req.body || {};
+        const { topic = 'Sujet', locked = [], editable = [], outline = 'H1/H2/H3', models = {} } = req.body || {};
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
         const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=1200) => {
           const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, model, messages, temperature, maxTokens }) });
@@ -64,20 +64,23 @@ export default async function handler(req: any, res: any) {
         // 1) OpenAI draft
         const sys1 = 'You write publication-quality French long-form. Respect locked sections; return only edited sections JSON.';
         const usr1 = `Topic: ${topic}\nOutline: ${outline}\nLocked: ${JSON.stringify(locked).slice(0,1000)}\nEditable: ${JSON.stringify(editable).slice(0,2000)}\nReturn JSON {"sections":[{"id":"...","title":"...","html":"..."}]}`;
-        const openai = await callAI('openai', 'gpt-4-turbo', [ {role:'system', content: sys1}, {role:'user', content: usr1} ]).catch(e=>({ error:String(e)}));
-        logs.push({ step:'openai_draft', summary: openai?.usage || null, model: 'gpt-4-turbo' });
+        const openaiModel = models.openai || 'gpt-4-turbo';
+        const openai = await callAI('openai', openaiModel, [ {role:'system', content: sys1}, {role:'user', content: usr1} ]).catch(e=>({ error:String(e)}));
+        logs.push({ step:'openai_draft', summary: openai?.usage || null, model: openaiModel });
         const draftText = (openai?.content || openai?.choices?.[0]?.message?.content || '').trim();
         // 2) Claude review
         const sys2 = 'You are a senior French editor. Improve clarity/consistency; preserve structure; return JSON sections only.';
         const usr2 = `Review and improve these sections JSON. Keep locked untouched. Return {"sections":[{"id":"...","html":"..."}],"notes":["..."]}\n\n${draftText}`;
-        const claude = await callAI('anthropic', 'claude-3-sonnet', [ {role:'system', content: sys2}, {role:'user', content: usr2} ]).catch(e=>({ error:String(e)}));
-        logs.push({ step:'claude_review', summary: claude?.usage || null, model: 'claude-3-sonnet' });
+        const anthropicModel = models.anthropic || 'claude-3-sonnet';
+        const claude = await callAI('anthropic', anthropicModel, [ {role:'system', content: sys2}, {role:'user', content: usr2} ]).catch(e=>({ error:String(e)}));
+        logs.push({ step:'claude_review', summary: claude?.usage || null, model: anthropicModel });
         const reviewText = (claude?.content || '').trim() || draftText;
         // 3) Perplexity scoring
         const sys3 = 'You output ONLY compact JSON. No prose. No markdown.';
         const usr3 = `Compute SEO/GEO (0..100) + strengths/weaknesses/fixes. Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} for article sections JSON:\n${reviewText}`;
-        const ppx = await callAI('perplexity', 'sonar', [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
-        logs.push({ step:'perplexity_score', summary: ppx?.usage || null, model: 'sonar' });
+        const ppxModel = models.perplexity || 'sonar';
+        const ppx = await callAI('perplexity', ppxModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
+        logs.push({ step:'perplexity_score', summary: ppx?.usage || null, model: ppxModel });
         return res.json({ draft: draftText, review: reviewText, score: ppx?.content || '', logs });
       }
       if (action === 'export_html') {

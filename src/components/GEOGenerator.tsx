@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 export default function GEOGenerator({ className='' }: { className?: string }) {
   const [topic, setTopic] = React.useState('Power BI pour la finance');
@@ -14,6 +15,11 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
   const [isWorking, setIsWorking] = React.useState(false);
   const [logs, setLogs] = React.useState<any[]>([]);
   const [chainPreview, setChainPreview] = React.useState<{draft?:string; review?:string} | null>(null);
+  const [models, setModels] = React.useState<{ openai: string; anthropic: string; perplexity: string }>({
+    openai: 'gpt-4-turbo',
+    anthropic: 'claude-3-sonnet',
+    perplexity: 'sonar'
+  });
 
   const importTemplate = async () => {
     setIsWorking(true);
@@ -56,7 +62,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
   const runChain = async () => {
     setIsWorking(true);
     try {
-      const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'chain_draft', topic, locked: lockedIds, editable: sections, outline:'H1/H2/H3' }) });
+      const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'chain_draft', topic, locked: lockedIds, editable: sections, outline:'H1/H2/H3', models }) });
       const d = await r.json();
       setLogs(d.logs || []);
       setChainPreview({ draft: d.draft, review: d.review });
@@ -95,6 +101,35 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
         <CardHeader><CardTitle>Nouveau draft</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <Input value={topic} onChange={(e)=> setTopic(e.target.value)} placeholder="Sujet principal (ex: Power BI pour la finance)" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-sm text-gray-600">OpenAI (draft)</label>
+              <Select value={models.openai} onValueChange={(v)=> setModels(prev=> ({ ...prev, openai: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['gpt-4o','gpt-4-turbo','gpt-4.1-mini'].map(m=> (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Anthropic (review)</label>
+              <Select value={models.anthropic} onValueChange={(v)=> setModels(prev=> ({ ...prev, anthropic: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['claude-3-sonnet','claude-3-opus','claude-3-5-sonnet'].map(m=> (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Perplexity (score)</label>
+              <Select value={models.perplexity} onValueChange={(v)=> setModels(prev=> ({ ...prev, perplexity: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['sonar','sonar-pro','llama-3.1-sonar-large-128k-online'].map(m=> (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="flex gap-2">
             <Button onClick={generateDraft} disabled={isWorking} className="bg-purple-600 hover:bg-purple-700">Générer le draft</Button>
             <Button onClick={scoreArticle} disabled={isWorking}>Scorer SEO/GEO</Button>
