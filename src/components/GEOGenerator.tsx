@@ -353,7 +353,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
       {/* TOC + Assistants */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader><CardTitle>Plan / TDM</CardHeader></CardHeader>
+          <CardHeader><CardTitle>Plan / TDM</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <Button size="sm" onClick={generateTOC}>Générer le plan</Button>
             <ul className="list-disc ml-5 text-sm">
