@@ -74,24 +74,36 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
     } catch(e:any){ alert('Erreur score: ' + (e?.message||'unknown')); } finally { setIsWorking(false); }
   };
 
+  const [genStatus, setGenStatus] = React.useState<string>('');
+
   const runChain = async () => {
     setIsWorking(true);
+    setGenStatus('Génération en cours (chaîne multi‑modèles)…');
     try {
       const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'chain_draft', topic, locked: lockedIds, editable: sections, outline:'H1/H2/H3', models, providers, prompts }) });
       const d = await r.json();
       setLogs(d.logs || []);
       setChainPreview({ draft: d.draft, review: d.review });
-      // Parse review JSON -> sections and inject in editor
+      // Parse review JSON -> sections (strict; pas de fallback simulé)
+      let nextSections:any[] = [];
       try {
         const j = JSON.parse(d.review || '{}');
         if (Array.isArray(j.sections) && j.sections.length > 0) {
-          const mapped = j.sections.map((s:any, i:number)=> ({ id: s.id || `sec-${i}`, title: s.title || `Section ${i+1}`, html: String(s.html||'') }));
-          setSections(mapped);
+          nextSections = j.sections.map((s:any, i:number)=> ({ id: s.id || `sec-${i}`, title: s.title || `Section ${i+1}`, html: String(s.html||'') }));
         } else if (typeof j.html === 'string' && j.html.trim().length > 0) {
-          setSections([{ id: 'article', title: topic || 'Article', html: j.html }]);
+          nextSections = [{ id: 'article', title: topic || 'Article', html: j.html }];
         }
       } catch {}
-    } catch(e:any){ alert('Erreur chaîne: ' + (e?.message||'unknown')); } finally { setIsWorking(false); }
+      if (nextSections.length > 0) {
+        setSections(nextSections);
+        setGenStatus('Génération terminée. L’article complet est prêt.');
+      } else {
+        setGenStatus('Échec de la génération structurée par l’IA (aucune section renvoyée). Ajustez les prompts et réessayez.');
+      }
+    } catch(e:any){
+      setGenStatus('Erreur lors de la génération.');
+      alert('Erreur chaîne: ' + (e?.message||'unknown'));
+    } finally { setIsWorking(false); }
   };
 
   const saveSettings = async () => {
@@ -262,9 +274,10 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
             <Button onClick={runChain} disabled={isWorking} className="bg-green-600 hover:bg-green-700">Générer l’article (chaîne multi‑modèles)</Button>
             <Button onClick={saveSettings} disabled={isWorking} variant="outline">Sauvegarder</Button>
+            {genStatus && (<span className="text-sm text-gray-600">{genStatus}</span>)}
           </div>
         </CardContent>
       </Card>
@@ -273,6 +286,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
         <Card>
           <CardHeader><CardTitle>Article complet</CardTitle></CardHeader>
           <CardContent className="space-y-3">
+            {genStatus && (<div className="text-sm text-gray-600">{genStatus}</div>)}
             <div className="bg-white border rounded p-3 text-sm whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: fullHtml }} />
             <div className="flex gap-2">
               <Button onClick={exportHtml} disabled={isWorking}>Exporter HTML</Button>
@@ -339,7 +353,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
       {/* TOC + Assistants */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader><CardTitle>Plan / TDM</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Plan / TDM</CardHeader></CardHeader>
           <CardContent className="space-y-3">
             <Button size="sm" onClick={generateTOC}>Générer le plan</Button>
             <ul className="list-disc ml-5 text-sm">
