@@ -8,6 +8,15 @@ function getSupabase() {
   return createClient(url as string, key as string, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
+function resolvePerplexityModel(input: string | undefined): string {
+  const m = (input || '').trim().toLowerCase();
+  if (m === 'sonar-pro') return 'sonar-pro';
+  if (m === 'sonar-small-online') return 'llama-3.1-sonar-small-128k-online';
+  if (m === 'sonar-large-online') return 'llama-3.1-sonar-large-128k-online';
+  if (m === 'sonar-medium-online') return 'llama-3.1-sonar-small-128k-online';
+  return input || 'sonar-pro';
+}
+
 async function putObject(bucket: string, path: string, text: string, contentType = 'application/json') {
   const supabase = getSupabase();
   if (!supabase) return;
@@ -151,7 +160,7 @@ export default async function handler(req: any, res: any) {
               : `Tu es un agent de recherche. Objectif: ${cfg2.objective || 'veille marketing/IA B2B'}. Retourne UNIQUEMENT un JSON compact {\"urls\":[...] } listant jusqu'à ${maxNewPerRun} URLs d'articles/rapports récents (<=30 jours si possible) hautement pertinents (business/ROI/lead magnet/benchmarks).`;
             const body0 = {
               provider: cfg2.aiProvider || 'perplexity',
-              model: cfg2.aiModel || 'sonar-pro',
+              model: resolvePerplexityModel(cfg2.aiModel || 'sonar-pro'),
               messages: [
                 { role: 'system', content: 'You output ONLY compact JSON. No prose.' },
                 { role: 'user', content: docPrompt }
@@ -279,7 +288,7 @@ export default async function handler(req: any, res: any) {
               const prompt = `${basePrompt}\n\n${jsonRule}`;
               const body = {
                 provider: cfg2.aiProvider || 'perplexity',
-                model: cfg2.aiModel || 'llama-3.1-sonar-large-128k-online',
+                model: resolvePerplexityModel(cfg2.aiModel || 'sonar-pro'),
                 messages: [
                   { role: 'system', content: sys },
                   { role: 'user', content: `${prompt}\n\nTITRE: ${obj.title}\nSOURCE: ${obj.url}\nTEXTE:\n${obj.content}` }
@@ -362,7 +371,7 @@ export default async function handler(req: any, res: any) {
                 : `Tu es un agent de veille. Objectif: ${cfg.objective || 'veille marketing/IA B2B'}. Propose jusqu'à 10 URLs pertinentes (web/RSS/YouTube) qui permettront de générer contenus et lead magnets orientés conversion. Favorise thématiques business (ROI, pipeline, benchmark, classement), CTA/Conversion (demo, essai, webinar, download), lead magnets (guide, template, checklist). Renvoie UNIQUEMENT un JSON compact {"websites":[],"rss":[],"youtube":[]} sans texte.`;
               const body = {
                 provider: cfg.aiProvider || 'perplexity',
-                model: cfg.aiModel || 'sonar-pro',
+                model: resolvePerplexityModel(cfg.aiModel || 'sonar-pro'),
                 messages: [
                   { role: 'system', content: 'You output ONLY compact JSON. No prose.' },
                   { role: 'user', content: prompt }
