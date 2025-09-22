@@ -67,6 +67,7 @@ export default function AgentTester({ agentType, defaultPrompts = {}, onConfigSa
     presencePenalty: 0
   });
   const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, boolean>>({});
+  const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   // Brief façon Générateur (UI identique)
   const [brief, setBrief] = useState({
     audience: 'DAF/Finance',
@@ -524,6 +525,61 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
                   </div>
                 </div>
               </div>
+
+              {/* Résultats récents (affichage type Générateur) */}
+              {testResults.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Posts générés récemment</h3>
+                  {testResults.map((result) => (
+                    <Card key={result.id} className="hover:shadow-lg transition-shadow">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <CardTitle className="text-base font-semibold mb-2">
+                              {result.provider} • {result.model}
+                            </CardTitle>
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-blue-100 text-blue-800">{new Date(result.timestamp).toLocaleString()}</Badge>
+                              <Badge className="bg-purple-100 text-purple-800">{(result.metrics.tokenCount||0)} tokens</Badge>
+                              <Badge className="bg-green-100 text-green-800">{result.metrics.cost.toFixed(4)}€</Badge>
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedResultId(selectedResultId === result.id ? null : result.id)}
+                            >
+                              {selectedResultId === result.id ? 'Fermer' : 'Voir'}
+                            </Button>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      {selectedResultId === result.id && (
+                        <CardContent className="space-y-4">
+                          {result.variants ? (
+                            <div className="space-y-4">
+                              {[{label:'120 mots (Mobile)', val: result.variants.v120}, {label:'180 mots (Standard)', val: result.variants.v180}, {label:'300 mots (Détaillé)', val: result.variants.v300}] 
+                                .filter(v=>!!v.val)
+                                .map((v, idx)=> (
+                                  <div key={idx} className="border rounded-lg p-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <h4 className="font-medium text-sm">{v.label}</h4>
+                                      <Button variant="outline" size="sm" onClick={()=> navigator.clipboard.writeText(v.val as string)}>Copier</Button>
+                                    </div>
+                                    <div className="bg-white border rounded p-3 text-sm whitespace-pre-wrap">{v.val}</div>
+                                  </div>
+                                ))}
+                            </div>
+                          ) : (
+                            <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">{result.response}</div>
+                          )}
+                        </CardContent>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="batch" className="space-y-4 mt-4">
