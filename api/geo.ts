@@ -239,6 +239,18 @@ export default async function handler(req: any, res: any) {
         await put('agents', `geo/exports/article_${id}.html`, String(html||''), 'text/html');
         return res.json({ ok: true, id });
       }
+      if (action === 'save_template_html') {
+        const { html, title } = req.body || {};
+        const id = Date.now().toString();
+        const path = `geo/templates/generated_${id}.html`;
+        await put('agents', path, String(html||''), 'text/html');
+        // update templates index
+        const idxPath = 'geo/templates/index.json';
+        const idx = (await getJSON<any>('agents', idxPath)) || { items: [] };
+        idx.items.unshift({ id, title: title || 'Article', path, createdAt: new Date().toISOString() });
+        await put('agents', idxPath, JSON.stringify(idx, null, 2));
+        return res.json({ ok: true, id, path });
+      }
       return res.status(400).json({ error: 'Unknown action' });
     }
     return res.status(405).json({ error: 'Method not allowed' });

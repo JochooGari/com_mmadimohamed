@@ -161,11 +161,18 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
     const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'benchmark', topic }) });
     if (r.ok) setBench((await r.json()).rows || []);
   };
+  const [showSections, setShowSections] = React.useState(false);
+  const fullHtml = React.useMemo(()=> sections.map(s=> (s.title ? `\n<h2 id="${s.id}">${s.title}</h2>\n` : '') + (s.html||'')).join('\n'), [sections]);
 
   const exportHtml = async () => {
     const html = sections.map(s=> s.html).join('\n');
     const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'export_html', html }) });
-    if (r.ok) alert('Export HTML OK'); else alert('Export échoué');
+    if (r.ok) {
+      const d = await r.json();
+      alert('Export HTML OK');
+      // enregistrer comme template réutilisable
+      await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'save_template_html', html, title: topic }) });
+    } else alert('Export échoué');
   };
 
   return (
@@ -256,9 +263,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button onClick={generateDraft} disabled={isWorking} className="bg-purple-600 hover:bg-purple-700">Générer le draft</Button>
-            <Button onClick={exportHtml} disabled={isWorking}>Exporter HTML</Button>
-            <Button onClick={runChain} disabled={isWorking} className="bg-green-600 hover:bg-green-700">Chaîne multi‑modèles</Button>
+            <Button onClick={runChain} disabled={isWorking} className="bg-green-600 hover:bg-green-700">Générer l’article (chaîne multi‑modèles)</Button>
             <Button onClick={saveSettings} disabled={isWorking} variant="outline">Sauvegarder</Button>
           </div>
         </CardContent>
@@ -266,20 +271,30 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
 
       {sections.length > 0 && (
         <Card>
-          <CardHeader><CardTitle>Sections (verrouillage / régénération)</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Article complet</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="bg-white border rounded p-3 text-sm whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: fullHtml }} />
+            <div className="flex gap-2">
+              <Button onClick={exportHtml} disabled={isWorking}>Exporter HTML</Button>
+              <Button variant="outline" size="sm" onClick={()=> setShowSections(v=> !v)}>{showSections ? 'Masquer les sections' : 'Modifier par section'}</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showSections && sections.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Édition par section</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            {sections.map((s) => (
+            {sections.map((s, idx) => (
               <div key={s.id} className="border rounded p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-medium text-sm">{s.title || s.id}</h4>
+                  <h4 className="font-medium text-sm">{s.title || `Section ${idx+1}`}</h4>
                   <div className="flex items-center gap-2">
-                    <label className="text-sm">
-                      <input type="checkbox" checked={lockedIds.includes(s.id)} onChange={(e)=> setLockedIds(prev => e.target.checked ? [...prev, s.id] : prev.filter(x=>x!==s.id))} /> Verrouiller
-                    </label>
-                    <Button variant="outline" size="sm" onClick={()=> rewriteSection(s)} disabled={lockedIds.includes(s.id)}>Régénérer</Button>
+                    <Button variant="outline" size="sm" onClick={()=> rewriteSection(s)}>Régénérer</Button>
                   </div>
                 </div>
-                <div className="bg-white border rounded p-3 text-sm whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: s.html }} />
+                <Textarea className="min-h-[160px]" value={s.html} onChange={(e)=> setSections(prev=> prev.map(x=> x.id===s.id? { ...x, html: e.target.value }: x))} />
               </div>
             ))}
           </CardContent>
