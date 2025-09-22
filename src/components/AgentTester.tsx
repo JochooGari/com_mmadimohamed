@@ -128,25 +128,49 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
     setIsRunning(true);
     const startTime = Date.now();
 
-    // Vérifier la clé API avant le test
-    const apiKey = getApiKey(selectedProvider);
-    if (!apiKey) {
-      alert(`❌ Clé API manquante pour ${selectedProvider}. Veuillez configurer VITE_${selectedProvider.toUpperCase()}_API_KEY dans .env.local`);
-      setIsRunning(false);
-      return;
-    }
-
     try {
       const prompts = testInput ? getDefaultPrompts() : { system: systemPrompt, user: userPrompt };
-      
-      const response = await aiService.generateCompletion(selectedProvider, {
-        model: selectedModel,
-        messages: [
-          { role: 'system', content: prompts.system },
-          { role: 'user', content: prompts.user }
-        ],
-        ...currentConfig
+
+      // Récupérer contexte: sources internes + veille optimisée
+      let contextBlocks: string[] = [];
+      try {
+        const [internalRes, veilleRes] = await Promise.all([
+          fetch('/api/storage?agent=linkedin&type=sources').then(r => r.ok ? r.json() : [] as any).catch(()=>[]),
+          fetch('/api/monitoring?list=1&limit=5&sort=global_desc').then(r => r.ok ? r.json() : { items: [] }).catch(()=>({ items: [] }))
+        ]);
+        const internals: any[] = Array.isArray(internalRes) ? internalRes : [];
+        if (internals.length > 0) {
+          const snips = internals.slice(0, 5).map((s:any) => `- ${s.name || s.id || ''}: ${String(s.content || s.summary || '').slice(0,180)}`);
+          contextBlocks.push(`Sources internes:\n${snips.join('\n')}`);
+        }
+        const rows: any[] = Array.isArray(veilleRes?.items) ? veilleRes.items : [];
+        if (rows.length > 0) {
+          const snips = rows.slice(0, 5).map((r:any) => `- ${r.title || ''} (${r.sector || ''}) ${Math.round((r.scores?.global||0)*100)}% → ${r.url}`);
+          contextBlocks.push(`Veille optimisée:\n${snips.join('\n')}`);
+        }
+      } catch {}
+
+      const combinedUser = `${prompts.user}\n\nContexte (utiliser uniquement ce qui suit si pertinent):\n${contextBlocks.join('\n')}`;
+
+      // Appel via proxy serveur (pas d'exposition de clés)
+      const proxyRes = await fetch('/api/ai-proxy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          model: selectedModel,
+          messages: [
+            { role: 'system', content: prompts.system },
+            { role: 'user', content: combinedUser }
+          ],
+          temperature: currentConfig.temperature,
+          maxTokens: currentConfig.maxTokens
+        })
       });
+      if (!proxyRes.ok) {
+        const t = await proxyRes.text().catch(()=> '');
+        throw new Error(`Proxy error ${proxyRes.status}: ${t}`);
+      }
+      const response = await proxyRes.json();
 
       const endTime = Date.now();
       const responseTime = endTime - startTime;
@@ -198,11 +222,11 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
 
   const calculateCost = (provider: string, model: string, tokens: number): number => {
     // Coûts approximatifs en centimes d'euro pour 1000 tokens
-    const costs = {
+    const costs: Record<string, Record<string, number>> = {
       'openai': { 'gpt-4-turbo': 0.02, 'gpt-5': 0.03, 'gpt-4': 0.015 },
       'anthropic': { 'claude-3-opus': 0.025, 'claude-3-sonnet': 0.006 },
       'mistral': { 'mistral-large': 0.008 },
-      'perplexity': { 'llama-3.1-sonar-large-128k-online': 0.004 }
+      'perplexity': { 'sonar': 0.005, 'sonar-pro': 0.012, 'llama-3.1-sonar-large-128k-online': 0.004, 'llama-3.1-sonar-small-128k-online': 0.003 }
     };
     
     const costPer1k = costs[provider]?.[model] || 0.01;

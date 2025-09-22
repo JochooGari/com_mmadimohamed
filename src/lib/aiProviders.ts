@@ -42,7 +42,7 @@ export const AI_PROVIDERS: AIProvider[] = [
     name: 'Perplexity',
     baseUrl: 'https://api.perplexity.ai',
     requiresAuth: true,
-    models: ['llama-3.1-sonar-small-128k-online', 'llama-3.1-sonar-large-128k-online', 'llama-3.1-sonar-huge-128k-online']
+    models: ['sonar', 'sonar-pro', 'llama-3.1-sonar-small-128k-online', 'llama-3.1-sonar-large-128k-online']
   }
 ];
 
