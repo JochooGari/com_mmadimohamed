@@ -76,6 +76,8 @@ export default function AgentTester({ agentType, defaultPrompts = {}, onConfigSa
     sujet: '',
     preuve: true
   });
+  const [templateUrl, setTemplateUrl] = useState('');
+  const [templateHtml, setTemplateHtml] = useState('');
 
   // Vérification des clés API au chargement
   React.useEffect(() => {
@@ -317,6 +319,18 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
     return AI_PROVIDERS.find(p => p.id === providerId)?.models || [];
   };
 
+  const importTemplate = async () => {
+    try {
+      const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'import_template', url: templateUrl, html: templateHtml }) });
+      if (!r.ok) throw new Error(await r.text());
+      const d = await r.json();
+      if (d?.outline?.h1) setBrief(prev => ({ ...prev, sujet: d.outline.h1 }));
+      alert('Template importé');
+    } catch(e:any) {
+      alert('Erreur import: ' + (e?.message || 'unknown'));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -338,6 +352,18 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
             </TabsList>
 
             <TabsContent value="single" className="space-y-4 mt-4">
+              {agentType === 'linkedin' && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Importer une structure d’article (URL ou HTML)</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Input placeholder="Coller une URL d’article (optionnel)" value={templateUrl} onChange={(e)=> setTemplateUrl(e.target.value)} />
+                    <Textarea className="min-h-[120px]" placeholder="Ou collez l’HTML d’un article pour créer un template (structure H2/H3)" value={templateHtml} onChange={(e)=> setTemplateHtml(e.target.value)} />
+                    <Button onClick={importTemplate}>Importer</Button>
+                  </CardContent>
+                </Card>
+              )}
               {agentType === 'linkedin' && (
                 <Card>
                   <CardHeader>
