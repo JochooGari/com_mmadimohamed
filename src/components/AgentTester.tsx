@@ -66,6 +66,14 @@ export default function AgentTester({ agentType, defaultPrompts = {}, onConfigSa
     presencePenalty: 0
   });
   const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, boolean>>({});
+  // Brief façon Générateur (UI identique)
+  const [brief, setBrief] = useState({
+    audience: 'DAF/Finance',
+    angle: 'probleme' as 'probleme' | 'resultat',
+    template: 'Liste3-5',
+    sujet: '',
+    preuve: true
+  });
 
   // Vérification des clés API au chargement
   React.useEffect(() => {
@@ -320,6 +328,65 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
             </TabsList>
 
             <TabsContent value="single" className="space-y-4 mt-4">
+              {agentType === 'linkedin' && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      Nouveau Post LinkedIn (aperçu Générateur)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Audience:</label>
+                        <select value={brief.audience} onChange={(e)=> setBrief({...brief, audience: e.target.value})} className="w-full p-2 border rounded">
+                          <option value="DAF/Finance">DAF/Finance</option>
+                          <option value="ESN/IT">ESN/IT</option>
+                          <option value="Executive/Direction">Executive/Direction</option>
+                          <option value="RH/Recrutement">RH/Recrutement</option>
+                          <option value="Sales/Business Dev">Sales/Business Dev</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Angle:</label>
+                        <select value={brief.angle} onChange={(e)=> setBrief({...brief, angle: e.target.value as 'probleme'|'resultat'})} className="w-full p-2 border rounded">
+                          <option value="probleme">Problème (Pain points)</option>
+                          <option value="resultat">Résultat (Success story)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Template:</label>
+                        <select value={brief.template} onChange={(e)=> setBrief({...brief, template: e.target.value})} className="w-full p-2 border rounded">
+                          <option value="Liste3-5">Liste 3-5 points</option>
+                          <option value="PPP">Perspective/Preuve/Process</option>
+                          <option value="WhatHowWhy">What/How/Why</option>
+                          <option value="CasClient">Cas Client Express</option>
+                          <option value="MytheRealite">Mythe vs Réalité</option>
+                        </select>
+                      </div>
+                      <div className="flex items-end">
+                        <label className="flex items-center space-x-2">
+                          <input type="checkbox" checked={brief.preuve} onChange={(e)=> setBrief({...brief, preuve: e.target.checked})} />
+                          <span className="text-sm font-medium">Inclure preuve</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Sujet principal:</label>
+                      <Input placeholder="Ex: Budget vs Rolling Forecast, Recrutement IT..." value={brief.sujet} onChange={(e)=> setBrief({...brief, sujet: e.target.value})} />
+                    </div>
+                    <div className="text-right">
+                      <Button
+                        onClick={() => { setTestInput(brief.sujet); runSingleTest(); }}
+                        disabled={isRunning || !brief.sujet.trim()}
+                        className="bg-purple-600 hover:bg-purple-700"
+                      >
+                        Générer via API
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Configuration */}
                 <div className="space-y-4">
