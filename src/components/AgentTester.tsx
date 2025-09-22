@@ -41,6 +41,7 @@ interface TestResult {
   };
   score: number;
   feedback: string;
+  variants?: { v120?: string; v180?: string; v300?: string };
 }
 
 interface AgentTesterProps {
@@ -158,7 +159,7 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
         }
       } catch {}
 
-      const combinedUser = `${prompts.user}\n\nContexte (utiliser uniquement ce qui suit si pertinent):\n${contextBlocks.join('\n')}`;
+      const combinedUser = `${prompts.user}\n\nRetourne UNIQUEMENT un JSON {\"variant_120\":\"...\",\"variant_180\":\"...\",\"variant_300\":\"...\"}.\n\nContexte (utiliser uniquement ce qui suit si pertinent):\n${contextBlocks.join('\n')}`;
 
       // Appel via proxy serveur (pas d'exposition de clés)
       const proxyRes = await fetch('/api/ai-proxy', {
@@ -179,6 +180,13 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
         throw new Error(`Proxy error ${proxyRes.status}: ${t}`);
       }
       const response = await proxyRes.json();
+      let text = (response?.content || '').trim();
+      if (/^```/.test(text)) text = text.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+      let v120: string | undefined, v180: string | undefined, v300: string | undefined;
+      try {
+        const j = JSON.parse(text);
+        v120 = j?.variant_120; v180 = j?.variant_180; v300 = j?.variant_300;
+      } catch {}
 
       const endTime = Date.now();
       const responseTime = endTime - startTime;
@@ -189,7 +197,7 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
         provider: selectedProvider,
         model: selectedModel,
         prompt: prompts.user,
-        response: response.content,
+        response: text || response.content,
         metrics: {
           responseTime,
           tokenCount: response.usage?.totalTokens || 0,
@@ -197,7 +205,8 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
           quality: 0 // À remplir manuellement
         },
         score: 0,
-        feedback: ''
+        feedback: '',
+        variants: (v120 || v180 || v300) ? { v120, v180, v300 } : undefined
       };
 
       setTestResults(prev => [newResult, ...prev]);
@@ -625,12 +634,26 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div>
-                        <Label className="text-sm font-medium">Réponse générée:</Label>
-                        <div className="mt-1 p-3 bg-gray-50 rounded-lg text-sm">
-                          {result.response}
+                      {result.variants ? (
+                        <div className="space-y-4">
+                          {[{label:'120 mots (Mobile)', val: result.variants.v120}, {label:'180 mots (Standard)', val: result.variants.v180}, {label:'300 mots (Détaillé)', val: result.variants.v300}] 
+                            .filter(v=>!!v.val)
+                            .map((v, idx)=> (
+                              <div key={idx} className="border rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className="font-medium text-sm">{v.label}</h4>
+                                  <Button variant="outline" size="sm" onClick={()=> navigator.clipboard.writeText(v.val as string)}>Copier</Button>
+                                </div>
+                                <div className="bg-white border rounded p-3 text-sm whitespace-pre-wrap">{v.val}</div>
+                              </div>
+                            ))}
                         </div>
-                      </div>
+                      ) : (
+                        <div>
+                          <Label className="text-sm font-medium">Réponse générée:</Label>
+                          <div className="mt-1 p-3 bg-gray-50 rounded-lg text-sm">{result.response}</div>
+                        </div>
+                      )}
                       
                       <div className="flex gap-2">
                         <Input
