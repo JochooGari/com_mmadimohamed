@@ -28,11 +28,14 @@ import AdminSettings from './pages/AdminSettings';
 import LinkedInAgentPage from './pages/LinkedInAgentPage';
 import GEOAgentPage from './pages/GEOAgentPage';
 import { AdminDataProvider } from './context/AdminDataContext';
+import { useLocation } from 'react-router-dom';
 
 function App() {
+  const location = useLocation();
+  const isAdmin = location.pathname.startsWith('/admin');
   return (
     <ContentProvider>
-      <Header />
+      {!isAdmin && <Header />}
       <Routes>
         <Route path="/" element={<>
           <Hero />
@@ -65,7 +68,7 @@ function App() {
           <Route path="content" element={<AdminPage />} />
         </Route>
       </Routes>
-      <Footer />
+      {!isAdmin && <Footer />}
     </ContentProvider>
   );
 }
