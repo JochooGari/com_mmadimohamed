@@ -29,7 +29,13 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'POST') {
       const { action } = req.body || {};
       if (action === 'import_template') {
-        const { html, url } = req.body || {};
+        let { html, url } = req.body || {};
+        if (!html && url) {
+          try {
+            const r = await fetch(url);
+            if (r.ok) html = await r.text();
+          } catch {}
+        }
         const id = Date.now().toString();
         const record = { id, html: String(html||''), url: String(url||''), createdAt: new Date().toISOString() };
         await put('agents', `geo/templates/${id}.json`, JSON.stringify(record, null, 2));
@@ -79,6 +85,8 @@ export default async function handler(req: any, res: any) {
         const claude = await callAI('anthropic', anthropicModel, [ {role:'system', content: sys2}, {role:'user', content: usr2} ]).catch(e=>({ error:String(e)}));
         logs.push({ step:'claude_review', summary: claude?.usage || null, model: anthropicModel });
         const reviewText = (claude?.content || '').trim() || draftText;
+        let claudeNotes: string[] = [];
+        try { const j = JSON.parse(reviewText); claudeNotes = Array.isArray(j?.notes) ? j.notes : []; } catch {}
         // 3) Perplexity scoring
         const sys3 = 'You output ONLY compact JSON. No prose. No markdown.';
         const usr3 = (req.body?.prompts?.perplexity||'').trim().length>0
@@ -87,7 +95,8 @@ export default async function handler(req: any, res: any) {
         const ppxModel = models.perplexity || 'sonar';
         const ppx = await callAI('perplexity', ppxModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
         logs.push({ step:'perplexity_score', summary: ppx?.usage || null, model: ppxModel });
-        return res.json({ draft: draftText, review: reviewText, score: ppx?.content || '', logs });
+        let scoreObj: any = null; try { scoreObj = JSON.parse((ppx?.content||'').trim()); } catch {}
+        return res.json({ logs, feedback: { openai: 'Draft généré', claude: claudeNotes, perplexity: scoreObj } });
       }
       if (action === 'export_html') {
         const { html } = req.body || {};

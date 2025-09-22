@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 export default function GEOGenerator({ className='' }: { className?: string }) {
   const [topic, setTopic] = React.useState('Power BI pour la finance');
   const [templateHtml, setTemplateHtml] = React.useState('');
+  const [templateUrl, setTemplateUrl] = React.useState('');
   const [sections, setSections] = React.useState<any[]>([]);
   const [lockedIds, setLockedIds] = React.useState<string[]>([]);
   const [scores, setScores] = React.useState<{seo?:number; geo?:number}>({});
@@ -29,7 +30,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
   const importTemplate = async () => {
     setIsWorking(true);
     try {
-      const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'import_template', html: templateHtml }) });
+      const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'import_template', html: templateHtml, url: templateUrl }) });
       if (!r.ok) throw new Error(await r.text());
       alert('Template importé');
     } catch(e:any){ alert('Erreur import: ' + (e?.message||'unknown')); } finally { setIsWorking(false); }
@@ -95,8 +96,9 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Importer un template (coller HTML)</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Importer une structure d’article (URL ou HTML)</CardTitle></CardHeader>
         <CardContent className="space-y-3">
+          <Input placeholder="Coller une URL d’article (optionnel)" value={templateUrl} onChange={(e)=> setTemplateUrl(e.target.value)} />
           <Textarea className="min-h-[140px]" placeholder="Collez ici l'HTML extrait d'un article pour créer un template" value={templateHtml} onChange={(e)=> setTemplateHtml(e.target.value)} />
           <Button onClick={importTemplate} disabled={isWorking} className="bg-blue-600 hover:bg-blue-700">Importer</Button>
         </CardContent>
@@ -198,9 +200,9 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
         </Card>
       )}
 
-      {(logs.length > 0 || chainPreview) && (
+      {(logs.length > 0) && (
         <Card>
-          <CardHeader><CardTitle>Échanges IA (synthèse)</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Échanges IA (synthèse collaborative)</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="text-sm text-gray-700">
               {logs.map((l, i)=> (
@@ -212,18 +214,23 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
                 </div>
               ))}
             </div>
-            {chainPreview?.draft && (
-              <div>
-                <h4 className="text-sm font-medium mb-1">Draft (OpenAI)</h4>
-                <Textarea className="min-h-[100px]" value={chainPreview.draft} readOnly />
+            {/* Feedback des IA */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3 border rounded">
+                <h4 className="text-sm font-semibold">OpenAI (Draft)</h4>
+                <p className="text-xs text-gray-600">Feedback: Draft généré</p>
               </div>
-            )}
-            {chainPreview?.review && (
-              <div>
-                <h4 className="text-sm font-medium mb-1">Review (Claude)</h4>
-                <Textarea className="min-h-[100px]" value={chainPreview.review} readOnly />
+              <div className="p-3 border rounded">
+                <h4 className="text-sm font-semibold">Claude (Review)</h4>
+                <ul className="list-disc ml-4 text-xs text-gray-700">
+                  {(logs as any) && []}
+                </ul>
               </div>
-            )}
+              <div className="p-3 border rounded">
+                <h4 className="text-sm font-semibold">Perplexity (Score)</h4>
+                <p className="text-xs text-gray-700">Voir panneau SEO/GEO (à gauche) + sources suggérées.</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
