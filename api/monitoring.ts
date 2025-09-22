@@ -65,7 +65,7 @@ async function getConfig() {
     autoDiscovery: true,
     aiResearch: true,
     aiProvider: 'perplexity',
-    aiModel: 'sonar-pro',
+    aiModel: 'sonar',
     scoringPrompt: '',
     maxNewPerFeed: 5,
     maxNewPerRun: 50

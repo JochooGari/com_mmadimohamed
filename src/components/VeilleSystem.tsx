@@ -344,7 +344,7 @@ export default function VeilleSystem({ className = '' }: { className?: string })
 
   const runVeille = async () => {
     try {
-      setIsRunningVeille(true);
+    setIsRunningVeille(true);
       // Déclenche un cycle backend (api/monitoring)
       const response = await fetch('/api/monitoring', {
         method: 'POST',
@@ -553,7 +553,14 @@ export default function VeilleSystem({ className = '' }: { className?: string })
             </div>
             <div>
               <label className="text-sm text-gray-600">Modèle</label>
-              <Input value={config.aiModel || 'sonar-pro'} onChange={e=> setConfig({ ...config, aiModel: e.target.value })} />
+              <select
+                className="border rounded px-2 py-1 text-sm w-full"
+                value={config.aiModel || 'sonar'}
+                onChange={e=> setConfig({ ...config, aiModel: e.target.value })}
+              >
+                <option value="sonar">sonar (économique)</option>
+                <option value="sonar-pro">sonar-pro (avancé)</option>
+              </select>
             </div>
           </div>
           <div>
