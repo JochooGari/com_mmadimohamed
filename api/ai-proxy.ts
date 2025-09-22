@@ -1,5 +1,3 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
 type Message = { role: 'system' | 'user' | 'assistant'; content: string };
 
 function getKey(provider: string): string | undefined {
@@ -42,7 +40,7 @@ function normalize(provider: string, data: any, model: string) {
   return { content, usage, model };
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
