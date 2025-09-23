@@ -31,6 +31,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
     anthropic: '',
     perplexity: ''
   });
+  const [promptsOpen, setPromptsOpen] = React.useState<boolean>(true);
 
   const importTemplate = async () => {
     setIsWorking(true);
@@ -207,72 +208,77 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
         <CardContent className="space-y-3">
           <Input value={topic} onChange={(e)=> setTopic(e.target.value)} placeholder="Sujet principal (ex: Power BI pour la finance)" />
           <div className="space-y-2">
-            <h4 className="text-sm font-semibold">Prompts personnalisés</h4>
-            <div className="flex flex-col gap-3">
-              {/* Écriture */}
-              <div className="flex flex-wrap items-start gap-3 p-3 border rounded">
-                <div className="w-24 text-xs font-semibold">Écriture</div>
-                <div className="flex items-center gap-2">
-                  <Select value={providers.draft} onValueChange={(v)=> setProviders(prev=> ({ ...prev, draft: v }))}>
-                    <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {['openai','anthropic','perplexity'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={models.draft} onValueChange={(v)=> setModels(prev=> ({ ...prev, draft: v }))}>
-                    <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {providerModels[providers.draft].map(m=> (<SelectItem key={m} value={m}>{m}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1 min-w-[260px]">
-                  <Textarea className="min-h-[70px]" placeholder="Consigne de rédaction (H1/H2/H3, CTA, FAQ, JSON-LD...)" value={prompts.openai} onChange={(e)=> setPrompts(prev=> ({ ...prev, openai: e.target.value }))} />
-                </div>
-              </div>
-              {/* Révision */}
-              <div className="flex flex-wrap items-start gap-3 p-3 border rounded">
-                <div className="w-24 text-xs font-semibold">Révision</div>
-                <div className="flex items-center gap-2">
-                  <Select value={providers.review} onValueChange={(v)=> setProviders(prev=> ({ ...prev, review: v }))}>
-                    <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {['openai','anthropic','perplexity'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={models.review} onValueChange={(v)=> setModels(prev=> ({ ...prev, review: v }))}>
-                    <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {providerModels[providers.review].map(m=> (<SelectItem key={m} value={m}>{m}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1 min-w-[260px]">
-                  <Textarea className="min-h-[70px]" placeholder="Consignes d'édition (clarté, ton, cohérence, sections verrouillées...)" value={prompts.anthropic} onChange={(e)=> setPrompts(prev=> ({ ...prev, anthropic: e.target.value }))} />
-                </div>
-              </div>
-              {/* Finalisation */}
-              <div className="flex flex-wrap items-start gap-3 p-3 border rounded">
-                <div className="w-24 text-xs font-semibold">Finalisation</div>
-                <div className="flex items-center gap-2">
-                  <Select value={providers.score} onValueChange={(v)=> setProviders(prev=> ({ ...prev, score: v }))}>
-                    <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {['openai','anthropic','perplexity'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={models.score} onValueChange={(v)=> setModels(prev=> ({ ...prev, score: v }))}>
-                    <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {providerModels[providers.score].map(m=> (<SelectItem key={m} value={m}>{m}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1 min-w-[260px]">
-                  <Textarea className="min-h-[70px]" placeholder="Critères & format JSON pour le scoring GEO/SEO, sources, FAQ, JSON-LD…" value={prompts.perplexity} onChange={(e)=> setPrompts(prev=> ({ ...prev, perplexity: e.target.value }))} />
-                </div>
-              </div>
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold">Prompts personnalisés</h4>
+              <Button type="button" variant="outline" size="sm" onClick={()=> setPromptsOpen(v=> !v)}>{promptsOpen ? 'Plier' : 'Déplier'}</Button>
             </div>
+            {promptsOpen && (
+              <div className="flex flex-col gap-3">
+                {/* Écriture */}
+                <div className="flex flex-wrap items-start gap-3 p-3 border rounded">
+                  <div className="w-24 text-xs font-semibold">Écriture</div>
+                  <div className="flex items-center gap-2">
+                    <Select value={providers.draft} onValueChange={(v)=> setProviders(prev=> ({ ...prev, draft: v }))}>
+                      <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['openai','anthropic','perplexity'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={models.draft} onValueChange={(v)=> setModels(prev=> ({ ...prev, draft: v }))}>
+                      <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {providerModels[providers.draft].map(m=> (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 min-w-[260px]">
+                    <Textarea className="min-h-[70px]" placeholder="Consigne de rédaction (H1/H2/H3, CTA, FAQ, JSON-LD...)" value={prompts.openai} onChange={(e)=> setPrompts(prev=> ({ ...prev, openai: e.target.value }))} />
+                  </div>
+                </div>
+                {/* Révision */}
+                <div className="flex flex-wrap items-start gap-3 p-3 border rounded">
+                  <div className="w-24 text-xs font-semibold">Révision</div>
+                  <div className="flex items-center gap-2">
+                    <Select value={providers.review} onValueChange={(v)=> setProviders(prev=> ({ ...prev, review: v }))}>
+                      <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['openai','anthropic','perplexity'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={models.review} onValueChange={(v)=> setModels(prev=> ({ ...prev, review: v }))}>
+                      <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {providerModels[providers.review].map(m=> (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 min-w-[260px]">
+                    <Textarea className="min-h-[70px]" placeholder="Consignes d'édition (clarté, ton, cohérence, sections verrouillées...)" value={prompts.anthropic} onChange={(e)=> setPrompts(prev=> ({ ...prev, anthropic: e.target.value }))} />
+                  </div>
+                </div>
+                {/* Finalisation */}
+                <div className="flex flex-wrap items-start gap-3 p-3 border rounded">
+                  <div className="w-24 text-xs font-semibold">Finalisation</div>
+                  <div className="flex items-center gap-2">
+                    <Select value={providers.score} onValueChange={(v)=> setProviders(prev=> ({ ...prev, score: v }))}>
+                      <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['openai','anthropic','perplexity'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={models.score} onValueChange={(v)=> setModels(prev=> ({ ...prev, score: v }))}>
+                      <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {providerModels[providers.score].map(m=> (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 min-w-[260px]">
+                    <Textarea className="min-h-[70px]" placeholder="Critères & format JSON pour le scoring GEO/SEO, sources, FAQ, JSON-LD…" value={prompts.perplexity} onChange={(e)=> setPrompts(prev=> ({ ...prev, perplexity: e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <Button onClick={runChain} disabled={isWorking} className="bg-green-600 hover:bg-green-700">Générer l’article (chaîne multi‑modèles)</Button>

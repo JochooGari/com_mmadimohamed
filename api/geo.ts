@@ -39,6 +39,15 @@ function extractOutline(html: string) {
   return { h1, sections };
 }
 
+function stripFences(text: string): string {
+  if (typeof text !== 'string') return '';
+  let t = text.trim();
+  if (/^```/m.test(t)) {
+    t = t.replace(/^```(?:json|JSON)?\n?/i,'').replace(/\n?```$/,'').trim();
+  }
+  return t;
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -84,7 +93,7 @@ export default async function handler(req: any, res: any) {
         return res.json({ scores: { seo: 85, geo: 86 }, strengths:['structure'], weaknesses:['few sources'], fixes:['add sources'] });
       }
       if (action === 'chain_draft') {
-        const { topic = 'Sujet', locked = [], editable = [], outline = 'H1/H2/H3', models = {}, providers = {} } = req.body || {};
+        const { topic = 'Sujet', locked = [], editable = [], outline = 'H1/H2/H3', models = {}, providers = {}, prompts = {} } = req.body || {};
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
         const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=1200) => {
           const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, model, messages, temperature, maxTokens }) });
@@ -93,38 +102,47 @@ export default async function handler(req: any, res: any) {
         };
         const logs:any[] = [];
         // 1) OpenAI draft
-        const sys1 = 'You write publication-quality French long-form. Respect locked sections; return only edited sections JSON.';
-        const usr1 = (models?.openai && (req.body?.prompts?.openai||'').trim().length>0)
-          ? req.body.prompts.openai
+        const sys1 = 'You output ONLY compact JSON. No prose. No markdown. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
+        const usr1 = (prompts?.openai||'').trim().length>0
+          ? `${prompts.openai}\n\nRappel: retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}]}`
           : `Sujet: ${topic}\nOutline: ${outline}\nLocked: ${JSON.stringify(locked).slice(0,1000)}\nEditable: ${JSON.stringify(editable).slice(0,2000)}\nLivrable JSON strict: {"sections":[{"id":"...","title":"...","html":"..."}]}`;
         const draftProvider = providers.draft || 'openai';
-        const draftModel = models.draft || models.openai || 'gpt-4-turbo';
+        const draftModel = (models.draft || (models as any).openai || 'gpt-4-turbo');
         const openai = await callAI(draftProvider, draftModel, [ {role:'system', content: sys1}, {role:'user', content: usr1} ]).catch(e=>({ error:String(e)}));
         logs.push({ step:'draft', summary: openai?.usage || null, model: draftModel, provider: draftProvider });
-        const draftText = (openai?.content || openai?.choices?.[0]?.message?.content || '').trim();
-        // 2) Claude review
-        const sys2 = 'You are a senior French editor. Improve clarity/consistency; preserve structure; return JSON sections only.';
-        const usr2 = (req.body?.prompts?.anthropic||'').trim().length>0
-          ? req.body.prompts.anthropic.replace('{draft}', draftText)
-          : `Review and improve these sections JSON. Keep locked untouched. Return {"sections":[{"id":"...","html":"..."}],"notes":["..."]}\n\n${draftText}`;
+        const draftTextRaw = (openai?.content || openai?.choices?.[0]?.message?.content || '').trim();
+        const draftText = stripFences(draftTextRaw);
+        // 2) Claude review (must return JSON sections)
+        const sys2 = 'You output ONLY compact JSON. No prose. No markdown. Improve clarity/consistency; preserve structure and locks; return strictly {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]} in French.';
+        const usr2 = (prompts?.anthropic||'').trim().length>0
+          ? `${prompts.anthropic.replace('{draft}', draftText)}\n\nRappel: retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]}`
+          : `Review and improve these sections JSON. Keep locked untouched. Return {"sections":[{"id":"...","html":"..."}],"notes":["..."]}.\n\n${draftText}`;
         const reviewProvider = providers.review || 'anthropic';
-        const anthropicModel = models.review || models.anthropic || 'claude-3-sonnet';
+        const anthropicModel = (models.review || (models as any).anthropic || 'claude-3-sonnet');
         const claude = await callAI(reviewProvider, anthropicModel, [ {role:'system', content: sys2}, {role:'user', content: usr2} ]).catch(e=>({ error:String(e)}));
         logs.push({ step:'review', summary: claude?.usage || null, model: anthropicModel, provider: reviewProvider });
-        const reviewText = (claude?.content || '').trim() || draftText;
-        let claudeNotes: string[] = [];
-        try { const j = JSON.parse(reviewText); claudeNotes = Array.isArray(j?.notes) ? j.notes : []; } catch {}
+        const reviewTextRaw = (claude?.content || '').trim() || draftText;
+        const reviewText = stripFences(reviewTextRaw);
+        let reviewJson: any = null;
+        try { reviewJson = JSON.parse(reviewText); } catch {}
+        let reviewOut = '';
+        if (reviewJson && Array.isArray(reviewJson.sections)) {
+          reviewOut = JSON.stringify(reviewJson);
+        } else {
+          // no fallback content; return empty to let frontend show strict error
+          reviewOut = '';
+        }
         // 3) Perplexity scoring
         const sys3 = 'You output ONLY compact JSON. No prose. No markdown.';
-        const usr3 = (req.body?.prompts?.perplexity||'').trim().length>0
-          ? req.body.prompts.perplexity.replace('{article}', reviewText)
-          : `Compute SEO/GEO (0..100) + strengths/weaknesses/fixes. Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} for article sections JSON:\n${reviewText}`;
+        const usr3 = (prompts?.perplexity||'').trim().length>0
+          ? `${prompts.perplexity.replace('{article}', reviewOut || reviewText)}`
+          : `Compute SEO/GEO (0..100) + strengths/weaknesses/fixes. Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} for article sections JSON:\n${reviewOut || reviewText}`;
         const scoreProvider = providers.score || 'perplexity';
-        const ppxModel = models.score || models.perplexity || 'sonar';
+        const ppxModel = (models.score || (models as any).perplexity || 'sonar');
         const ppx = await callAI(scoreProvider, ppxModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
         logs.push({ step:'score', summary: ppx?.usage || null, model: ppxModel, provider: scoreProvider });
-        let scoreObj: any = null; try { scoreObj = JSON.parse((ppx?.content||'').trim()); } catch {}
-        return res.json({ logs, feedback: { openai: 'Draft généré', claude: claudeNotes, perplexity: scoreObj } });
+        let scoreObj: any = null; try { const t = stripFences((ppx?.content||'').trim()); scoreObj = JSON.parse(t); } catch {}
+        return res.json({ logs, draft: draftText, review: reviewOut, feedback: { openai: 'Draft généré', claude: (reviewJson?.notes||[]), perplexity: scoreObj } });
       }
       if (action === 'save_settings') {
         const { models, providers, prompts } = req.body || {};
