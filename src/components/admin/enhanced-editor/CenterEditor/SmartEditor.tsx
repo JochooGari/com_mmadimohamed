@@ -306,13 +306,16 @@ export default function SmartEditor({ content, onChange, focusMode, zenMode, mod
                 <textarea value={content.content_html || ''} onChange={(e)=> handleTextChange('content_html', e.target.value)} placeholder="Collez/éditez du HTML propre…" rows={18} className="flex-1 w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-mono" />
               ) : (
                 <Editor
-                  apiKey={import.meta.env.VITE_TINYMCE_API_KEY || 'mzqxfb4pdq9g24k0hq3vgfnp0nhqxt041fhp3jm10avytq1f'}
+                  apiKey={'mzqxfb4pdq9g24k0hq3vgfnp0nhqxt041fhp3jm10avytq1f'}
+                  tinymceScriptSrc={'https://cdn.tiny.cloud/1/mzqxfb4pdq9g24k0hq3vgfnp0nhqxt041fhp3jm10avytq1f/tinymce/6/tinymce.min.js'}
                   value={content.content_html || ''}
                   init={{
                     height: 600,
                     menubar: false,
-                    plugins: 'link lists table code image paste',
-                    toolbar: 'undo redo | styles | bold italic underline | alignleft aligncenter alignright | bullist numlist | link image table | code',
+                    plugins: [
+                      'anchor','autolink','charmap','codesample','emoticons','link','lists','media','searchreplace','table','visualblocks','wordcount'
+                    ],
+                    toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline | alignleft aligncenter alignright | bullist numlist | link media table | code',
                     paste_as_text: false,
                     content_style: 'body { font-family:Inter,system-ui,Arial; line-height:1.7; }'
                   }}
