@@ -55,7 +55,6 @@ export default function EnhancedEditorLayout({
 
   const [autosaveStatus, setAutosaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
 
-  // Auto-save functionality
   useEffect(() => {
     const timer = setTimeout(() => {
       if (content.title || content.content_md) {
@@ -82,119 +81,52 @@ export default function EnhancedEditorLayout({
   };
 
   const getLayoutClasses = () => {
-    if (settings.zenMode) {
-      return 'grid grid-cols-1';
-    }
-
+    if (settings.zenMode) return 'grid grid-cols-1';
     let baseClass = 'grid gap-4 ';
-
     if (!settings.leftPanelVisible && !settings.rightPanelVisible) {
       baseClass += 'grid-cols-1';
     } else if (!settings.leftPanelVisible) {
-      baseClass += 'grid-cols-[1fr_350px]';
+      baseClass += 'grid-cols-[1fr_30%]';
     } else if (!settings.rightPanelVisible) {
-      baseClass += 'grid-cols-[280px_1fr]';
+      baseClass += 'grid-cols-[20%_1fr]';
     } else {
-      baseClass += 'grid-cols-[280px_1fr_350px]';
+      baseClass += 'grid-cols-[20%_1fr_30%]';
     }
-
     return baseClass;
   };
 
   return (
     <div className={`min-h-screen ${settings.darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
-      {/* Barre supérieure - Actions globales */}
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
         <div className="flex items-center justify-between">
-          {/* Actions principales */}
           <div className="flex items-center gap-4">
             <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {mode === 'articles' ? 'Éditeur d\'Articles' : 'Éditeur de Ressources'}
+              {mode === 'articles' ? "Éditeur d'Articles" : 'Éditeur de Ressources'}
             </h1>
-
             <div className="flex items-center gap-2">
-              <button className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-                Sauvegarder
-              </button>
-              <button className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors">
-                Aperçu
-              </button>
-              <button className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
-                Publier
-              </button>
+              <button className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">Sauvegarder</button>
+              <button className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors">Aperçu</button>
+              <button className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">Publier</button>
             </div>
           </div>
-
-          {/* Scores et contrôles */}
-          <div className="flex items-center gap-6">
-            {/* Scores SEO/GEO */}
-            <div className="flex items-center gap-4">
-              <div className="text-sm">
-                <span className="text-gray-600 dark:text-gray-400">SEO:</span>
-                <span className={`ml-1 font-semibold ${
-                  content.seoScore >= 80 ? 'text-green-600' :
-                  content.seoScore >= 60 ? 'text-orange-600' : 'text-red-600'
-                }`}>
-                  {content.seoScore}/100
-                </span>
-              </div>
-              <div className="text-sm">
-                <span className="text-gray-600 dark:text-gray-400">GEO:</span>
-                <span className={`ml-1 font-semibold ${
-                  content.geoScore >= 80 ? 'text-green-600' :
-                  content.geoScore >= 60 ? 'text-orange-600' : 'text-red-600'
-                }`}>
-                  {content.geoScore}/100
-                </span>
-              </div>
-            </div>
-
-            {/* Status d'autosauve */}
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              {autosaveStatus === 'saving' && '💾 Sauvegarde...'}
-              {autosaveStatus === 'saved' && '✅ Sauvegardé'}
-              {autosaveStatus === 'error' && '❌ Erreur'}
-            </div>
-
+          <div className="flex items-center gap-2">
+            {/* Bouton explicite pour (dé)plier le panneau droit */}
+            <button
+              onClick={() => toggleSetting('rightPanelVisible')}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-white"
+            >
+              {settings.rightPanelVisible ? 'Replier panneau droit' : 'Déplier panneau droit'}
+            </button>
             {/* Contrôles d'affichage */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => toggleSetting('leftPanelVisible')}
-                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
-                title="Basculer panneau gauche"
-              >
-                {settings.leftPanelVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={() => toggleSetting('rightPanelVisible')}
-                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
-                title="Basculer panneau droit"
-              >
-                {settings.rightPanelVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={() => toggleSetting('focusMode')}
-                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
-                title="Mode focus"
-              >
-                <Maximize2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => toggleSetting('zenMode')}
-                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
-                title="Mode zen"
-              >
-                <Minimize2 className="w-4 h-4" />
-              </button>
-            </div>
+            <button onClick={() => toggleSetting('leftPanelVisible')} className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded" title="Basculer panneau gauche">{settings.leftPanelVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+            <button onClick={() => toggleSetting('rightPanelVisible')} className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded" title="Basculer panneau droit">{settings.rightPanelVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+            <button onClick={() => toggleSetting('focusMode')} className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded" title="Mode focus"><Maximize2 className="w-4 h-4" /></button>
+            <button onClick={() => toggleSetting('zenMode')} className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded" title="Mode zen"><Minimize2 className="w-4 h-4" /></button>
           </div>
         </div>
       </header>
-
-      {/* Layout principal */}
       <main className="p-6">
         <div className={getLayoutClasses()}>
-          {/* Panneau Gauche - Structure & Navigation (20%) */}
           {settings.leftPanelVisible && !settings.zenMode && (
             <aside className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
               <div className="border-b border-gray-200 dark:border-gray-700">
@@ -205,122 +137,34 @@ export default function EnhancedEditorLayout({
                   </button>
                 </nav>
               </div>
-
               <div className="h-[calc(100vh-200px)] overflow-y-auto">
-                {/* Arborescence de l'article */}
                 <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-                  <ArticleOutline
-                    content={content.content_md}
-                    onStructureChange={(newStructure) => {
-                      // Handle structure changes
-                    }}
-                  />
+                  <ArticleOutline content={content.content_md} onStructureChange={() => {}} />
                 </div>
-
-                {/* Bibliothèque de contenus */}
                 <div className="p-4">
-                  <ContentLibrary
-                    onInsertContent={(insertContent) => {
-                      handleContentChange({
-                        content_md: content.content_md + '\n\n' + insertContent
-                      });
-                    }}
-                  />
+                  <ContentLibrary onInsertContent={(insertContent) => handleContentChange({ content_md: content.content_md + '\n\n' + insertContent })} />
                 </div>
               </div>
             </aside>
           )}
-
-          {/* Zone Centrale - Éditeur enrichi (50%) */}
           <section className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <SmartEditor
-              content={content}
-              onChange={handleContentChange}
-              focusMode={settings.focusMode}
-              zenMode={settings.zenMode}
-            />
+            <SmartEditor content={content} onChange={handleContentChange} focusMode={settings.focusMode} zenMode={settings.zenMode} />
           </section>
-
-          {/* Panneau Droit - IA Assistant & Analytics (30%) */}
           {settings.rightPanelVisible && !settings.zenMode && (
             <aside className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-              {/* Tabs */}
               <div className="border-b border-gray-200 dark:border-gray-700">
                 <nav className="flex">
-                  <button
-                    onClick={() => setActiveRightTab('ai')}
-                    className={`flex-1 px-3 py-3 text-sm font-medium border-b-2 ${
-                      activeRightTab === 'ai'
-                        ? 'text-blue-600 border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Brain className="w-4 h-4 inline mr-1" />
-                    IA
-                  </button>
-                  <button
-                    onClick={() => setActiveRightTab('seo')}
-                    className={`flex-1 px-3 py-3 text-sm font-medium border-b-2 ${
-                      activeRightTab === 'seo'
-                        ? 'text-blue-600 border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    SEO
-                  </button>
-                  <button
-                    onClick={() => setActiveRightTab('geo')}
-                    className={`flex-1 px-3 py-3 text-sm font-medium border-b-2 ${
-                      activeRightTab === 'geo'
-                        ? 'text-blue-600 border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    GEO
-                  </button>
-                  <button
-                    onClick={() => setActiveRightTab('insights')}
-                    className={`flex-1 px-3 py-3 text-sm font-medium border-b-2 ${
-                      activeRightTab === 'insights'
-                        ? 'text-blue-600 border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <BarChart3 className="w-4 h-4 inline mr-1" />
-                    Stats
-                  </button>
+                  <button onClick={() => setActiveRightTab('ai')} className={`flex-1 px-3 py-3 text-sm font-medium border-b-2 ${activeRightTab === 'ai' ? 'text-blue-600 border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50'}`}><Brain className="w-4 h-4 inline mr-1" />IA</button>
+                  <button onClick={() => setActiveRightTab('seo')} className={`flex-1 px-3 py-3 text-sm font-medium border-b-2 ${activeRightTab === 'seo' ? 'text-blue-600 border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50'}`}>SEO</button>
+                  <button onClick={() => setActiveRightTab('geo')} className={`flex-1 px-3 py-3 text-sm font-medium border-b-2 ${activeRightTab === 'geo' ? 'text-blue-600 border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50'}`}>GEO</button>
+                  <button onClick={() => setActiveRightTab('insights')} className={`flex-1 px-3 py-3 text-sm font-medium border-b-2 ${activeRightTab === 'insights' ? 'text-blue-600 border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50'}`}><BarChart3 className="w-4 h-4 inline mr-1" />Stats</button>
                 </nav>
               </div>
-
-              {/* Tab Content */}
               <div className="h-[calc(100vh-200px)] overflow-y-auto">
-                {activeRightTab === 'ai' && (
-                  <AIAssistant
-                    content={content}
-                    onContentSuggestion={(suggestion) => {
-                      // Handle AI suggestions
-                    }}
-                  />
-                )}
-                {activeRightTab === 'seo' && (
-                  <SEOScoring
-                    content={content}
-                    onScoreUpdate={(score) => {
-                      handleContentChange({ seoScore: score });
-                    }}
-                  />
-                )}
-                {activeRightTab === 'geo' && (
-                  <GEOScoring
-                    content={content}
-                    onScoreUpdate={(score) => {
-                      handleContentChange({ geoScore: score });
-                    }}
-                  />
-                )}
-                {activeRightTab === 'insights' && (
-                  <Insights content={content} />
-                )}
+                {activeRightTab === 'ai' && (<AIAssistant content={content} onContentSuggestion={() => {}} />)}
+                {activeRightTab === 'seo' && (<SEOScoring content={content} onScoreUpdate={(s)=> handleContentChange({ seoScore: s })} />)}
+                {activeRightTab === 'geo' && (<GEOScoring content={content} onScoreUpdate={(s)=> handleContentChange({ geoScore: s })} />)}
+                {activeRightTab === 'insights' && (<Insights content={content} />)}
               </div>
             </aside>
           )}

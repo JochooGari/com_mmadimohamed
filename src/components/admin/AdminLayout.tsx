@@ -167,7 +167,7 @@ export default function AdminLayout() {
 
           {/* Content Area */}
           <main className="flex-1 p-6">
-            <div className="max-w-7xl mx-auto">
+            <div className="mx-auto">
               <Outlet />
             </div>
           </main>
