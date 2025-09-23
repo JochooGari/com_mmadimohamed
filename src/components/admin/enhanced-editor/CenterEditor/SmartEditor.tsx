@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Bold, Italic, List, Link, Image, Code, Quote, Hash, Eye, Type, Palette, FileCode } from 'lucide-react';
+import { Editor } from '@tinymce/tinymce-react';
 
 interface SmartEditorProps {
   content: {
@@ -91,6 +92,13 @@ export default function SmartEditor({ content, onChange, focusMode, zenMode, mod
     const timer = setTimeout(generateSuggestions, 1000);
     return () => clearTimeout(timer);
   }, [content.content_md, content.keywords]);
+
+  // When switching from HTML->Visual and content_md is empty, seed with html
+  useEffect(()=>{
+    if (mode==='visual' && (!content.content_html || content.content_html.trim()==='') && content.content_md) {
+      // no-op; keep md
+    }
+  }, [mode]);
 
   const handleTextChange = (field: keyof typeof content, value: string) => {
     onChange({ [field]: value });
@@ -293,11 +301,23 @@ export default function SmartEditor({ content, onChange, focusMode, zenMode, mod
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Contenu principal ({mode==='html' ? 'HTML' : 'Markdown/Visuel'})</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Contenu principal ({mode==='html' ? 'HTML' : 'Visuel (TinyMCE)'})</label>
               {mode==='html' ? (
                 <textarea value={content.content_html || ''} onChange={(e)=> handleTextChange('content_html', e.target.value)} placeholder="Collez/éditez du HTML propre…" rows={18} className="flex-1 w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-mono" />
               ) : (
-                <textarea ref={contentRef} value={content.content_md} onChange={(e) => handleTextChange('content_md', e.target.value)} onKeyDown={(e) => handleKeyDown(e, 'content')} placeholder="Commencez à écrire…" className="flex-1 w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-mono leading-relaxed" />
+                <Editor
+                  apiKey="no-api-key"
+                  value={content.content_html || ''}
+                  init={{
+                    height: 600,
+                    menubar: false,
+                    plugins: 'link lists table code image paste',
+                    toolbar: 'undo redo | styles | bold italic underline | alignleft aligncenter alignright | bullist numlist | link image table | code',
+                    paste_as_text: false,
+                    content_style: 'body { font-family:Inter,system-ui,Arial; line-height:1.7; }'
+                  }}
+                  onEditorChange={(newValue) => handleTextChange('content_html', newValue)}
+                />
               )}
             </div>
 
@@ -335,19 +355,7 @@ export default function SmartEditor({ content, onChange, focusMode, zenMode, mod
             <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
               <h1 className="text-3xl font-bold mb-3">{content.title || "Titre de l'article"}</h1>
               {content.excerpt && <p className="text-slate-600 mb-6">{content.excerpt}</p>}
-              <div className="prose max-w-none">
-                {mode==='html' ? (
-                  <div dangerouslySetInnerHTML={{ __html: content.content_html || '' }} />
-                ) : (
-                  <div dangerouslySetInnerHTML={{ __html: (content.content_md || '')
-                    .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-                    .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-                    .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-                    .replace(/\*\*(.*)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*(.*)\*/g, '<em>$1</em>')
-                    .replace(/\n/g, '<br>') }} />
-                )}
-              </div>
+              <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: mode==='html' ? (content.content_html || '') : (content.content_html || '') }} />
             </section>
           </div>
         )}
