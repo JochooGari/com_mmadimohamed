@@ -53,7 +53,13 @@ export default function ArticleDetailPage() {
       <Breadcrumbs items={[{ label: 'Accueil', href: '/' }, { label: 'Blog', href: '/blog' }, { label: article.title }]} />
       <h1 className="text-3xl font-bold mb-3">{article.title}</h1>
       {article.excerpt && <p className="text-slate-600 mb-6">{article.excerpt}</p>}
-      {article.content_md && <MarkdownRenderer content={article.content_md} />}
+      {article.content_md && (/^\s*<[^>]+>/.test(article.content_md)
+        ? (
+          <div className="prose prose-slate max-w-none" dangerouslySetInnerHTML={{ __html: article.content_md }} />
+        ) : (
+          <MarkdownRenderer content={article.content_md} />
+        )
+      )}
       {related.length > 0 && (
         <div className="mt-12">
           <h2 className="text-2xl font-semibold mb-4">Articles liés</h2>
