@@ -60,7 +60,7 @@ export default function ArticleDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-8">
-            <article className="bg-white rounded-2xl border shadow-sm p-6 md:p-8">
+            <article className="bg-white rounded-2xl border shadow-sm p-6 md:p-8 prose-headings:font-serif" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
               {article.content_md && (/^\s*<[^>]+>/.test(article.content_md)
                 ? (
                   <div
