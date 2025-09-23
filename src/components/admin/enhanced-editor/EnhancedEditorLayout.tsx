@@ -12,12 +12,14 @@ interface EnhancedEditorLayoutProps {
   articleId?: string;
   initialContent?: { title?: string; slug?: string; excerpt?: string; content_md?: string; };
   onSave?: (content: any) => void;
+  onSaveAction?: (content: any) => void | Promise<void>;
+  onPublishAction?: (content: any) => void | Promise<void>;
   mode?: 'articles' | 'resources';
 }
 
 interface EditorSettings { focusMode: boolean; zenMode: boolean; darkMode: boolean; leftPanelVisible: boolean; rightPanelVisible: boolean; }
 
-export default function EnhancedEditorLayout({ articleId, initialContent, onSave, mode = 'articles' }: EnhancedEditorLayoutProps) {
+export default function EnhancedEditorLayout({ articleId, initialContent, onSave, onSaveAction, onPublishAction, mode = 'articles' }: EnhancedEditorLayoutProps) {
   const [settings, setSettings] = useState<EditorSettings>({ focusMode: false, zenMode: false, darkMode: false, leftPanelVisible: true, rightPanelVisible: true });
   const [activeRightTab, setActiveRightTab] = useState<'ai' | 'seo' | 'geo' | 'insights'>('ai');
   const [editorMode, setEditorMode] = useState<'visual'|'html'>('visual');
@@ -46,6 +48,14 @@ export default function EnhancedEditorLayout({ articleId, initialContent, onSave
 
   const getLayoutClasses = () => { if (settings.zenMode) return 'grid grid-cols-1'; let baseClass = 'grid gap-4 '; if (!settings.leftPanelVisible && !settings.rightPanelVisible) baseClass += 'grid-cols-1'; else if (!settings.leftPanelVisible) baseClass += 'grid-cols-[1fr_30%]'; else if (!settings.rightPanelVisible) baseClass += 'grid-cols-[20%_1fr]'; else baseClass += 'grid-cols-[20%_1fr_30%]'; return baseClass; };
 
+  const handleExplicitSave = async () => {
+    if (onSave) onSave(content);
+    if (onSaveAction) await onSaveAction(content);
+  };
+  const handleExplicitPublish = async () => {
+    if (onPublishAction) await onPublishAction(content);
+  };
+
   return (
     <div className={`min-h-screen ${settings.darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
@@ -53,9 +63,9 @@ export default function EnhancedEditorLayout({ articleId, initialContent, onSave
           <div className="flex items-center gap-4">
             <h1 className="text-lg font-semibold text-gray-900 dark:text-white">{mode === 'articles' ? "Éditeur d'Articles" : 'Éditeur de Ressources'}</h1>
             <div className="flex items-center gap-2">
-              <button className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">Sauvegarder</button>
+              <button onClick={handleExplicitSave} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">Sauvegarder</button>
               <button className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors">Aperçu</button>
-              <button className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">Publier</button>
+              <button onClick={handleExplicitPublish} className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">Publier</button>
               <button onClick={()=> setShowHtmlPanel(v=> !v)} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"><ClipboardPaste className="w-4 h-4" /> Coller HTML</button>
             </div>
           </div>

@@ -302,8 +302,37 @@ export default function AdminArticles() {
         <EnhancedEditorLayout
           mode="articles"
           initialContent={{ title: draft.title || '', slug: '', excerpt: draft.excerpt || '', content_md: draft.content || '' }}
-          onSave={(content)=> {
-            setDraft(d => ({ ...d, title: content?.title || d.title, excerpt: content?.excerpt || d.excerpt, content: content?.content_md || d.content }));
+          onSave={(content)=> { setDraft(d => ({ ...d, title: content?.title || d.title, excerpt: content?.excerpt || d.excerpt, content: (content?.content_html || content?.content_md || d.content) })); }}
+          onSaveAction={async (content)=> {
+            // persist as draft
+            const now = new Date().toISOString();
+            const article: Article = {
+              id: selectedArticle?.id || crypto.randomUUID(),
+              title: content.title || draft.title || 'Sans titre',
+              excerpt: content.excerpt || '',
+              content: content.content_html || content.content_md || '',
+              status: 'draft',
+              createdBy: selectedArticle?.createdBy || 'User',
+              createdAt: selectedArticle?.createdAt || now,
+              updatedAt: now,
+              tags: draft.tags || [],
+            } as Article;
+            try { await upsertArticleSupabase(article); } catch {}
+          }}
+          onPublishAction={async (content)=> {
+            const now = new Date().toISOString();
+            const article: Article = {
+              id: selectedArticle?.id || crypto.randomUUID(),
+              title: content.title || draft.title || 'Sans titre',
+              excerpt: content.excerpt || '',
+              content: content.content_html || content.content_md || '',
+              status: 'published',
+              createdBy: selectedArticle?.createdBy || 'User',
+              createdAt: selectedArticle?.createdAt || now,
+              updatedAt: now,
+              tags: draft.tags || [],
+            } as Article;
+            try { await upsertArticleSupabase(article); } catch (e:any) { alert('Erreur publication: ' + (e?.message||'unknown')); return; }
           }}
         />
       </div>
