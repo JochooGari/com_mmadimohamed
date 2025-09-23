@@ -180,7 +180,7 @@ export default function AdminArticles() {
       published: a.status === 'published',
       published_at: a.status === 'published' ? new Date().toISOString() : null
     };
-    const { error } = await supabase.from('articles').upsert(payload, { onConflict: 'id' });
+    const { error } = await supabase.from('articles').upsert(payload, { onConflict: 'slug' });
     if (error) throw error;
   };
 
