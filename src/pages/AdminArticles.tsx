@@ -78,6 +78,21 @@ export default function AdminArticles() {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
+
+  // Ctrl+S to save
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        if (showForm) {
+          e.preventDefault();
+          handleSaveArticle();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showForm, draft]);
 
   // Load from Supabase
   useEffect(() => { (async () => {
@@ -335,7 +350,22 @@ export default function AdminArticles() {
 
           {/* Article Form */}
           {showForm && (
-            <Card className="border-teal-200 bg-teal-50/50">
+            <Card className="border-teal-200 bg-teal-50/50 relative">
+              {/* Sticky actions bar */}
+              <div className="sticky top-0 z-10 bg-teal-50/90 border-b px-4 py-3 flex flex-wrap gap-2 items-center justify-between">
+                <div className="font-medium text-sm text-gray-700">
+                  {isEditing ? 'Modification' : 'Nouvel article'} · {draft.title || 'Sans titre'}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={handleSaveArticle} className="bg-teal-600 hover:bg-teal-700">
+                    <Save className="w-3 h-3 mr-2" /> Sauvegarder (Ctrl+S)
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={()=> setDraft(d=> ({ ...d, status: 'published' as any }))}>Marquer publié</Button>
+                  <Button size="sm" variant="outline" onClick={calcScore}>Calculer scoring & reco</Button>
+                  <Button size="sm" variant="outline" onClick={()=> setShowForm(false)}>Fermer</Button>
+                </div>
+              </div>
+
               <CardHeader>
                 <CardTitle>
                   {isEditing ? 'Modifier l\'article' : 'Nouveau article'}
@@ -399,26 +429,15 @@ export default function AdminArticles() {
                         placeholder="<h1>Titre</h1>\n<p>Votre contenu HTML…</p>"
                         value={draft.content || ''}
                         onChange={(e) => setDraft(d => ({ ...d, content: e.target.value }))}
-                        rows={editorTab==='html' ? 14 : 6}
+                        rows={editorTab==='html' ? 16 : 8}
                         className="font-mono text-sm"
                       />
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-2">Preview</div>
-                      <div className="border rounded p-3 bg-white min-h-[220px] text-sm prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: draft.content || '' }} />
+                      <div className="border rounded p-3 bg-white min-h-[260px] text-sm prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: draft.content || '' }} />
                     </div>
                   </div>
-                </div>
-
-                <div className="flex items-center space-x-3 pt-2">
-                  <Button onClick={handleSaveArticle} className="bg-teal-500 hover:bg-teal-600">
-                    <Save className="w-4 h-4 mr-2" />
-                    {isEditing ? 'Mettre à jour' : 'Créer l\'article'}
-                  </Button>
-                  <Button variant="outline" onClick={() => { setShowForm(false); setDraft({}); setSelectedArticle(null); }}>
-                    Annuler
-                  </Button>
-                  <Button type="button" variant="outline" onClick={calcScore}>Calculer scoring & recommandations</Button>
                 </div>
 
                 {(liveScore?.scores || liveScore?.fixes) && (
@@ -445,26 +464,29 @@ export default function AdminArticles() {
                   </div>
                 )}
 
-                {/* Chat IA pour recommandations incrémentales */}
+                {/* Chat IA collapsible */}
                 <Card className="mt-4">
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Assistant IA – Recommandations & complétions</CardTitle>
+                    <Button size="sm" variant="outline" onClick={()=> setChatOpen(v=> !v)}>{chatOpen ? 'Masquer' : 'Afficher'}</Button>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="border rounded p-3 bg-white h-64 overflow-auto text-sm">
-                      {chatMessages.filter(m=> m.role!=='system').map((m, i)=> (
-                        <div key={i} className={`mb-2 ${m.role==='assistant' ? 'text-gray-800' : 'text-gray-700'}`}>
-                          <span className="font-medium mr-2">{m.role==='assistant' ? 'IA' : 'Vous'}:</span>
-                          <span dangerouslySetInnerHTML={{ __html: m.content.replace(/\n/g,'<br/>') }} />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Input value={chatInput} onChange={(e)=> setChatInput(e.target.value)} placeholder="Demander des liens, sources, compléter un paragraphe…" />
-                      <Button onClick={sendChat} disabled={chatLoading}>{chatLoading ? 'Envoi…' : 'Envoyer'}</Button>
-                      <Button variant="outline" onClick={insertLastAssistant}>Insérer la dernière réponse</Button>
-                    </div>
-                  </CardContent>
+                  {chatOpen && (
+                    <CardContent className="space-y-3">
+                      <div className="border rounded p-3 bg-white h-64 overflow-auto text-sm">
+                        {chatMessages.filter(m=> m.role!=='system').map((m, i)=> (
+                          <div key={i} className={`mb-2 ${m.role==='assistant' ? 'text-gray-800' : 'text-gray-700'}`}>
+                            <span className="font-medium mr-2">{m.role==='assistant' ? 'IA' : 'Vous'}:</span>
+                            <span dangerouslySetInnerHTML={{ __html: m.content.replace(/\n/g,'<br/>') }} />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Input value={chatInput} onChange={(e)=> setChatInput(e.target.value)} placeholder="Demander des liens, sources, compléter un paragraphe…" />
+                        <Button onClick={sendChat} disabled={chatLoading}>{chatLoading ? 'Envoi…' : 'Envoyer'}</Button>
+                        <Button variant="outline" onClick={insertLastAssistant}>Insérer la dernière réponse</Button>
+                      </div>
+                    </CardContent>
+                  )}
                 </Card>
               </CardContent>
             </Card>
