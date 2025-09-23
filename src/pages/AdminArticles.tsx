@@ -161,7 +161,7 @@ export default function AdminArticles() {
 
   const upsertArticleSupabase = async (a: Article) => {
     if (!supabase) return;
-    const payload = {
+    const payload: any = {
       id: a.id,
       slug: a.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$|--+/g,'-').slice(0,120),
       title: a.title,
@@ -175,15 +175,8 @@ export default function AdminArticles() {
     if (error) throw error;
   };
 
-  const deleteArticleSupabase = async (id: string) => {
-    if (!supabase) return;
-    const { error } = await supabase.from('articles').delete().eq('id', id);
-    if (error) throw error;
-  };
-
   const handleSaveArticle = async () => {
     if (!draft.title?.trim()) return;
-    
     const now = new Date().toISOString();
     const article: Article = {
       id: selectedArticle?.id || crypto.randomUUID(),
@@ -198,38 +191,34 @@ export default function AdminArticles() {
       readTime: Math.ceil((draft.content?.length || 0) / 1000),
       seoScore: selectedArticle?.seoScore
     };
-
-    try {
-      await upsertArticleSupabase(article);
-    } catch (e:any) {
-      console.warn('Supabase upsert failed, keeping local only', e?.message);
-    }
-
-    if (selectedArticle) {
-      setArticles(prev => prev.map(a => a.id === selectedArticle.id ? article : a));
-    } else {
-      setArticles(prev => [article, ...prev]);
-    }
-
-    setDraft({});
-    setSelectedArticle(null);
-    setIsEditing(false);
-    setShowForm(false);
+    try { await upsertArticleSupabase(article); } catch (e:any) { console.warn('Supabase upsert failed', e?.message); }
+    if (selectedArticle) setArticles(prev => prev.map(a => a.id === selectedArticle.id ? article : a)); else setArticles(prev => [article, ...prev]);
+    setDraft({}); setSelectedArticle(null); setIsEditing(false); setShowForm(false);
   };
 
-  const handleEditArticle = (article: Article) => {
-    setSelectedArticle(article);
-    setDraft(article);
-    setIsEditing(true);
-    setShowForm(true);
+  const handlePublishArticle = async () => {
+    if (!draft.title?.trim()) return;
+    const now = new Date().toISOString();
+    const article: Article = {
+      id: selectedArticle?.id || crypto.randomUUID(),
+      title: draft.title!,
+      excerpt: draft.excerpt || '',
+      content: draft.content || '',
+      status: 'published',
+      createdBy: selectedArticle?.createdBy || 'User',
+      createdAt: selectedArticle?.createdAt || now,
+      updatedAt: now,
+      tags: draft.tags || [],
+      readTime: Math.ceil((draft.content?.length || 0) / 1000),
+      seoScore: selectedArticle?.seoScore
+    };
+    try { await upsertArticleSupabase(article); } catch (e:any) { alert('Erreur publication: ' + (e?.message||'unknown')); return; }
+    setArticles(prev => [article, ...prev.filter(a => a.id !== article.id)]);
+    setDraft({}); setSelectedArticle(null); setIsEditing(false); setShowForm(false);
   };
 
   const handleDeleteArticle = async (id: string) => {
-    try {
-      await deleteArticleSupabase(id);
-    } catch (e:any) {
-      console.warn('Supabase delete failed', e?.message);
-    }
+    try { if (supabase) { await supabase.from('articles').delete().eq('id', id); } } catch (e:any) { console.warn('Supabase delete failed', e?.message); }
     setArticles(prev => prev.filter(a => a.id !== id));
   };
 
@@ -395,8 +384,9 @@ export default function AdminArticles() {
                   <Button size="sm" onClick={handleSaveArticle} className="bg-teal-600 hover:bg-teal-700">
                     <Save className="w-3 h-3 mr-2" /> Sauvegarder (Ctrl+S)
                   </Button>
-                  <Button size="sm" variant="outline" onClick={()=> setDraft(d=> ({ ...d, status: 'published' as any }))}>Marquer publié</Button>
+                  <Button size="sm" variant="outline" onClick={handlePublishArticle}>Marquer publié</Button>
                   <Button size="sm" variant="outline" onClick={calcScore}>Calculer scoring & reco</Button>
+                  <Button size="sm" onClick={handlePublishArticle} className="bg-green-600 hover:bg-green-700">Publier</Button>
                   <Button size="sm" variant="outline" onClick={()=> setShowForm(false)}>Fermer</Button>
                 </div>
               </div>
@@ -606,11 +596,7 @@ export default function AdminArticles() {
                         <Eye className="w-3 h-3 mr-1" />
                         Voir
                       </Button>
-                      <Button 
-                        variant="destructive" 
-                        size="sm"
-                        onClick={() => handleDeleteArticle(article.id)}
-                      >
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteArticle(article.id)}>
                         <Trash2 className="w-3 h-3" />
                       </Button>
                     </div>
