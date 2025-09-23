@@ -24,6 +24,7 @@ import {
 import { useAdminData } from '../context/AdminDataContext';
 import { tryGetSupabaseClient } from '../lib/supabase';
 import EnhancedEditorLayout from '../components/admin/enhanced-editor/EnhancedEditorLayout';
+import AuthGuard from '../components/admin/AuthGuard';
 
 type Article = {
   id: string;
@@ -289,455 +290,438 @@ export default function AdminArticles() {
   // If enhanced editor is enabled, render it inside Articles page
   if (useEnhancedEditor) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Articles – Éditeur IA Amélioré</h1>
-            <p className="text-gray-600 mt-1">Structure · Éditeur intelligent · IA/SEO/GEO</p>
+      <AuthGuard>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Articles – Éditeur IA Amélioré</h1>
+              <p className="text-gray-600 mt-1">Structure · Éditeur intelligent · IA/SEO/GEO</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={()=> setUseEnhancedEditor(false)}>Revenir à l’éditeur classique</Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={()=> setUseEnhancedEditor(false)}>Revenir à l’éditeur classique</Button>
-          </div>
+          <EnhancedEditorLayout
+            mode="articles"
+            initialContent={{ title: draft.title || '', slug: '', excerpt: draft.excerpt || '', content_md: draft.content || '' }}
+            onSave={(content)=> { setDraft(d => ({ ...d, title: content?.title || d.title, excerpt: content?.excerpt || d.excerpt, content: (content?.content_html || content?.content_md || d.content) })); }}
+            onSaveAction={async (content)=> {
+              const now = new Date().toISOString();
+              const article: Article = { id: selectedArticle?.id || crypto.randomUUID(), title: content.title || draft.title || 'Sans titre', excerpt: content.excerpt || '', content: content.content_html || content.content_md || '', status: 'draft', createdBy: selectedArticle?.createdBy || 'User', createdAt: selectedArticle?.createdAt || now, updatedAt: now, tags: draft.tags || [] } as Article;
+              try { await upsertArticleSupabase(article); } catch {}
+            }}
+            onPublishAction={async (content)=> {
+              const now = new Date().toISOString();
+              const article: Article = { id: selectedArticle?.id || crypto.randomUUID(), title: content.title || draft.title || 'Sans titre', excerpt: content.excerpt || '', content: content.content_html || content.content_md || '', status: 'published', createdBy: selectedArticle?.createdBy || 'User', createdAt: selectedArticle?.createdAt || now, updatedAt: now, tags: draft.tags || [] } as Article;
+              try { await upsertArticleSupabase(article); } catch (e:any) { alert('Erreur publication: ' + (e?.message||'unknown')); return; }
+            }}
+          />
         </div>
-        <EnhancedEditorLayout
-          mode="articles"
-          initialContent={{ title: draft.title || '', slug: '', excerpt: draft.excerpt || '', content_md: draft.content || '' }}
-          onSave={(content)=> { setDraft(d => ({ ...d, title: content?.title || d.title, excerpt: content?.excerpt || d.excerpt, content: (content?.content_html || content?.content_md || d.content) })); }}
-          onSaveAction={async (content)=> {
-            // persist as draft
-            const now = new Date().toISOString();
-            const article: Article = {
-              id: selectedArticle?.id || crypto.randomUUID(),
-              title: content.title || draft.title || 'Sans titre',
-              excerpt: content.excerpt || '',
-              content: content.content_html || content.content_md || '',
-              status: 'draft',
-              createdBy: selectedArticle?.createdBy || 'User',
-              createdAt: selectedArticle?.createdAt || now,
-              updatedAt: now,
-              tags: draft.tags || [],
-            } as Article;
-            try { await upsertArticleSupabase(article); } catch {}
-          }}
-          onPublishAction={async (content)=> {
-            const now = new Date().toISOString();
-            const article: Article = {
-              id: selectedArticle?.id || crypto.randomUUID(),
-              title: content.title || draft.title || 'Sans titre',
-              excerpt: content.excerpt || '',
-              content: content.content_html || content.content_md || '',
-              status: 'published',
-              createdBy: selectedArticle?.createdBy || 'User',
-              createdAt: selectedArticle?.createdAt || now,
-              updatedAt: now,
-              tags: draft.tags || [],
-            } as Article;
-            try { await upsertArticleSupabase(article); } catch (e:any) { alert('Erreur publication: ' + (e?.message||'unknown')); return; }
-          }}
-        />
-      </div>
+      </AuthGuard>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestion des Articles</h1>
-          <p className="text-gray-600 mt-1">Créez, éditez et publiez vos articles de blog</p>
+    <AuthGuard>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Gestion des Articles</h1>
+            <p className="text-gray-600 mt-1">Créez, éditez et publiez vos articles de blog</p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <Button variant="outline" onClick={generateAIArticle}>
+              <Bot className="w-4 h-4 mr-2" />
+              Générer avec IA
+            </Button>
+            <Button onClick={() => { setShowForm(true); setDraft({}); setSelectedArticle(null); setIsEditing(false); }}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nouveau Article
+            </Button>
+            <Button variant="outline" onClick={()=> setUseEnhancedEditor(true)}>Éditeur IA Amélioré</Button>
+          </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <Button variant="outline" onClick={generateAIArticle}>
-            <Bot className="w-4 h-4 mr-2" />
-            Générer avec IA
-          </Button>
-          <Button onClick={() => { setShowForm(true); setDraft({}); setSelectedArticle(null); setIsEditing(false); }}>
-            <Plus className="w-4 h-4 mr-2" />
-            Nouveau Article
-          </Button>
-          <Button variant="outline" onClick={()=> setUseEnhancedEditor(true)}>Éditeur IA Amélioré</Button>
-        </div>
-      </div>
 
-      <Tabs defaultValue="list" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="list">Liste des Articles</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        </TabsList>
+        <Tabs defaultValue="list" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="list">Liste des Articles</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          </TabsList>
 
-        {/* Article List Tab */}
-        <TabsContent value="list" className="space-y-6">
-          {/* Filters */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <Input
-                      placeholder="Rechercher des articles..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
+          {/* Article List Tab */}
+          <TabsContent value="list" className="space-y-6">
+            {/* Filters */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <Input
+                        placeholder="Rechercher des articles..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Filter className="w-4 h-4 text-gray-500" />
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  >
-                    <option value="all">Tous les statuts</option>
-                    <option value="draft">Brouillons</option>
-                    <option value="pending">En attente</option>
-                    <option value="approved">Approuvés</option>
-                    <option value="published">Publiés</option>
-                  </select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Article Form */}
-          {showForm && (
-            <Card className="border-teal-200 bg-teal-50/50 relative">
-              {/* Sticky actions bar */}
-              <div className="sticky top-0 z-10 bg-teal-50/90 border-b px-4 py-3 flex flex-wrap gap-2 items-center justify-between">
-                <div className="font-medium text-sm text-gray-700">
-                  {isEditing ? 'Modification' : 'Nouvel article'} · {draft.title || 'Sans titre'}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={handleSaveArticle} className="bg-teal-600 hover:bg-teal-700">
-                    <Save className="w-3 h-3 mr-2" /> Sauvegarder (Ctrl+S)
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={handlePublishArticle}>Marquer publié</Button>
-                  <Button size="sm" variant="outline" onClick={calcScore}>Calculer scoring & reco</Button>
-                  <Button size="sm" onClick={handlePublishArticle} className="bg-green-600 hover:bg-green-700">Publier</Button>
-                  <Button size="sm" variant="outline" onClick={()=> setShowForm(false)}>Fermer</Button>
-                </div>
-              </div>
-
-              <CardHeader>
-                <CardTitle>
-                  {isEditing ? 'Modifier l\'article' : 'Nouveau article'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-1">
-                      Titre
-                    </label>
-                    <Input
-                      placeholder="Titre de l'article"
-                      value={draft.title || ''}
-                      onChange={(e) => setDraft(d => ({ ...d, title: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-1">
-                      Statut
-                    </label>
+                  <div className="flex items-center space-x-2">
+                    <Filter className="w-4 h-4 text-gray-500" />
                     <select
-                      value={draft.status || 'draft'}
-                      onChange={(e) => setDraft(d => ({ ...d, status: e.target.value as Article['status'] }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                     >
-                      <option value="draft">Brouillon</option>
-                      <option value="pending">En attente de validation</option>
-                      <option value="approved">Approuvé</option>
-                      <option value="published">Publié</option>
+                      <option value="all">Tous les statuts</option>
+                      <option value="draft">Brouillons</option>
+                      <option value="pending">En attente</option>
+                      <option value="approved">Approuvés</option>
+                      <option value="published">Publiés</option>
                     </select>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
 
-                <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-1">
-                    Extrait
-                  </label>
-                  <Textarea
-                    placeholder="Résumé de l'article (méta description)"
-                    value={draft.excerpt || ''}
-                    onChange={(e) => setDraft(d => ({ ...d, excerpt: e.target.value }))}
-                    rows={2}
-                  />
+            {/* Article Form */}
+            {showForm && (
+              <Card className="border-teal-200 bg-teal-50/50 relative">
+                {/* Sticky actions bar */}
+                <div className="sticky top-0 z-10 bg-teal-50/90 border-b px-4 py-3 flex flex-wrap gap-2 items-center justify-between">
+                  <div className="font-medium text-sm text-gray-700">
+                    {isEditing ? 'Modification' : 'Nouvel article'} · {draft.title || 'Sans titre'}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" onClick={handleSaveArticle} className="bg-teal-600 hover:bg-teal-700">
+                      <Save className="w-3 h-3 mr-2" /> Sauvegarder (Ctrl+S)
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handlePublishArticle}>Marquer publié</Button>
+                    <Button size="sm" variant="outline" onClick={calcScore}>Calculer scoring & reco</Button>
+                    <Button size="sm" onClick={handlePublishArticle} className="bg-green-600 hover:bg-green-700">Publier</Button>
+                    <Button size="sm" variant="outline" onClick={()=> setShowForm(false)}>Fermer</Button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-2">
-                    Contenu (HTML)
-                  </label>
+                <CardHeader>
+                  <CardTitle>
+                    {isEditing ? 'Modifier l\'article' : 'Nouveau article'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-xs text-gray-500">Éditeur HTML</div>
-                        <div className="space-x-2">
-                          <Button size="sm" variant="outline" onClick={()=> setEditorTab('html')} disabled={editorTab==='html'}>Éditer</Button>
-                          <Button size="sm" variant="outline" onClick={()=> setEditorTab('preview')} disabled={editorTab==='preview'}>Prévisualiser</Button>
-                        </div>
-                      </div>
-                      <Textarea
-                        placeholder="<h1>Titre</h1>\n<p>Votre contenu HTML…</p>"
-                        value={draft.content || ''}
-                        onChange={(e) => setDraft(d => ({ ...d, content: e.target.value }))}
-                        rows={editorTab==='html' ? 16 : 8}
-                        className="font-mono text-sm"
+                      <label className="text-sm font-medium text-gray-700 block mb-1">
+                        Titre
+                      </label>
+                      <Input
+                        placeholder="Titre de l'article"
+                        value={draft.title || ''}
+                        onChange={(e) => setDraft(d => ({ ...d, title: e.target.value }))}
                       />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-2">Preview</div>
-                      <div className="border rounded p-3 bg-white min-h-[260px] text-sm prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: draft.content || '' }} />
-                    </div>
-                  </div>
-                </div>
-
-                {(liveScore?.scores || liveScore?.fixes) && (
-                  <div className="rounded border p-3 bg-white space-y-2">
-                    <div className="text-sm">SEO: {liveScore?.scores?.seo ?? '—'} / GEO: {liveScore?.scores?.geo ?? '—'}</div>
-                    {liveScore?.strengths && (
-                      <div>
-                        <div className="text-xs font-semibold mb-1">Points forts</div>
-                        <ul className="list-disc ml-5 text-sm">{(liveScore.strengths||[]).map((s,i)=> (<li key={i}>{s}</li>))}</ul>
-                      </div>
-                    )}
-                    {liveScore?.weaknesses && (
-                      <div>
-                        <div className="text-xs font-semibold mb-1">Points d\'amélioration</div>
-                        <ul className="list-disc ml-5 text-sm">{(liveScore.weaknesses||[]).map((s,i)=> (<li key={i}>{s}</li>))}</ul>
-                      </div>
-                    )}
-                    {liveScore?.fixes && (
-                      <div>
-                        <div className="text-xs font-semibold mb-1">Recommandations</div>
-                        <ul className="list-disc ml-5 text-sm">{(liveScore.fixes||[]).map((s,i)=> (<li key={i}>{s}</li>))}</ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Chat IA collapsible */}
-                <Card className="mt-4">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Assistant IA – Recommandations & complétions</CardTitle>
-                    <Button size="sm" variant="outline" onClick={()=> setChatOpen(v=> !v)}>{chatOpen ? 'Masquer' : 'Afficher'}</Button>
-                  </CardHeader>
-                  {chatOpen && (
-                    <CardContent className="space-y-3">
-                      <div className="border rounded p-3 bg-white h-64 overflow-auto text-sm">
-                        {chatMessages.filter(m=> m.role!=='system').map((m, i)=> (
-                          <div key={i} className={`mb-2 ${m.role==='assistant' ? 'text-gray-800' : 'text-gray-700'}`}>
-                            <span className="font-medium mr-2">{m.role==='assistant' ? 'IA' : 'Vous'}:</span>
-                            <span dangerouslySetInnerHTML={{ __html: m.content.replace(/\n/g,'<br/>') }} />
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <Input value={chatInput} onChange={(e)=> setChatInput(e.target.value)} placeholder="Demander des liens, sources, compléter un paragraphe…" />
-                        <Button onClick={sendChat} disabled={chatLoading}>{chatLoading ? 'Envoi…' : 'Envoyer'}</Button>
-                        <Button variant="outline" onClick={insertLastAssistant}>Insérer la dernière réponse</Button>
-                      </div>
-                    </CardContent>
-                  )}
-                </Card>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Articles Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredArticles.map((article) => (
-              <Card key={article.id} className="hover:shadow-lg transition-shadow duration-200">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-base line-clamp-2 mb-2">
-                        {article.title}
-                      </CardTitle>
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Badge className={getStatusColor(article.status)}>
-                          {getStatusLabel(article.status)}
-                        </Badge>
-                        {article.seoScore && (
-                          <Badge variant="outline" className={getSeoScoreColor(article.seoScore)}>
-                            SEO: {article.seoScore}%
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <FileText className="w-5 h-5 text-teal-500 ml-2" />
-                  </div>
-                </CardHeader>
-
-                <CardContent>
-                  <p className="text-sm text-gray-600 line-clamp-3 mb-4">
-                    {article.excerpt}
-                  </p>
-
-                  <div className="space-y-3">
-                    {article.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {article.tags.slice(0, 3).map((tag, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                        {article.tags.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{article.tags.length - 3}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <div className="flex items-center space-x-3">
-                        <span className="flex items-center">
-                          <User className="w-3 h-3 mr-1" />
-                          {article.createdBy}
-                        </span>
-                        {article.readTime && (
-                          <span className="flex items-center">
-                            <Clock className="w-3 h-3 mr-1" />
-                            {article.readTime} min
-                          </span>
-                        )}
-                      </div>
-                      <span className="flex items-center">
-                        <Calendar className="w-3 h-3 mr-1" />
-                        {formatDate(article.updatedAt)}
-                      </span>
-                    </div>
-
-                    <div className="flex space-x-2 pt-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1"
-                        onClick={() => { setSelectedArticle(article); setDraft(article); setIsEditing(true); setShowForm(true); }}
+                      <label className="text-sm font-medium text-gray-700 block mb-1">
+                        Statut
+                      </label>
+                      <select
+                        value={draft.status || 'draft'}
+                        onChange={(e) => setDraft(d => ({ ...d, status: e.target.value as Article['status'] }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                       >
-                        <Edit3 className="w-3 h-3 mr-1" />
-                        Éditer
+                        <option value="draft">Brouillon</option>
+                        <option value="pending">En attente de validation</option>
+                        <option value="approved">Approuvé</option>
+                        <option value="published">Publié</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 block mb-1">
+                      Extrait
+                    </label>
+                    <Textarea
+                      placeholder="Résumé de l'article (méta description)"
+                      value={draft.excerpt || ''}
+                      onChange={(e) => setDraft(d => ({ ...d, excerpt: e.target.value }))}
+                      rows={2}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 block mb-2">
+                      Contenu (HTML)
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs text-gray-500">Éditeur HTML</div>
+                          <div className="space-x-2">
+                            <Button size="sm" variant="outline" onClick={()=> setEditorTab('html')} disabled={editorTab==='html'}>Éditer</Button>
+                            <Button size="sm" variant="outline" onClick={()=> setEditorTab('preview')} disabled={editorTab==='preview'}>Prévisualiser</Button>
+                          </div>
+                        </div>
+                        <Textarea
+                          placeholder="<h1>Titre</h1>\n<p>Votre contenu HTML…</p>"
+                          value={draft.content || ''}
+                          onChange={(e) => setDraft(d => ({ ...d, content: e.target.value }))}
+                          rows={editorTab==='html' ? 16 : 8}
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 mb-2">Preview</div>
+                        <div className="border rounded p-3 bg-white min-h-[260px] text-sm prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: draft.content || '' }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {(liveScore?.scores || liveScore?.fixes) && (
+                    <div className="rounded border p-3 bg-white space-y-2">
+                      <div className="text-sm">SEO: {liveScore?.scores?.seo ?? '—'} / GEO: {liveScore?.scores?.geo ?? '—'}</div>
+                      {liveScore?.strengths && (
+                        <div>
+                          <div className="text-xs font-semibold mb-1">Points forts</div>
+                          <ul className="list-disc ml-5 text-sm">{(liveScore.strengths||[]).map((s,i)=> (<li key={i}>{s}</li>))}</ul>
+                        </div>
+                      )}
+                      {liveScore?.weaknesses && (
+                        <div>
+                          <div className="text-xs font-semibold mb-1">Points d\'amélioration</div>
+                          <ul className="list-disc ml-5 text-sm">{(liveScore.weaknesses||[]).map((s,i)=> (<li key={i}>{s}</li>))}</ul>
+                        </div>
+                      )}
+                      {liveScore?.fixes && (
+                        <div>
+                          <div className="text-xs font-semibold mb-1">Recommandations</div>
+                          <ul className="list-disc ml-5 text-sm">{(liveScore.fixes||[]).map((s,i)=> (<li key={i}>{s}</li>))}</ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Chat IA collapsible */}
+                  <Card className="mt-4">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <CardTitle>Assistant IA – Recommandations & complétions</CardTitle>
+                      <Button size="sm" variant="outline" onClick={()=> setChatOpen(v=> !v)}>{chatOpen ? 'Masquer' : 'Afficher'}</Button>
+                    </CardHeader>
+                    {chatOpen && (
+                      <CardContent className="space-y-3">
+                        <div className="border rounded p-3 bg-white h-64 overflow-auto text-sm">
+                          {chatMessages.filter(m=> m.role!=='system').map((m, i)=> (
+                            <div key={i} className={`mb-2 ${m.role==='assistant' ? 'text-gray-800' : 'text-gray-700'}`}>
+                              <span className="font-medium mr-2">{m.role==='assistant' ? 'IA' : 'Vous'}:</span>
+                              <span dangerouslySetInnerHTML={{ __html: m.content.replace(/\n/g,'<br/>') }} />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <Input value={chatInput} onChange={(e)=> setChatInput(e.target.value)} placeholder="Demander des liens, sources, compléter un paragraphe…" />
+                          <Button onClick={sendChat} disabled={chatLoading}>{chatLoading ? 'Envoi…' : 'Envoyer'}</Button>
+                          <Button variant="outline" onClick={insertLastAssistant}>Insérer la dernière réponse</Button>
+                        </div>
+                      </CardContent>
+                    )}
+                  </Card>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Articles Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredArticles.map((article) => (
+                <Card key={article.id} className="hover:shadow-lg transition-shadow duration-200">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-base line-clamp-2 mb-2">
+                          {article.title}
+                        </CardTitle>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Badge className={getStatusColor(article.status)}>
+                            {getStatusLabel(article.status)}
+                          </Badge>
+                          {article.seoScore && (
+                            <Badge variant="outline" className={getSeoScoreColor(article.seoScore)}>
+                              SEO: {article.seoScore}%
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <FileText className="w-5 h-5 text-teal-500 ml-2" />
+                    </div>
+                  </CardHeader>
+
+                  <CardContent>
+                    <p className="text-sm text-gray-600 line-clamp-3 mb-4">
+                      {article.excerpt}
+                    </p>
+
+                    <div className="space-y-3">
+                      {article.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {article.tags.slice(0, 3).map((tag, index) => (
+                            <Badge key={index} variant="outline" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                          {article.tags.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{article.tags.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <div className="flex items-center space-x-3">
+                          <span className="flex items-center">
+                            <User className="w-3 h-3 mr-1" />
+                            {article.createdBy}
+                          </span>
+                          {article.readTime && (
+                            <span className="flex items-center">
+                              <Clock className="w-3 h-3 mr-1" />
+                              {article.readTime} min
+                            </span>
+                          )}
+                        </div>
+                        <span className="flex items-center">
+                          <Calendar className="w-3 h-3 mr-1" />
+                          {formatDate(article.updatedAt)}
+                        </span>
+                      </div>
+
+                      <div className="flex space-x-2 pt-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1"
+                          onClick={() => { setSelectedArticle(article); setDraft(article); setIsEditing(true); setShowForm(true); }}
+                        >
+                          <Edit3 className="w-3 h-3 mr-1" />
+                          Éditer
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Eye className="w-3 h-3 mr-1" />
+                          Voir
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => handleDeleteArticle(article.id)}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Empty State */}
+            {filteredArticles.length === 0 && (
+              <Card className="text-center py-12">
+                <CardContent>
+                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    {searchTerm ? 'Aucun article trouvé' : 'Aucun article'}
+                  </h3>
+                  <p className="text-gray-500 mb-6">
+                    {searchTerm 
+                      ? 'Essayez de modifier vos critères de recherche'
+                      : 'Commencez par créer votre premier article'
+                    }
+                  </p>
+                  {!searchTerm && (
+                    <div className="space-x-3">
+                      <Button onClick={() => { setShowForm(true); setDraft({}); }} className="bg-teal-500 hover:bg-teal-600">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Créer un article
                       </Button>
-                      <Button variant="outline" size="sm">
-                        <Eye className="w-3 h-3 mr-1" />
-                        Voir
-                      </Button>
-                      <Button variant="destructive" size="sm" onClick={() => handleDeleteArticle(article.id)}>
-                        <Trash2 className="w-3 h-3" />
+                      <Button variant="outline" onClick={generateAIArticle}>
+                        <Bot className="w-4 h-4 mr-2" />
+                        Générer avec IA
                       </Button>
                     </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-600">Total Articles</p>
+                      <p className="text-2xl font-bold text-gray-900">{articles.length}</p>
+                    </div>
+                    <FileText className="w-8 h-8 text-teal-500" />
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
 
-          {/* Empty State */}
-          {filteredArticles.length === 0 && (
-            <Card className="text-center py-12">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-600">Publiés</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {articles.filter(a => a.status === 'published').length}
+                      </p>
+                    </div>
+                    <BarChart3 className="w-8 h-8 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-600">En attente</p>
+                      <p className="text-2xl font-bold text-yellow-600">
+                        {articles.filter(a => a.status === 'pending').length}
+                      </p>
+                    </div>
+                    <AlertCircle className="w-8 h-8 text-yellow-500" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-600">Score SEO Moyen</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {Math.round(articles.reduce((acc, a) => acc + (a.seoScore || 0), 0) / articles.length || 0)}%
+                      </p>
+                    </div>
+                    <BarChart3 className="w-8 h-8 text-blue-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Performance des Articles</CardTitle>
+              </CardHeader>
               <CardContent>
-                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  {searchTerm ? 'Aucun article trouvé' : 'Aucun article'}
-                </h3>
-                <p className="text-gray-500 mb-6">
-                  {searchTerm 
-                    ? 'Essayez de modifier vos critères de recherche'
-                    : 'Commencez par créer votre premier article'
-                  }
-                </p>
-                {!searchTerm && (
-                  <div className="space-x-3">
-                    <Button onClick={() => { setShowForm(true); setDraft({}); }} className="bg-teal-500 hover:bg-teal-600">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Créer un article
-                    </Button>
-                    <Button variant="outline" onClick={generateAIArticle}>
-                      <Bot className="w-4 h-4 mr-2" />
-                      Générer avec IA
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Analytics Tab */}
-        <TabsContent value="analytics" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600">Total Articles</p>
-                    <p className="text-2xl font-bold text-gray-900">{articles.length}</p>
-                  </div>
-                  <FileText className="w-8 h-8 text-teal-500" />
+                <div className="text-center py-12 text-gray-500">
+                  <BarChart3 className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                  <p>Analytics détaillées à venir...</p>
+                  <p className="text-sm">Connectez Google Analytics pour voir les performances</p>
                 </div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600">Publiés</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {articles.filter(a => a.status === 'published').length}
-                    </p>
-                  </div>
-                  <BarChart3 className="w-8 h-8 text-green-500" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600">En attente</p>
-                    <p className="text-2xl font-bold text-yellow-600">
-                      {articles.filter(a => a.status === 'pending').length}
-                    </p>
-                  </div>
-                  <AlertCircle className="w-8 h-8 text-yellow-500" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600">Score SEO Moyen</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {Math.round(articles.reduce((acc, a) => acc + (a.seoScore || 0), 0) / articles.length || 0)}%
-                    </p>
-                  </div>
-                  <BarChart3 className="w-8 h-8 text-blue-500" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance des Articles</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12 text-gray-500">
-                <BarChart3 className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                <p>Analytics détaillées à venir...</p>
-                <p className="text-sm">Connectez Google Analytics pour voir les performances</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </AuthGuard>
   );
 }
