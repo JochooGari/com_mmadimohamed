@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Brain, BarChart3, Eye, EyeOff, Maximize2, Minimize2, Copy } from 'lucide-react';
+import { FileText, Brain, BarChart3, Eye, EyeOff, Maximize2, Minimize2, Copy, ClipboardPaste } from 'lucide-react';
 import ArticleOutline from './LeftPanel/ArticleOutline';
 import ContentLibrary from './LeftPanel/ContentLibrary';
 import SmartEditor from './CenterEditor/SmartEditor';
@@ -54,6 +54,7 @@ export default function EnhancedEditorLayout({
   });
   const [htmlSnippet, setHtmlSnippet] = useState<string>('');
   const [showHtmlPreview, setShowHtmlPreview] = useState<boolean>(false);
+  const [showHtmlModal, setShowHtmlModal] = useState<boolean>(false);
 
   const [autosaveStatus, setAutosaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
 
@@ -99,6 +100,33 @@ export default function EnhancedEditorLayout({
 
   return (
     <div className={`min-h-screen ${settings.darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+      {/* Modal Coller HTML */}
+      {showHtmlModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl border border-gray-200 dark:border-gray-700">
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Coller du HTML</h3>
+              <button onClick={()=> setShowHtmlModal(false)} className="text-sm px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-700">Fermer</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <textarea value={htmlSnippet} onChange={(e)=> setHtmlSnippet(e.target.value)} rows={10} placeholder="Collez ici votre bloc HTML…" className="w-full text-sm font-mono border rounded p-2 bg-white dark:bg-gray-900 dark:text-white dark:border-gray-700"></textarea>
+              {showHtmlPreview && htmlSnippet && (
+                <div className="border rounded p-3 bg-white dark:bg-gray-900 text-sm" dangerouslySetInnerHTML={{ __html: htmlSnippet }} />
+              )}
+            </div>
+            <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="text-xs text-gray-500 dark:text-gray-400">Le HTML collé n’est pas nettoyé automatiquement. Vérifiez avant insertion.</div>
+              <div className="flex items-center gap-2">
+                <button onClick={()=> { navigator.clipboard.writeText(htmlSnippet||''); }} disabled={!htmlSnippet} className="text-xs px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-1 disabled:opacity-50"><Copy className="w-3 h-3" /> Copier</button>
+                <button onClick={()=> setShowHtmlPreview(v=> !v)} disabled={!htmlSnippet} className="text-xs px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">{showHtmlPreview? 'Masquer preview' : 'Prévisualiser'}</button>
+                <button onClick={()=> setHtmlSnippet('')} disabled={!htmlSnippet} className="text-xs px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">Vider</button>
+                <button onClick={()=> { if (!htmlSnippet) return; setContent(prev=> ({ ...prev, content_md: (prev.content_md || '') + (prev.content_md? '\n\n' : '') + htmlSnippet })); setShowHtmlModal(false); }} disabled={!htmlSnippet} className="px-3 py-1.5 text-sm bg-teal-600 text-white rounded-md hover:bg-teal-700 disabled:opacity-50">Insérer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -109,6 +137,7 @@ export default function EnhancedEditorLayout({
               <button className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">Sauvegarder</button>
               <button className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors">Aperçu</button>
               <button className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">Publier</button>
+              <button onClick={()=> setShowHtmlModal(true)} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"><ClipboardPaste className="w-4 h-4" /> Coller HTML</button>
             </div>
           </div>
           <div className="flex items-center gap-2">
