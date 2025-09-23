@@ -82,6 +82,8 @@ export default function AdminArticles() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ type:'success'|'error'|'info'; text:string }|null>(null);
 
   // Ctrl+S to save
   useEffect(() => {
@@ -201,11 +203,14 @@ export default function AdminArticles() {
       seoScore: selectedArticle?.seoScore
     };
     try { 
+      setSaving(true); setSaveMsg({ type:'info', text:'Sauvegarde en cours…' });
       const saved = await upsertArticleSupabase(article);
       if (saved?.id) article.id = saved.id;
+      setSaveMsg({ type:'success', text:'Article sauvegardé.' });
     } catch (e:any) { 
-      alert('Erreur sauvegarde: ' + (e?.message||'unknown'));
+      setSaveMsg({ type:'error', text:'Erreur sauvegarde: ' + (e?.message||'unknown') });
     }
+    setSaving(false);
     if (selectedArticle) setArticles(prev => prev.map(a => a.id === selectedArticle.id ? article : a)); else setArticles(prev => [article, ...prev]);
     setDraft({}); setSelectedArticle(null); setIsEditing(false); setShowForm(false);
   };
@@ -226,7 +231,12 @@ export default function AdminArticles() {
       readTime: Math.ceil((draft.content?.length || 0) / 1000),
       seoScore: selectedArticle?.seoScore
     };
-    try { await upsertArticleSupabase(article); } catch (e:any) { alert('Erreur publication: ' + (e?.message||'unknown')); return; }
+    try { 
+      setSaving(true); setSaveMsg({ type:'info', text:'Publication…' });
+      await upsertArticleSupabase(article);
+      setSaveMsg({ type:'success', text:'Article publié.' });
+    } catch (e:any) { setSaveMsg({ type:'error', text:'Erreur publication: ' + (e?.message||'unknown') }); setSaving(false); return; }
+    setSaving(false);
     setArticles(prev => [article, ...prev.filter(a => a.id !== article.id)]);
     setDraft({}); setSelectedArticle(null); setIsEditing(false); setShowForm(false);
   };
@@ -406,12 +416,12 @@ export default function AdminArticles() {
                     {isEditing ? 'Modification' : 'Nouvel article'} · {draft.title || 'Sans titre'}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={handleSaveArticle} className="bg-teal-600 hover:bg-teal-700">
-                      <Save className="w-3 h-3 mr-2" /> Sauvegarder (Ctrl+S)
+                    <Button size="sm" onClick={handleSaveArticle} className="bg-teal-600 hover:bg-teal-700" disabled={saving}>
+                      <Save className="w-3 h-3 mr-2" /> {saving ? 'En cours…' : 'Sauvegarder (Ctrl+S)'}
                     </Button>
-                    <Button size="sm" variant="outline" onClick={handlePublishArticle}>Marquer publié</Button>
-                    <Button size="sm" variant="outline" onClick={calcScore}>Calculer scoring & reco</Button>
-                    <Button size="sm" onClick={handlePublishArticle} className="bg-green-600 hover:bg-green-700">Publier</Button>
+                    <Button size="sm" variant="outline" onClick={handlePublishArticle} disabled={saving}>Marquer publié</Button>
+                    <Button size="sm" variant="outline" onClick={calcScore} disabled={saving}>Calculer scoring & reco</Button>
+                    <Button size="sm" onClick={handlePublishArticle} className="bg-green-600 hover:bg-green-700" disabled={saving}>Publier</Button>
                     <Button size="sm" variant="outline" onClick={()=> setShowForm(false)}>Fermer</Button>
                   </div>
                 </div>
@@ -422,6 +432,9 @@ export default function AdminArticles() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {saveMsg && (
+                    <div className={`text-sm rounded border px-3 py-2 ${saveMsg.type==='success'?'bg-green-50 border-green-200 text-green-700': saveMsg.type==='error'?'bg-red-50 border-red-200 text-red-700':'bg-amber-50 border-amber-200 text-amber-700'}`}>{saveMsg.text}</div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-gray-700 block mb-1">
