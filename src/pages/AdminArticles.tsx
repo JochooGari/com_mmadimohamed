@@ -22,6 +22,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAdminData } from '../context/AdminDataContext';
+import { tryGetSupabaseClient } from '../lib/supabase';
 
 type Article = {
   id: string;
@@ -50,37 +51,12 @@ const SAMPLE_ARTICLES: Article[] = [
     tags: ['Power BI', 'Performance', 'Guide'],
     readTime: 8,
     seoScore: 85
-  },
-  {
-    id: '2',
-    title: 'DAX vs SQL : Quelle approche choisir?',
-    excerpt: 'Comparaison approfondie entre DAX et SQL pour l\'analyse de données',
-    content: '<h1>DAX vs SQL</h1><p>Dans le monde de l\'analyse...</p>',
-    status: 'pending',
-    createdBy: 'Agent Strategist',
-    createdAt: '2025-01-15T09:15:00Z',
-    updatedAt: '2025-01-15T09:15:00Z',
-    tags: ['DAX', 'SQL', 'Analyse'],
-    readTime: 12,
-    seoScore: 72
-  },
-  {
-    id: '3',
-    title: 'Dashboard Marketing : KPIs essentiels',
-    excerpt: 'Les indicateurs clés pour suivre vos performances marketing',
-    content: '<h1>Dashboard Marketing</h1><p>Voici les KPIs...</p>',
-    status: 'draft',
-    createdBy: 'Content Marketer',
-    createdAt: '2025-01-14T16:45:00Z',
-    updatedAt: '2025-01-15T08:30:00Z',
-    tags: ['Marketing', 'KPI', 'Dashboard'],
-    readTime: 6,
-    seoScore: 68
   }
 ];
 
 export default function AdminArticles() {
   const admin = useAdminData();
+  const supabase = tryGetSupabaseClient();
   const [articles, setArticles] = useState<Article[]>(SAMPLE_ARTICLES);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -102,6 +78,28 @@ export default function AdminArticles() {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+
+  // Load from Supabase
+  useEffect(() => { (async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase.from('articles').select('*').order('updated_at', { ascending:false }).limit(200);
+    if (!error && Array.isArray(data)) {
+      const rows: Article[] = data.map((r:any) => ({
+        id: r.id,
+        title: r.title,
+        excerpt: r.excerpt || '',
+        content: (typeof r.content === 'string' ? r.content : (r.content?.html || '')) || '',
+        status: r.published ? 'published' : 'draft',
+        createdBy: r.author_id || 'User',
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        tags: r.tags || [],
+        readTime: Math.ceil(((typeof r.content==='string'? r.content : (r.content?.html||''))||'').length / 1000),
+        seoScore: undefined
+      }));
+      setArticles(rows);
+    }
+  })(); }, [supabase]);
 
   const filteredArticles = articles.filter(article => {
     const matchesSearch = article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -136,23 +134,51 @@ export default function AdminArticles() {
     return 'text-red-600';
   };
 
-  const handleSaveArticle = () => {
+  const upsertArticleSupabase = async (a: Article) => {
+    if (!supabase) return;
+    const payload = {
+      id: a.id,
+      slug: a.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$|--+/g,'-').slice(0,120),
+      title: a.title,
+      excerpt: a.excerpt,
+      content: { html: a.content },
+      tags: a.tags,
+      published: a.status === 'published',
+      published_at: a.status === 'published' ? new Date().toISOString() : null
+    };
+    const { error } = await supabase.from('articles').upsert(payload, { onConflict: 'id' });
+    if (error) throw error;
+  };
+
+  const deleteArticleSupabase = async (id: string) => {
+    if (!supabase) return;
+    const { error } = await supabase.from('articles').delete().eq('id', id);
+    if (error) throw error;
+  };
+
+  const handleSaveArticle = async () => {
     if (!draft.title?.trim()) return;
     
     const now = new Date().toISOString();
     const article: Article = {
-      id: selectedArticle?.id || Date.now().toString(),
+      id: selectedArticle?.id || crypto.randomUUID(),
       title: draft.title!,
       excerpt: draft.excerpt || '',
       content: draft.content || '',
       status: (draft.status as Article['status']) || 'draft',
-      createdBy: draft.createdBy || 'User',
+      createdBy: selectedArticle?.createdBy || 'User',
       createdAt: selectedArticle?.createdAt || now,
       updatedAt: now,
       tags: draft.tags || [],
       readTime: Math.ceil((draft.content?.length || 0) / 1000),
-      seoScore: Math.floor(Math.random() * 40) + 60 // Mock SEO score
+      seoScore: selectedArticle?.seoScore
     };
+
+    try {
+      await upsertArticleSupabase(article);
+    } catch (e:any) {
+      console.warn('Supabase upsert failed, keeping local only', e?.message);
+    }
 
     if (selectedArticle) {
       setArticles(prev => prev.map(a => a.id === selectedArticle.id ? article : a));
@@ -160,7 +186,6 @@ export default function AdminArticles() {
       setArticles(prev => [article, ...prev]);
     }
 
-    // Reset form
     setDraft({});
     setSelectedArticle(null);
     setIsEditing(false);
@@ -174,12 +199,16 @@ export default function AdminArticles() {
     setShowForm(true);
   };
 
-  const handleDeleteArticle = (id: string) => {
+  const handleDeleteArticle = async (id: string) => {
+    try {
+      await deleteArticleSupabase(id);
+    } catch (e:any) {
+      console.warn('Supabase delete failed', e?.message);
+    }
     setArticles(prev => prev.filter(a => a.id !== id));
   };
 
   const generateAIArticle = async () => {
-    // Mock AI generation
     const aiArticle = {
       title: 'Article généré par IA : Tendances Data 2025',
       excerpt: 'Découvrez les principales tendances en matière de données pour 2025',
