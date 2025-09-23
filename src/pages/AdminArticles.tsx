@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useAdminData } from '../context/AdminDataContext';
 import { tryGetSupabaseClient } from '../lib/supabase';
+import EnhancedEditorLayout from '../components/admin/enhanced-editor/EnhancedEditorLayout';
 
 type Article = {
   id: string;
@@ -57,6 +58,7 @@ const SAMPLE_ARTICLES: Article[] = [
 export default function AdminArticles() {
   const admin = useAdminData();
   const supabase = tryGetSupabaseClient();
+  const [useEnhancedEditor, setUseEnhancedEditor] = useState<boolean>(false);
   const [articles, setArticles] = useState<Article[]>(SAMPLE_ARTICLES);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -93,6 +95,14 @@ export default function AdminArticles() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [showForm, draft]);
+
+  // Toggle from URL (?editor=pro)
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('editor') === 'pro') setUseEnhancedEditor(true);
+    } catch {}
+  }, []);
 
   // Load from Supabase
   useEffect(() => { (async () => {
@@ -287,6 +297,30 @@ export default function AdminArticles() {
     setDraft(d => ({ ...d, content: (d.content || '') + '\n' + last.content }));
   };
 
+  // If enhanced editor is enabled, render it inside Articles page
+  if (useEnhancedEditor) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Articles – Éditeur IA Amélioré</h1>
+            <p className="text-gray-600 mt-1">Structure · Éditeur intelligent · IA/SEO/GEO</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={()=> setUseEnhancedEditor(false)}>Revenir à l’éditeur classique</Button>
+          </div>
+        </div>
+        <EnhancedEditorLayout
+          mode="articles"
+          initialContent={{ title: draft.title || '', slug: '', excerpt: draft.excerpt || '', content_md: draft.content || '' }}
+          onSave={(content)=> {
+            setDraft(d => ({ ...d, title: content?.title || d.title, excerpt: content?.excerpt || d.excerpt, content: content?.content_md || d.content }));
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -304,6 +338,7 @@ export default function AdminArticles() {
             <Plus className="w-4 h-4 mr-2" />
             Nouveau Article
           </Button>
+          <Button variant="outline" onClick={()=> setUseEnhancedEditor(true)}>Éditeur IA Amélioré</Button>
         </div>
       </div>
 
