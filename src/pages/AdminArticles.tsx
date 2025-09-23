@@ -587,7 +587,7 @@ export default function AdminArticles() {
                         variant="outline" 
                         size="sm" 
                         className="flex-1"
-                        onClick={() => handleEditArticle(article)}
+                        onClick={() => { setSelectedArticle(article); setDraft(article); setIsEditing(true); setShowForm(true); }}
                       >
                         <Edit3 className="w-3 h-3 mr-1" />
                         Éditer
