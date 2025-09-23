@@ -114,13 +114,13 @@ export default function AdminArticles() {
         id: r.id,
         title: r.title,
         excerpt: r.excerpt || '',
-        content: (typeof r.content === 'string' ? r.content : (r.content?.html || '')) || '',
+        content: (r.content_md || (typeof r.content === 'string' ? r.content : (r.content?.html || '')) || ''),
         status: r.published ? 'published' : 'draft',
         createdBy: r.author_id || 'User',
         createdAt: r.created_at,
         updatedAt: r.updated_at,
         tags: r.tags || [],
-        readTime: Math.ceil(((typeof r.content==='string'? r.content : (r.content?.html||''))||'').length / 1000),
+        readTime: Math.ceil(((r.content_md || (typeof r.content==='string'? r.content : (r.content?.html||''))||'')).length / 1000),
         seoScore: undefined
       }));
       setArticles(rows);
@@ -171,17 +171,17 @@ export default function AdminArticles() {
     if (!supabase) return;
     const computedSlug = slugifyLocal(a.title || '') || `article-${Date.now()}`;
     const payload: any = {
-      id: a.id,
       slug: computedSlug,
       title: a.title,
       excerpt: a.excerpt,
-      content: { html: a.content || '' },
+      content_md: a.content || '',
       tags: Array.isArray(a.tags) ? a.tags : [],
       published: a.status === 'published',
       published_at: a.status === 'published' ? new Date().toISOString() : null
     };
-    const { error } = await supabase.from('articles').upsert(payload, { onConflict: 'slug' });
+    const { data, error } = await supabase.from('articles').upsert(payload, { onConflict: 'slug' }).select('*').single();
     if (error) throw error;
+    return data;
   };
 
   const handleSaveArticle = async () => {
@@ -200,7 +200,12 @@ export default function AdminArticles() {
       readTime: Math.ceil((draft.content?.length || 0) / 1000),
       seoScore: selectedArticle?.seoScore
     };
-    try { await upsertArticleSupabase(article); } catch (e:any) { console.warn('Supabase upsert failed', e?.message); }
+    try { 
+      const saved = await upsertArticleSupabase(article);
+      if (saved?.id) article.id = saved.id;
+    } catch (e:any) { 
+      alert('Erreur sauvegarde: ' + (e?.message||'unknown'));
+    }
     if (selectedArticle) setArticles(prev => prev.map(a => a.id === selectedArticle.id ? article : a)); else setArticles(prev => [article, ...prev]);
     setDraft({}); setSelectedArticle(null); setIsEditing(false); setShowForm(false);
   };
