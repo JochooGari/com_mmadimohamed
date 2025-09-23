@@ -42,7 +42,7 @@ const SAMPLE_ARTICLES: Article[] = [
     id: '1',
     title: 'Guide Power BI : Optimisation des performances',
     excerpt: 'Découvrez les meilleures pratiques pour améliorer les performances de vos rapports Power BI',
-    content: '# Guide Power BI : Optimisation des performances\n\nPower BI est un outil...',
+    content: '<h1>Guide Power BI : Optimisation des performances</h1><p>Power BI est un outil...</p>',
     status: 'published',
     createdBy: 'Agent Ghostwriter',
     createdAt: '2025-01-15T10:30:00Z',
@@ -55,7 +55,7 @@ const SAMPLE_ARTICLES: Article[] = [
     id: '2',
     title: 'DAX vs SQL : Quelle approche choisir?',
     excerpt: 'Comparaison approfondie entre DAX et SQL pour l\'analyse de données',
-    content: '# DAX vs SQL\n\nDans le monde de l\'analyse...',
+    content: '<h1>DAX vs SQL</h1><p>Dans le monde de l\'analyse...</p>',
     status: 'pending',
     createdBy: 'Agent Strategist',
     createdAt: '2025-01-15T09:15:00Z',
@@ -68,7 +68,7 @@ const SAMPLE_ARTICLES: Article[] = [
     id: '3',
     title: 'Dashboard Marketing : KPIs essentiels',
     excerpt: 'Les indicateurs clés pour suivre vos performances marketing',
-    content: '# Dashboard Marketing\n\nVoici les KPIs...',
+    content: '<h1>Dashboard Marketing</h1><p>Voici les KPIs...</p>',
     status: 'draft',
     createdBy: 'Content Marketer',
     createdAt: '2025-01-14T16:45:00Z',
@@ -95,6 +95,13 @@ export default function AdminArticles() {
     tags: [],
     status: 'draft'
   });
+  const [editorTab, setEditorTab] = useState<'html'|'preview'>('html');
+  const [liveScore, setLiveScore] = useState<{ scores?: { seo?: number; geo?: number }; fixes?: string[]; strengths?: string[]; weaknesses?: string[] }>({});
+  const [chatMessages, setChatMessages] = useState<{role:'user'|'assistant'|'system'; content:string}[]>([
+    { role:'system', content: 'Tu es un assistant éditorial SEO/GEO senior. Tu proposes des recommandations concrètes (titres Hn, liens FR/EU, CTA, FAQ, JSON-LD) et tu fournis des extraits HTML prêts à insérer.' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
 
   const filteredArticles = articles.filter(article => {
     const matchesSearch = article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -135,10 +142,10 @@ export default function AdminArticles() {
     const now = new Date().toISOString();
     const article: Article = {
       id: selectedArticle?.id || Date.now().toString(),
-      title: draft.title,
+      title: draft.title!,
       excerpt: draft.excerpt || '',
       content: draft.content || '',
-      status: draft.status as Article['status'] || 'draft',
+      status: (draft.status as Article['status']) || 'draft',
       createdBy: draft.createdBy || 'User',
       createdAt: selectedArticle?.createdAt || now,
       updatedAt: now,
@@ -176,7 +183,7 @@ export default function AdminArticles() {
     const aiArticle = {
       title: 'Article généré par IA : Tendances Data 2025',
       excerpt: 'Découvrez les principales tendances en matière de données pour 2025',
-      content: '# Tendances Data 2025\n\nLes données continuent de transformer...',
+      content: '<h1>Tendances Data 2025</h1><p>Les données continuent de transformer...</p>',
       tags: ['Data', 'Tendances', '2025'],
       status: 'draft' as const,
       createdBy: 'Agent IA'
@@ -197,6 +204,45 @@ export default function AdminArticles() {
     }).format(new Date(dateString));
   };
 
+  const calcScore = async () => {
+    try {
+      const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'score_live', html: draft.content || '' }) });
+      if (!r.ok) throw new Error(await r.text());
+      const d = await r.json();
+      setLiveScore(d);
+    } catch (e:any) {
+      alert('Erreur scoring: ' + (e?.message||'unknown'));
+    }
+  };
+
+  const sendChat = async () => {
+    if (!chatInput.trim()) return;
+    const next = [...chatMessages, { role:'user' as const, content: chatInput }];
+    setChatMessages(next);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const messages = [
+        ...next,
+        { role:'system' as const, content: `Contexte article HTML actuel:\n${draft.content || ''}\n\nTu proposes: recommandations SEO/GEO, liens FR/EU, sources autoritaires, complétions de paragraphes, CTAs contextuels, FAQ, et JSON-LD. Réponds en sections claires avec extraits HTML prêts à insérer.` }
+      ];
+      const r = await fetch('/api/ai-proxy', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider:'perplexity', model:'sonar', messages, temperature:0.3, maxTokens:900 }) });
+      const d = await r.json();
+      const text = (d?.content || d?.choices?.[0]?.message?.content || '').trim();
+      setChatMessages(prev => [...prev, { role:'assistant', content: text }]);
+    } catch (e:any) {
+      setChatMessages(prev => [...prev, { role:'assistant', content: 'Erreur IA: ' + (e?.message||'unknown') }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const insertLastAssistant = () => {
+    const last = [...chatMessages].reverse().find(m => m.role === 'assistant');
+    if (!last) return;
+    setDraft(d => ({ ...d, content: (d.content || '') + '\n' + last.content }));
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -212,7 +258,7 @@ export default function AdminArticles() {
           </Button>
           <Button onClick={() => { setShowForm(true); setDraft({}); setSelectedArticle(null); setIsEditing(false); }}>
             <Plus className="w-4 h-4 mr-2" />
-            Nouvel Article
+            Nouveau Article
           </Button>
         </div>
       </div>
@@ -263,7 +309,7 @@ export default function AdminArticles() {
             <Card className="border-teal-200 bg-teal-50/50">
               <CardHeader>
                 <CardTitle>
-                  {isEditing ? 'Modifier l\'article' : 'Nouvel article'}
+                  {isEditing ? 'Modifier l\'article' : 'Nouveau article'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -308,33 +354,34 @@ export default function AdminArticles() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-1">
-                    Tags (séparés par des virgules)
+                  <label className="text-sm font-medium text-gray-700 block mb-2">
+                    Contenu (HTML)
                   </label>
-                  <Input
-                    placeholder="ex: Power BI, Data Analysis, Tutorial"
-                    value={draft.tags?.join(', ') || ''}
-                    onChange={(e) => setDraft(d => ({ 
-                      ...d, 
-                      tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
-                    }))}
-                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs text-gray-500">Éditeur HTML</div>
+                        <div className="space-x-2">
+                          <Button size="sm" variant="outline" onClick={()=> setEditorTab('html')} disabled={editorTab==='html'}>Éditer</Button>
+                          <Button size="sm" variant="outline" onClick={()=> setEditorTab('preview')} disabled={editorTab==='preview'}>Prévisualiser</Button>
+                        </div>
+                      </div>
+                      <Textarea
+                        placeholder="<h1>Titre</h1>\n<p>Votre contenu HTML…</p>"
+                        value={draft.content || ''}
+                        onChange={(e) => setDraft(d => ({ ...d, content: e.target.value }))}
+                        rows={editorTab==='html' ? 14 : 6}
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-2">Preview</div>
+                      <div className="border rounded p-3 bg-white min-h-[220px] text-sm prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: draft.content || '' }} />
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-1">
-                    Contenu (Markdown)
-                  </label>
-                  <Textarea
-                    placeholder="# Titre de l'article&#10;&#10;Votre contenu en Markdown..."
-                    value={draft.content || ''}
-                    onChange={(e) => setDraft(d => ({ ...d, content: e.target.value }))}
-                    rows={12}
-                    className="font-mono text-sm"
-                  />
-                </div>
-
-                <div className="flex items-center space-x-3 pt-4">
+                <div className="flex items-center space-x-3 pt-2">
                   <Button onClick={handleSaveArticle} className="bg-teal-500 hover:bg-teal-600">
                     <Save className="w-4 h-4 mr-2" />
                     {isEditing ? 'Mettre à jour' : 'Créer l\'article'}
@@ -342,7 +389,54 @@ export default function AdminArticles() {
                   <Button variant="outline" onClick={() => { setShowForm(false); setDraft({}); setSelectedArticle(null); }}>
                     Annuler
                   </Button>
+                  <Button type="button" variant="outline" onClick={calcScore}>Calculer scoring & recommandations</Button>
                 </div>
+
+                {(liveScore?.scores || liveScore?.fixes) && (
+                  <div className="rounded border p-3 bg-white space-y-2">
+                    <div className="text-sm">SEO: {liveScore?.scores?.seo ?? '—'} / GEO: {liveScore?.scores?.geo ?? '—'}</div>
+                    {liveScore?.strengths && (
+                      <div>
+                        <div className="text-xs font-semibold mb-1">Points forts</div>
+                        <ul className="list-disc ml-5 text-sm">{(liveScore.strengths||[]).map((s,i)=> (<li key={i}>{s}</li>))}</ul>
+                      </div>
+                    )}
+                    {liveScore?.weaknesses && (
+                      <div>
+                        <div className="text-xs font-semibold mb-1">Points d\'amélioration</div>
+                        <ul className="list-disc ml-5 text-sm">{(liveScore.weaknesses||[]).map((s,i)=> (<li key={i}>{s}</li>))}</ul>
+                      </div>
+                    )}
+                    {liveScore?.fixes && (
+                      <div>
+                        <div className="text-xs font-semibold mb-1">Recommandations</div>
+                        <ul className="list-disc ml-5 text-sm">{(liveScore.fixes||[]).map((s,i)=> (<li key={i}>{s}</li>))}</ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Chat IA pour recommandations incrémentales */}
+                <Card className="mt-4">
+                  <CardHeader>
+                    <CardTitle>Assistant IA – Recommandations & complétions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="border rounded p-3 bg-white h-64 overflow-auto text-sm">
+                      {chatMessages.filter(m=> m.role!=='system').map((m, i)=> (
+                        <div key={i} className={`mb-2 ${m.role==='assistant' ? 'text-gray-800' : 'text-gray-700'}`}>
+                          <span className="font-medium mr-2">{m.role==='assistant' ? 'IA' : 'Vous'}:</span>
+                          <span dangerouslySetInnerHTML={{ __html: m.content.replace(/\n/g,'<br/>') }} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input value={chatInput} onChange={(e)=> setChatInput(e.target.value)} placeholder="Demander des liens, sources, compléter un paragraphe…" />
+                      <Button onClick={sendChat} disabled={chatLoading}>{chatLoading ? 'Envoi…' : 'Envoyer'}</Button>
+                      <Button variant="outline" onClick={insertLastAssistant}>Insérer la dernière réponse</Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </CardContent>
             </Card>
           )}
