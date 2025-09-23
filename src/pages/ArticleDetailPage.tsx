@@ -4,6 +4,7 @@ import { tryGetSupabaseClient } from '../lib/supabase';
 import { defaultContent } from '../data/defaultContent';
 import { slugify } from '../lib/utils';
 import MarkdownRenderer from '../components/markdown/MarkdownRenderer';
+import SiteSidebar from '../components/SiteSidebar';
 import Breadcrumbs from '../components/navigation/Breadcrumbs';
 import SEOHead from '../components/seo/SEOHead';
 import { track } from '../lib/analytics';
@@ -50,27 +51,34 @@ export default function ArticleDetailPage() {
   return (
     <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <SEOHead title={article.title} description={article.excerpt} canonical={canonical} ogImage={article.cover_url} jsonLd={jsonLd} />
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <Breadcrumbs items={[{ label: 'Accueil', href: '/' }, { label: 'Blog', href: '/blog' }, { label: article.title }]} />
         <header className="mb-6">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 mb-3">{article.title}</h1>
           {article.excerpt && <p className="text-slate-600 text-lg">{article.excerpt}</p>}
         </header>
 
-        <article className="bg-white rounded-2xl border shadow-sm p-6 md:p-8">
-          {article.content_md && (/^\s*<[^>]+>/.test(article.content_md)
-            ? (
-              <div
-                className="prose prose-slate prose-lg md:prose-xl max-w-none prose-headings:font-semibold prose-a:text-teal-600 hover:prose-a:text-teal-700 prose-img:rounded-xl prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg"
-                dangerouslySetInnerHTML={{ __html: article.content_md }}
-              />
-            ) : (
-              <div className="prose prose-slate prose-lg md:prose-xl max-w-none prose-headings:font-semibold prose-a:text-teal-600 hover:prose-a:text-teal-700 prose-img:rounded-xl">
-                <MarkdownRenderer content={article.content_md} />
-              </div>
-            )
-          )}
-        </article>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8">
+            <article className="bg-white rounded-2xl border shadow-sm p-6 md:p-8">
+              {article.content_md && (/^\s*<[^>]+>/.test(article.content_md)
+                ? (
+                  <div
+                    className="prose prose-slate prose-lg md:prose-xl max-w-none prose-headings:font-semibold prose-a:text-teal-600 hover:prose-a:text-teal-700 prose-img:rounded-xl prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg"
+                    dangerouslySetInnerHTML={{ __html: article.content_md }}
+                  />
+                ) : (
+                  <div className="prose prose-slate prose-lg md:prose-xl max-w-none prose-headings:font-semibold prose-a:text-teal-600 hover:prose-a:text-teal-700 prose-img:rounded-xl">
+                    <MarkdownRenderer content={article.content_md} />
+                  </div>
+                )
+              )}
+            </article>
+          </div>
+          <div className="lg:col-span-4">
+            <SiteSidebar />
+          </div>
+        </div>
 
         {related.length > 0 && (
           <div className="mt-12">

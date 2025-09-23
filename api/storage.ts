@@ -30,6 +30,14 @@ async function getObjectJSON<T = any>(bucket: string, objectPath: string): Promi
   try { return JSON.parse(text) as T; } catch { return null; }
 }
 
+async function getObjectText(bucket: string, objectPath: string): Promise<string | null> {
+  const supabase = getServerSupabase();
+  if (!supabase) return null;
+  const { data, error } = await supabase.storage.from(bucket).download(objectPath);
+  if (error || !data) return null;
+  return await (data as any).text();
+}
+
 // Assurer que les dossiers existent
 async function ensureDirectoryExists(dirPath: string) {
   try {
@@ -92,10 +100,15 @@ async function handleGet(req: any, res: any, agent: string, type: string) {
   }
 
   if (agent && type) {
-    // Récupérer des données spécifiques
+    // 1) Essaye Supabase Storage (prod)
+    try {
+      const text = await getObjectText('agents', `${agent}/inputs/${type}.json`);
+      if (text) return res.json(JSON.parse(text));
+    } catch {}
+
+    // 2) Fallback local (dev)
     const agentPath = path.join(DATA_DIR, 'agents', agent, 'inputs');
     const filePath = path.join(agentPath, `${type}.json`);
-    
     try {
       const data = await fs.promises.readFile(filePath, 'utf8');
       return res.json(JSON.parse(data));
@@ -120,6 +133,9 @@ async function handlePost(req: any, res: any, action: string, agentType: string,
     
     case 'save_monitoring':
       return await saveMonitoring(res, data);
+
+    case 'save_site_sidebar':
+      return await saveSiteSidebar(res, data);
     
     case 'create_structure':
       return await createDirectoryStructure(res);
@@ -181,6 +197,15 @@ async function saveCampaigns(res: any, agentType: string, campaigns: any[]) {
   try { await putObject('agents', `${agentType}/inputs/campaigns.json`, JSON.stringify(campaigns, null, 2), 'application/json'); } catch {}
   
   return res.json({ success: true, count: campaigns.length });
+}
+
+async function saveSiteSidebar(res: any, payload: any) {
+  const agentPath = path.join(DATA_DIR, 'agents', 'site', 'inputs');
+  const filePath = path.join(agentPath, 'sidebar.json');
+  await ensureDirectoryExists(agentPath);
+  await fs.promises.writeFile(filePath, JSON.stringify(payload, null, 2));
+  try { await putObject('agents', `site/inputs/sidebar.json`, JSON.stringify(payload, null, 2), 'application/json'); } catch {}
+  return res.json({ success: true });
 }
 
 async function saveMonitoring(res: any, content: any) {
