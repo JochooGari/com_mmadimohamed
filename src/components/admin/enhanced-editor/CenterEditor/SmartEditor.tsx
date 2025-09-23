@@ -306,7 +306,7 @@ export default function SmartEditor({ content, onChange, focusMode, zenMode, mod
                 <textarea value={content.content_html || ''} onChange={(e)=> handleTextChange('content_html', e.target.value)} placeholder="Collez/éditez du HTML propre…" rows={18} className="flex-1 w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-mono" />
               ) : (
                 <Editor
-                  apiKey="no-api-key"
+                  apiKey={import.meta.env.VITE_TINYMCE_API_KEY || 'mzqxfb4pdq9g24k0hq3vgfnp0nhqxt041fhp3jm10avytq1f'}
                   value={content.content_html || ''}
                   init={{
                     height: 600,
