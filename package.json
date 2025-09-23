@@ -81,7 +81,7 @@
     "tailwindcss": "^4.0.9",
     "tailwindcss-animate": "^1.0.7",
     "tinymce": "^7.4.1",
-    "@tinymce/tinymce-react": "^4.5.3",
+    "@tinymce/tinymce-react": "^4.5.2",
     "three": "^0.175.0",
     "typescript": "~5.7.2",
     "typescript-eslint": "^8.24.1",
