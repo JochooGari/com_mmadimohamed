@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bold, Italic, List, Link, Image, Code, Quote, Hash, Eye, Type, Palette } from 'lucide-react';
+import { Bold, Italic, List, Link, Image, Code, Quote, Hash, Eye, Type, Palette, FileCode } from 'lucide-react';
 
 interface SmartEditorProps {
   content: {
@@ -7,11 +7,14 @@ interface SmartEditorProps {
     slug: string;
     excerpt: string;
     content_md: string;
+    content_html?: string;
     keywords: string[];
   };
   onChange: (updates: any) => void;
   focusMode?: boolean;
   zenMode?: boolean;
+  mode?: 'visual' | 'html';
+  onModeChange?: (m: 'visual'|'html') => void;
 }
 
 interface Suggestion {
@@ -22,7 +25,7 @@ interface Suggestion {
   replacement?: string;
 }
 
-export default function SmartEditor({ content, onChange, focusMode, zenMode }: SmartEditorProps) {
+export default function SmartEditor({ content, onChange, focusMode, zenMode, mode='visual', onModeChange }: SmartEditorProps) {
   const [activeField, setActiveField] = useState<'title' | 'excerpt' | 'content'>('content');
   const [showPreview, setShowPreview] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -196,16 +199,15 @@ export default function SmartEditor({ content, onChange, focusMode, zenMode }: S
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowPreview(!showPreview)}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              <button onClick={() => onModeChange?.(mode==='visual' ? 'html' : 'visual')} className="px-3 py-1.5 text-sm rounded-md border hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
+                <FileCode className="w-4 h-4" /> {mode==='visual' ? 'Basculer en HTML' : 'Basculer en visuel'}
+              </button>
+              <button onClick={() => setShowPreview(!showPreview)} className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                   showPreview
                     ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
-                }`}
-              >
-                <Eye className="w-4 h-4 inline mr-1" />
-                Aperçu
+                }`}>
+                <Eye className="w-4 h-4 inline mr-1" /> Aperçu
               </button>
             </div>
           </div>
@@ -291,30 +293,12 @@ export default function SmartEditor({ content, onChange, focusMode, zenMode }: S
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Contenu principal
-              </label>
-              <textarea
-                ref={contentRef}
-                value={content.content_md}
-                onChange={(e) => handleTextChange('content_md', e.target.value)}
-                onKeyDown={(e) => handleKeyDown(e, 'content')}
-                placeholder="Commencez à écrire votre article en markdown...
-
-## Titre de section
-
-Votre contenu ici avec **gras**, *italique* et [liens](https://example.com).
-
-- Liste à puces
-- Deuxième élément
-
-> Citation importante
-
-```
-Code ou exemple
-```"
-                className="flex-1 w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-mono leading-relaxed"
-              />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Contenu principal ({mode==='html' ? 'HTML' : 'Markdown/Visuel'})</label>
+              {mode==='html' ? (
+                <textarea value={content.content_html || ''} onChange={(e)=> handleTextChange('content_html', e.target.value)} placeholder="Collez/éditez du HTML propre…" rows={18} className="flex-1 w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-mono" />
+              ) : (
+                <textarea ref={contentRef} value={content.content_md} onChange={(e) => handleTextChange('content_md', e.target.value)} onKeyDown={(e) => handleKeyDown(e, 'content')} placeholder="Commencez à écrire…" className="flex-1 w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-mono leading-relaxed" />
+              )}
             </div>
 
             {/* Smart Suggestions */}
@@ -346,27 +330,25 @@ Code ou exemple
             )}
           </div>
         ) : (
-          /* Preview */
           <div className="h-full overflow-y-auto">
-            <div className="prose dark:prose-invert max-w-none">
-              <h1>{content.title || 'Titre de l\'article'}</h1>
-              {content.excerpt && (
-                <div className="text-lg text-gray-600 dark:text-gray-400 italic">
-                  {content.excerpt}
-                </div>
-              )}
-              <div
-                dangerouslySetInnerHTML={{
-                  __html: content.content_md
+            {/* Preview calquée sur structure du site (article page) */}
+            <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+              <h1 className="text-3xl font-bold mb-3">{content.title || "Titre de l'article"}</h1>
+              {content.excerpt && <p className="text-slate-600 mb-6">{content.excerpt}</p>}
+              <div className="prose max-w-none">
+                {mode==='html' ? (
+                  <div dangerouslySetInnerHTML={{ __html: content.content_html || '' }} />
+                ) : (
+                  <div dangerouslySetInnerHTML={{ __html: (content.content_md || '')
                     .replace(/^### (.*$)/gm, '<h3>$1</h3>')
                     .replace(/^## (.*$)/gm, '<h2>$1</h2>')
                     .replace(/^# (.*$)/gm, '<h1>$1</h1>')
                     .replace(/\*\*(.*)\*\*/g, '<strong>$1</strong>')
                     .replace(/\*(.*)\*/g, '<em>$1</em>')
-                    .replace(/\n/g, '<br>')
-                }}
-              />
-            </div>
+                    .replace(/\n/g, '<br>') }} />
+                )}
+              </div>
+            </section>
           </div>
         )}
       </div>
