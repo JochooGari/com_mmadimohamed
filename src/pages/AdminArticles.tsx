@@ -160,15 +160,23 @@ export default function AdminArticles() {
     return 'text-red-600';
   };
 
+  const slugifyLocal = (s: string) => s
+    .toLowerCase()
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '')
+    .slice(0, 120);
+
   const upsertArticleSupabase = async (a: Article) => {
     if (!supabase) return;
+    const computedSlug = slugifyLocal(a.title || '') || `article-${Date.now()}`;
     const payload: any = {
       id: a.id,
-      slug: a.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$|--+/g,'-').slice(0,120),
+      slug: computedSlug,
       title: a.title,
       excerpt: a.excerpt,
-      content: { html: a.content },
-      tags: a.tags,
+      content: { html: a.content || '' },
+      tags: Array.isArray(a.tags) ? a.tags : [],
       published: a.status === 'published',
       published_at: a.status === 'published' ? new Date().toISOString() : null
     };
