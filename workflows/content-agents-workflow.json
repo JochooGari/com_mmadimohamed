@@ -1,0 +1,229 @@
+{
+  "name": "Content Agents Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ea9f7bb5-60b9-4a34-b7f4-8f0c67e8a2b3",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.perplexity.ai/chat/completions",
+        "options": {
+          "headers": {
+            "Authorization": "Bearer {{ $env.PERPLEXITY_API_KEY }}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "model": "llama-3.1-sonar-large-128k-online",
+            "messages": [
+              {
+                "role": "system",
+                "content": "Tu es un agent spécialisé dans l'analyse de contenu web et la proposition de sujets d'articles.\n\nTâches :\n1. Scanner le site web fourni\n2. Analyser le contenu existant\n3. Identifier les lacunes et opportunités\n4. Proposer 3-5 sujets d'articles pertinents\n5. Fournir un brief pour chaque sujet avec :\n   - Titre suggéré\n   - Mots-clés cibles\n   - Angle d'approche\n   - Public cible\n   - Sources potentielles\n\nCritères de sélection :\n- Pertinence avec le contenu existant\n- Potentiel SEO\n- Intérêt pour l'audience\n- Faisabilité de rédaction\n\nRetourne les sujets au format JSON avec cette structure :\n{\n  \"topics\": [\n    {\n      \"title\": \"Titre suggéré\",\n      \"keywords\": [\"mot-clé1\", \"mot-clé2\"],\n      \"angle\": \"Description de l'angle\",\n      \"audience\": \"Description du public cible\",\n      \"sources\": [\"source1\", \"source2\"]\n    }\n  ]\n}"
+              },
+              {
+                "role": "user",
+                "content": "Analyse le site {{ $json.siteUrl || \"https://magicpath.ai\" }} et propose des sujets d'articles."
+              }
+            ],
+            "temperature": 0.7,
+            "max_tokens": 2000
+          }
+        }
+      },
+      "id": "2f3a4b5c-1234-5678-9abc-def123456789",
+      "name": "Agent Search Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Perplexity response and extract topics\nconst response = $input.first().json;\nconst content = response.choices[0].message.content;\n\n// Try to extract JSON from the response\nlet topics;\ntry {\n  // Look for JSON content in the response\n  const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    topics = JSON.parse(jsonMatch[0]);\n  } else {\n    // Fallback: create topics from text analysis\n    topics = {\n      topics: [\n        {\n          title: \"Article suggéré par IA\",\n          keywords: [\"intelligence artificielle\", \"contenu\"],\n          angle: \"Approche pratique et accessible\",\n          audience: \"Professionnels et entreprises\",\n          sources: [\"Documentation officielle\", \"Études de cas\"]\n        }\n      ]\n    };\n  }\n} catch (error) {\n  // Error handling\n  topics = {\n    topics: [\n      {\n        title: \"Article de contenu par défaut\",\n        keywords: [\"contenu\", \"marketing\"],\n        angle: \"Guide pratique\",\n        audience: \"Professionnels du marketing\",\n        sources: [\"Recherche web\", \"Meilleures pratiques\"]\n      }\n    ]\n  };\n}\n\n// Return each topic as separate item for processing\nconst results = [];\ntopics.topics.forEach((topic, index) => {\n  results.push({\n    json: {\n      topicIndex: index,\n      topicData: topic,\n      searchContent: JSON.stringify(topic)\n    }\n  });\n});\n\nreturn results;"
+      },
+      "id": "3a4b5c6d-2345-6789-abcd-ef1234567890",
+      "name": "Process Topics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "options": {
+          "headers": {
+            "Authorization": "Bearer {{ $env.OPENAI_API_KEY }}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "model": "gpt-4",
+            "messages": [
+              {
+                "role": "system",
+                "content": "Tu es un rédacteur expert spécialisé dans la création de contenu web de qualité.\n\nTâches :\n1. Analyser le brief du sujet fourni\n2. Rechercher et vérifier les informations\n3. Structurer l'article de manière logique\n4. Rédiger un contenu engageant et informatif\n5. Optimiser pour le SEO\n6. Inclure des éléments visuels suggérés\n\nStructure requise :\n- Titre accrocheur (H1)\n- Introduction engageante\n- Corps de l'article avec sous-titres (H2, H3)\n- Conclusion avec call-to-action\n- Meta description\n- Suggestions d'images\n\nCritères de qualité :\n- Ton adapté au public cible\n- Longueur optimale (800-2000 mots)\n- Densité de mots-clés naturelle\n- Lisibilité élevée\n- Sources citées si nécessaire\n\nRetourne l'article au format JSON avec cette structure :\n{\n  \"article\": {\n    \"title\": \"Titre H1\",\n    \"metaDescription\": \"Meta description SEO\",\n    \"introduction\": \"Introduction engageante\",\n    \"content\": \"Corps de l'article en HTML\",\n    \"conclusion\": \"Conclusion avec CTA\",\n    \"images\": [\"suggestion1.jpg\", \"suggestion2.jpg\"],\n    \"wordCount\": 1500\n  }\n}"
+              },
+              {
+                "role": "user",
+                "content": "Rédige un article basé sur ce brief : {{ $json.searchContent }}"
+              }
+            ],
+            "temperature": 0.8,
+            "max_tokens": 4000
+          }
+        }
+      },
+      "id": "4b5c6d7e-3456-789a-bcde-f12345678901",
+      "name": "Agent Ghostwriting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "options": {
+          "headers": {
+            "x-api-key": "{{ $env.ANTHROPIC_API_KEY }}",
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "model": "claude-3-sonnet-20240229",
+            "max_tokens": 2000,
+            "messages": [
+              {
+                "role": "user",
+                "content": "Tu es un expert en révision de contenu et optimisation éditoriale.\n\nTâches :\n1. Analyser l'article fourni en détail\n2. Évaluer selon les critères définis\n3. Attribuer un score global (/100)\n4. Fournir des recommandations spécifiques\n5. Suggérer des améliorations concrètes\n\nCritères d'évaluation :\n- Qualité rédactionnelle (25 pts)\n- Pertinence du contenu (20 pts)\n- Optimisation SEO (20 pts)\n- Structure et lisibilité (15 pts)\n- Engagement potentiel (10 pts)\n- Respect du brief (10 pts)\n\nFormat de sortie JSON :\n{\n  \"review\": {\n    \"globalScore\": 85,\n    \"detailedScores\": {\n      \"writing\": 22,\n      \"relevance\": 18,\n      \"seo\": 17,\n      \"structure\": 13,\n      \"engagement\": 8,\n      \"briefCompliance\": 9\n    },\n    \"strengths\": [\"Point fort 1\", \"Point fort 2\"],\n    \"improvements\": [\"Amélioration 1\", \"Amélioration 2\"],\n    \"recommendations\": [\"Recommandation 1\", \"Recommandation 2\"],\n    \"actions\": [\"Action 1\", \"Action 2\"],\n    \"targetScore\": 95\n  }\n}\n\nArticle à analyser : {{ $json.article }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "5c6d7e8f-4567-89ab-cdef-123456789012",
+      "name": "Agent Review Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all results and prepare final output\nconst items = $input.all();\nconst results = [];\n\nitems.forEach((item, index) => {\n  const data = item.json;\n  \n  // Extract data from previous nodes\n  let topicData, article, review;\n  \n  try {\n    // Parse topic data\n    if (data.topicData) {\n      topicData = data.topicData;\n    }\n    \n    // Parse article from OpenAI response\n    if (data.choices && data.choices[0]) {\n      const content = data.choices[0].message.content;\n      const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) {\n        article = JSON.parse(jsonMatch[0]).article;\n      }\n    }\n    \n    // Parse review from Anthropic response\n    if (data.content && data.content[0]) {\n      const content = data.content[0].text;\n      const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) {\n        review = JSON.parse(jsonMatch[0]).review;\n      }\n    }\n    \n  } catch (error) {\n    console.log('Parsing error:', error);\n  }\n  \n  // Create comprehensive result\n  results.push({\n    json: {\n      timestamp: new Date().toISOString(),\n      workflowId: 'content-agents-workflow',\n      topic: topicData || { title: 'Topic ' + (index + 1) },\n      article: article || { title: 'Generated Article', content: 'Article content' },\n      review: review || { globalScore: 0, recommendations: [] },\n      status: 'completed'\n    }\n  });\n});\n\nreturn results;"
+      },
+      "id": "6d7e8f9a-5678-9abc-def1-23456789abcd",
+      "name": "Combine Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "path": "content-workflow-results",
+        "options": {
+          "responseMode": "responseNode"
+        }
+      },
+      "id": "7e8f9ab0-6789-abcd-ef12-3456789abcde",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [1400, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Agent Search Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Search Content": {
+      "main": [
+        [
+          {
+            "node": "Process Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Topics": {
+      "main": [
+        [
+          {
+            "node": "Agent Ghostwriting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Ghostwriting": {
+      "main": [
+        [
+          {
+            "node": "Agent Review Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Review Content": {
+      "main": [
+        [
+          {
+            "node": "Combine Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Results": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-09-24T21:00:00.000Z",
+      "updatedAt": "2024-09-24T21:00:00.000Z",
+      "id": "1",
+      "name": "Content Generation"
+    },
+    {
+      "createdAt": "2024-09-24T21:00:00.000Z",
+      "updatedAt": "2024-09-24T21:00:00.000Z",
+      "id": "2",
+      "name": "AI Agents"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2024-09-24T21:00:00.000Z",
+  "versionId": "1"
+}
