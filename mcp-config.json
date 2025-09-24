@@ -9,7 +9,7 @@
     }
   },
   "vercel": {
-    "serverUrl": "https://your-domain.vercel.app/api/mcp",
+    "serverUrl": "https://mmadimohamed.fr/api/mcp",
     "name": "magicpath-n8n-server",
     "version": "1.0.0",
     "description": "MCP Server for MagicPath n8n Content Agents",
