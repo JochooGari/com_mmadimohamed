@@ -41,9 +41,7 @@ class MCPService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = process.env.NODE_ENV === 'production'
-      ? '/api/mcp'
-      : 'http://localhost:3000/api/mcp';
+    this.baseUrl = '/api/mcp';
   }
 
   private async request(endpoint: string, options: RequestInit = {}) {
