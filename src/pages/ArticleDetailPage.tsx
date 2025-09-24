@@ -58,8 +58,8 @@ export default function ArticleDetailPage() {
           {article.excerpt && <p className="text-slate-600 text-lg">{article.excerpt}</p>}
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-9">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6">
+          <div>
             <div className="content-wrapper neil-patel-style max-w-[1280px] mx-auto">
               <article>
                 {article.content_md && (/^\s*<[^>]+>/.test(article.content_md)
@@ -77,7 +77,7 @@ export default function ArticleDetailPage() {
               </article>
             </div>
           </div>
-          <div className="lg:col-span-3">
+          <div>
             <SiteSidebar />
           </div>
         </div>
