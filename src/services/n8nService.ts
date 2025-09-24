@@ -30,7 +30,10 @@ class N8nService {
   private apiKey: string | null = null;
 
   constructor() {
-    this.baseUrl = 'http://localhost:5678'; // n8n default port
+    // Use Vercel API endpoints instead of n8n server
+    this.baseUrl = process.env.NODE_ENV === 'production'
+      ? '/api/n8n'  // Vercel production
+      : window.location.origin + '/api/n8n';  // Local dev with Vercel API
   }
 
   setApiKey(apiKey: string) {
@@ -59,7 +62,7 @@ class N8nService {
 
   // Workflow Management
   async getWorkflows(): Promise&lt;N8nWorkflow[]&gt; {
-    return this.request('/api/v1/workflows');
+    return this.request('/workflows');
   }
 
   async getWorkflow(id: string): Promise&lt;N8nWorkflow&gt; {
@@ -88,9 +91,12 @@ class N8nService {
 
   // Workflow Execution
   async executeWorkflow(id: string, data?: any): Promise&lt;WorkflowExecution&gt; {
-    return this.request(`/api/v1/workflows/${id}/execute`, {
+    return this.request('/execute', {
       method: 'POST',
-      body: JSON.stringify(data || {}),
+      body: JSON.stringify({
+        workflowId: id,
+        data: data || {}
+      }),
     });
   }
 
