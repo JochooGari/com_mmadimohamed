@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { tryGetSupabaseClient } from '../lib/supabase';
 import { defaultContent } from '../data/defaultContent';
@@ -15,6 +15,8 @@ export default function ArticleDetailPage() {
   const { slug } = useParams();
   const [article, setArticle] = useState<Article | null>(null);
   const [related, setRelated] = useState<Article[]>([]);
+  const progressRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -33,6 +35,27 @@ export default function ArticleDetailPage() {
     run();
   }, [slug]);
 
+  useEffect(() => {
+    const onScroll = () => {
+      const el = contentRef.current;
+      const bar = progressRef.current;
+      if (!el || !bar) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      const height = el.offsetHeight;
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const denom = Math.max(1, height - window.innerHeight);
+      const progress = Math.min(1, Math.max(0, (scrollTop - top) / denom));
+      bar.style.width = `${progress * 100}%`;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    onScroll();
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, []);
+
   if (!article) {
     const a = defaultContent.blog.find((x) => slugify(x.title) === slug);
     if (a) {
@@ -50,6 +73,7 @@ export default function ArticleDetailPage() {
 
   return (
     <section className="article-page container mx-auto px-4 py-10">
+      <div className="read-progress" ref={progressRef} />
       <SEOHead title={article.title} description={article.excerpt} canonical={canonical} ogImage={article.cover_url} jsonLd={jsonLd} />
       <div className="max-w-7xl mx-auto">
         <Breadcrumbs items={[{ label: 'Accueil', href: '/' }, { label: 'Blog', href: '/blog' }, { label: article.title }]} />
@@ -60,7 +84,7 @@ export default function ArticleDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6">
           <div>
-            <div className="content-wrapper neil-patel-style max-w-[1280px] mx-auto">
+            <div ref={contentRef} className="content-wrapper neil-patel-style max-w-[1280px] mx-auto">
               <article>
                 {article.content_md && (/^\s*<[^>]+>/.test(article.content_md)
                   ? (
