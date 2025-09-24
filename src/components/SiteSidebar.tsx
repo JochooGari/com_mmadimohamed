@@ -17,8 +17,8 @@ const defaults: SidebarConfig = {
     buttonHref: '/contact'
   },
   leadMagnet: {
-    title: 'Discover 100s of keywords Instantly',
-    subtitle: 'Mini-outils, prompts et checklists SEO/GEO à télécharger.',
+    title: 'Découvrez 5 dashboards Comptes de Résultat & Bilan',
+    subtitle: "Modèles Power BI prêts à l'emploi + guide PDF.",
     placeholder: 'Votre email professionnel',
     buttonLabel: 'Télécharger',
     href: '/bibliotheque'
@@ -73,14 +73,15 @@ export default function SiteSidebar() {
         </Link>
       </div>
 
-      {/* Lead magnet */}
-      <div className="rounded-xl border bg-white p-7 shadow-sm">
-        <h4 className="font-semibold text-slate-900 text-xl">{cfg.leadMagnet?.title}</h4>
-        <p className="text-slate-600 text-base mt-2">{cfg.leadMagnet?.subtitle}</p>
-        <div className="mt-4 flex gap-3">
-          <input type="email" placeholder={cfg.leadMagnet?.placeholder} className="flex-1 rounded-md border px-4 py-3 text-base" />
-          <a href={cfg.leadMagnet?.href} className="rounded-md bg-slate-900 text-white px-4 py-3 text-base hover:bg-slate-800">{cfg.leadMagnet?.buttonLabel}</a>
+      {/* Lead magnet - dark card */}
+      <div className="rounded-2xl overflow-hidden shadow-lg bg-gradient-to-br from-slate-900 to-slate-800 text-white p-7">
+        <h4 className="font-extrabold text-3xl leading-tight">{cfg.leadMagnet?.title}</h4>
+        <p className="text-slate-300 text-base mt-2">{cfg.leadMagnet?.subtitle}</p>
+        <div className="mt-5 flex rounded-md overflow-hidden">
+          <input type="email" placeholder={cfg.leadMagnet?.placeholder} className="flex-1 bg-white text-slate-900 px-4 py-3 text-base placeholder-slate-400" />
+          <a href={cfg.leadMagnet?.href} className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 text-base font-semibold">{cfg.leadMagnet?.buttonLabel}</a>
         </div>
+        <div className="mt-3 text-sm text-slate-300">Accès gratuit — aucun spam</div>
       </div>
 
       {/* About */}
