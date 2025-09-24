@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "magicpath-n8n": {
+      "command": "node",
+      "args": ["--loader", "ts-node/esm", "api/mcp/index.ts"],
+      "env": {
+        "NODE_ENV": "development"
+      }
+    }
+  },
+  "vercel": {
+    "serverUrl": "https://your-domain.vercel.app/api/mcp",
+    "name": "magicpath-n8n-server",
+    "version": "1.0.0",
+    "description": "MCP Server for MagicPath n8n Content Agents",
+    "tools": [
+      "execute_content_workflow",
+      "search_content_topics",
+      "generate_article",
+      "review_article",
+      "get_workflow_status"
+    ],
+    "resources": [
+      "workflow://content-agents",
+      "prompts://search-agent",
+      "prompts://ghostwriter-agent",
+      "prompts://review-agent"
+    ],
+    "prompts": [
+      "create_content_strategy",
+      "optimize_article_seo"
+    ]
+  }
+}

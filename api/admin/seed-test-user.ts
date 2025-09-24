@@ -31,15 +31,7 @@ export default async function handler(req: any, res: any) {
   try {
     // Vérifier si l'utilisateur existe déjà
     const list = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
-    const existing = list?.data?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
-    if (existing) {
-      // Option: reset mot de passe si force=true
-      const force = (req.query.force as string) === 'true' || (req.body?.force as boolean);
-      if (force) {
-        const upd = await supabase.auth.admin.updateUserById(existing.id, { password });
-        if (upd.error) return res.status(400).json({ error: upd.error.message });
-        return res.status(200).json({ ok: true, created: false, reset: true, userId: existing.id });
-      }
+    if (list?.data?.users?.some(u => u.email?.toLowerCase() === email.toLowerCase())) {
       return res.status(200).json({ ok: true, created: false, message: 'User already exists' });
     }
 

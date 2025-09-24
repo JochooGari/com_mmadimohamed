@@ -28,6 +28,7 @@ import AdminSettings from './pages/AdminSettings';
 import LinkedInAgentPage from './pages/LinkedInAgentPage';
 import GEOAgentPage from './pages/GEOAgentPage';
 import WorkflowPage from './pages/WorkflowPage';
+import MCPDashboard from './pages/MCPDashboard';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { useLocation } from 'react-router-dom';
 
@@ -53,6 +54,7 @@ function App() {
         <Route path="/blog/:slug" element={<ArticleDetailPage />} />
         <Route path="/pharma" element={<PharmaDemoPage />} />
         <Route path="/workflow" element={<WorkflowPage />} />
+        <Route path="/mcp" element={<MCPDashboard />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/admin" element={<AdminDataProvider><AdminLayout /></AdminDataProvider>} >
           <Route index element={<AdminDashboard />} />

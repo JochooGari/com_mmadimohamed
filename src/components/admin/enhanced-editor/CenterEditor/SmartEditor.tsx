@@ -39,6 +39,7 @@ export default function SmartEditor({ content, onChange, focusMode, zenMode, mod
   const titleRef = useRef<HTMLInputElement>(null);
   const excerptRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<any>(null);
 
   // Update statistics
   useEffect(() => {
@@ -207,8 +208,8 @@ export default function SmartEditor({ content, onChange, focusMode, zenMode, mod
             </div>
 
             <div className="flex items-center gap-2">
-              <button onClick={() => onModeChange?.(mode==='visual' ? 'html' : 'visual')} className="px-3 py-1.5 text-sm rounded-md border hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
-                <FileCode className="w-4 h-4" /> {mode==='visual' ? 'Basculer en HTML' : 'Basculer en visuel'}
+              <button onClick={() => editorRef.current?.execCommand('mceCodeEditor')} className="px-3 py-1.5 text-sm rounded-md border hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
+                <FileCode className="w-4 h-4" /> Source HTML
               </button>
               <button onClick={() => setShowPreview(!showPreview)} className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                   showPreview
@@ -301,27 +302,24 @@ export default function SmartEditor({ content, onChange, focusMode, zenMode, mod
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Contenu principal ({mode==='html' ? 'HTML' : 'Visuel (TinyMCE)'})</label>
-              {mode==='html' ? (
-                <textarea value={content.content_html || ''} onChange={(e)=> handleTextChange('content_html', e.target.value)} placeholder="Collez/éditez du HTML propre…" rows={18} className="flex-1 w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-mono" />
-              ) : (
-                <Editor
-                  apiKey={'mzqxfb4pdq9g24k0hq3vgfnp0nhqxt041fhp3jm10avytq1f'}
-                  tinymceScriptSrc={'https://cdn.tiny.cloud/1/mzqxfb4pdq9g24k0hq3vgfnp0nhqxt041fhp3jm10avytq1f/tinymce/6/tinymce.min.js'}
-                  value={content.content_html || ''}
-                  init={{
-                    height: 600,
-                    menubar: false,
-                    plugins: [
-                      'anchor','autolink','charmap','codesample','emoticons','link','lists','media','searchreplace','table','visualblocks','wordcount'
-                    ],
-                    toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline | alignleft aligncenter alignright | bullist numlist | link media table | code',
-                    paste_as_text: false,
-                    content_style: 'body { font-family:Inter,system-ui,Arial; line-height:1.7; }'
-                  }}
-                  onEditorChange={(newValue) => handleTextChange('content_html', newValue)}
-                />
-              )}
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Contenu principal (TinyMCE)</label>
+              <Editor
+                onInit={(_evt, editor) => { editorRef.current = editor; }}
+                apiKey={'mzqxfb4pdq9g24k0hq3vgfnp0nhqxt041fhp3jm10avytq1f'}
+                tinymceScriptSrc={'https://cdn.tiny.cloud/1/mzqxfb4pdq9g24k0hq3vgfnp0nhqxt041fhp3jm10avytq1f/tinymce/6/tinymce.min.js'}
+                value={content.content_html || ''}
+                init={{
+                  height: 600,
+                  menubar: false,
+                  plugins: [
+                    'anchor','autolink','charmap','codesample','emoticons','link','lists','media','searchreplace','table','visualblocks','wordcount','code'
+                  ],
+                  toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline | alignleft aligncenter alignright | bullist numlist | link media table | code',
+                  paste_as_text: false,
+                  content_style: 'body { font-family:Inter,system-ui,Arial; line-height:1.7; }'
+                }}
+                onEditorChange={(newValue) => handleTextChange('content_html', newValue)}
+              />
             </div>
 
             {/* Smart Suggestions */}
