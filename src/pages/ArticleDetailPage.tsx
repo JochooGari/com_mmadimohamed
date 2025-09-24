@@ -49,33 +49,35 @@ export default function ArticleDetailPage() {
   const jsonLd = [{ '@context': 'https://schema.org', '@type': 'BlogPosting', headline: article.title, description: article.excerpt, datePublished: article.published_at, image: article.cover_url, mainEntityOfPage: canonical }, { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [ { '@type': 'ListItem', position: 1, name: 'Accueil', item: `${import.meta.env.SITE_URL ?? ''}/` }, { '@type': 'ListItem', position: 2, name: 'Blog', item: `${import.meta.env.SITE_URL ?? ''}/blog` }, { '@type': 'ListItem', position: 3, name: article.title, item: canonical } ] }];
 
   return (
-    <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <section className="article-page container mx-auto px-4 py-10">
       <SEOHead title={article.title} description={article.excerpt} canonical={canonical} ogImage={article.cover_url} jsonLd={jsonLd} />
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <Breadcrumbs items={[{ label: 'Accueil', href: '/' }, { label: 'Blog', href: '/blog' }, { label: article.title }]} />
         <header className="mb-6">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 mb-3">{article.title}</h1>
           {article.excerpt && <p className="text-slate-600 text-lg">{article.excerpt}</p>}
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-8">
-            <article className="bg-white rounded-2xl border shadow-sm p-6 md:p-8 prose-headings:font-serif" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
-              {article.content_md && (/^\s*<[^>]+>/.test(article.content_md)
-                ? (
-                  <div
-                    className="prose prose-slate prose-lg md:prose-xl max-w-none prose-headings:font-semibold prose-a:text-teal-600 hover:prose-a:text-teal-700 prose-img:rounded-xl prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg"
-                    dangerouslySetInnerHTML={{ __html: article.content_md }}
-                  />
-                ) : (
-                  <div className="prose prose-slate prose-lg md:prose-xl max-w-none prose-headings:font-semibold prose-a:text-teal-600 hover:prose-a:text-teal-700 prose-img:rounded-xl">
-                    <MarkdownRenderer content={article.content_md} />
-                  </div>
-                )
-              )}
-            </article>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          <div className="lg:col-span-9">
+            <div className="content-wrapper neil-patel-style max-w-[800px] mx-auto">
+              <article>
+                {article.content_md && (/^\s*<[^>]+>/.test(article.content_md)
+                  ? (
+                    <div
+                      className="article-body"
+                      dangerouslySetInnerHTML={{ __html: article.content_md }}
+                    />
+                  ) : (
+                    <div className="article-body">
+                      <MarkdownRenderer content={article.content_md} />
+                    </div>
+                  )
+                )}
+              </article>
+            </div>
           </div>
-          <div className="lg:col-span-4">
+          <div className="lg:col-span-3">
             <SiteSidebar />
           </div>
         </div>
