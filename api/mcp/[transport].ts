@@ -164,5 +164,5 @@ Focus on actionable insights that can drive organic traffic and engagement.`
   }
 );
 
-// Export handlers for different HTTP methods
-export { handler as GET, handler as POST, handler as DELETE };
+// Export as default for Pages Router
+export default handler;
