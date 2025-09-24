@@ -12,10 +12,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { path } = req.query;
-    const fullPath = Array.isArray(path) ? path.join('/') : path || '';
+    const pathSegments = req.query.path as string[] | string | undefined;
+    const fullPath = Array.isArray(pathSegments)
+      ? pathSegments.join('/')
+      : pathSegments || '';
 
-    console.log('MCP Request:', req.method, fullPath, req.body);
+    console.log('MCP Request:', req.method, fullPath, req.query, req.body);
 
     // Handle different MCP endpoints
     switch (fullPath) {
