@@ -251,3 +251,49 @@ body {
   .cta-primary { width: 100%; text-align: center; }
   .modern-table { font-size: 14px; }
 }
+
+/* Neil-Patel-like clean article typography (without widening margins) */
+.neil-patel-style .article-body {
+  --np-maxw: 760px; /* reference only; not applied as hard max to keep width */
+  --np-pad-x: 20px;
+  --np-text: #111;
+  --np-muted: #666;
+  --np-bg: #fff;
+  --np-border: #eaeaea;
+  --np-accent: #f05a28;
+  --np-accent-dark: #d24e22;
+  --np-code-bg: #f6f8fa;
+  color: var(--np-text);
+}
+.neil-patel-style .article-body header { margin-bottom: 28px; }
+.neil-patel-style .article-body .meta { color: var(--np-muted); font-size: .95rem; }
+.neil-patel-style .article-body h1 { font-weight: 800; line-height: 1.15; margin: 0 0 12px; font-size: clamp(2rem, 4.5vw, 3rem); }
+.neil-patel-style .article-body h2 { font-weight: 800; line-height: 1.2; margin: 36px 0 12px; font-size: clamp(1.4rem, 2.5vw, 1.85rem); }
+.neil-patel-style .article-body h3 { font-weight: 700; line-height: 1.25; margin: 28px 0 8px; font-size: 1.2rem; }
+.neil-patel-style .article-body p { margin: 16px 0; }
+.neil-patel-style .article-body strong { font-weight: 800; }
+.neil-patel-style .article-body a { color: var(--np-accent); text-decoration: none; }
+.neil-patel-style .article-body a:hover { text-decoration: underline; }
+.neil-patel-style .article-body ul,
+.neil-patel-style .article-body ol { margin: 12px 0 16px 1.25rem; }
+.neil-patel-style .article-body li { margin: 6px 0; }
+.neil-patel-style .article-body figure { margin: 24px 0; }
+.neil-patel-style .article-body figure img { width: 100%; height: auto; display: block; border-radius: 8px; }
+.neil-patel-style .article-body figcaption { color: var(--np-muted); font-size: .9rem; margin-top: 6px; }
+.neil-patel-style .article-body blockquote { margin: 24px 0; padding: 18px 20px; border-left: 4px solid var(--np-accent); background: #fff7f3; border-radius: 8px; }
+.neil-patel-style .article-body .note,
+.neil-patel-style .article-body .cta { margin: 24px 0; padding: 18px 20px; border: 1px solid var(--np-border); border-radius: 12px; background: #fafafa; }
+.neil-patel-style .article-body .cta { border-color: var(--np-accent); background: linear-gradient(0deg, #fff, #fff6f2); }
+.neil-patel-style .article-body .cta .btn { display: inline-block; margin-top: 10px; padding: 12px 18px; border-radius: 999px; background: var(--np-accent); color: #fff; font-weight: 700; text-decoration: none; }
+.neil-patel-style .article-body .cta .btn:hover { background: var(--np-accent-dark); }
+.neil-patel-style .article-body code { background: var(--np-code-bg); padding: .15em .35em; border-radius: 6px; }
+.neil-patel-style .article-body pre { background: var(--np-code-bg); padding: 16px; border-radius: 10px; overflow: auto; }
+.neil-patel-style .article-body table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: .98rem; }
+.neil-patel-style .article-body th,
+.neil-patel-style .article-body td { border: 1px solid var(--np-border); padding: 12px 10px; text-align: left; }
+.neil-patel-style .article-body thead th { background: #fcfcfc; font-weight: 800; }
+.neil-patel-style .article-body tbody tr:nth-child(odd) { background: #fff; }
+.neil-patel-style .article-body .author { display: flex; gap: 14px; align-items: center; padding: 16px 0; border-top: 1px solid var(--np-border); border-bottom: 1px solid var(--np-border); margin: 28px 0; color: var(--np-muted); }
+.neil-patel-style .article-body .author img { width: 44px; height: 44px; border-radius: 50%; }
+.neil-patel-style .article-body .tags { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+.neil-patel-style .article-body .tag { font-size: .85rem; padding: 6px 10px; border: 1px solid var(--np-border); border-radius: 999px; color: var(--np-muted); }
