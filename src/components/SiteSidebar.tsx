@@ -63,65 +63,66 @@ export default function SiteSidebar() {
   })(); }, []);
 
   return (
-    <aside className="space-y-6 lg:sticky lg:top-24">
+    <aside className="space-y-8 lg:sticky lg:top-24">
       {/* Primary CTA */}
-      <div className="rounded-xl border bg-gradient-to-br from-teal-50 to-white p-5 shadow-sm">
-        <h3 className="text-xl font-semibold text-slate-900">{cfg.ctaPrimary?.title}</h3>
-        <p className="text-slate-600 mt-1">{cfg.ctaPrimary?.subtitle}</p>
-        <Link to={cfg.ctaPrimary?.buttonHref || '/contact'} className="mt-3 inline-flex items-center justify-center rounded-lg bg-teal-600 px-4 py-2 text-white hover:bg-teal-700">
+      <div className="rounded-xl border bg-gradient-to-br from-teal-50 to-white p-7 shadow-sm">
+        <h3 className="text-2xl font-semibold text-slate-900">{cfg.ctaPrimary?.title}</h3>
+        <p className="text-slate-600 mt-2 text-base">{cfg.ctaPrimary?.subtitle}</p>
+        <Link to={cfg.ctaPrimary?.buttonHref || '/contact'} className="mt-4 inline-flex items-center justify-center rounded-lg bg-teal-600 px-5 py-3 text-white text-base hover:bg-teal-700">
           {cfg.ctaPrimary?.buttonLabel}
         </Link>
       </div>
 
       {/* Lead magnet */}
-      <div className="rounded-xl border bg-white p-5 shadow-sm">
-        <h4 className="font-semibold text-slate-900">{cfg.leadMagnet?.title}</h4>
-        <p className="text-slate-600 text-sm mt-1">{cfg.leadMagnet?.subtitle}</p>
-        <div className="mt-3 flex gap-2">
-          <input type="email" placeholder={cfg.leadMagnet?.placeholder} className="flex-1 rounded-md border px-3 py-2 text-sm" />
-          <a href={cfg.leadMagnet?.href} className="rounded-md bg-slate-900 text-white px-3 py-2 text-sm hover:bg-slate-800">{cfg.leadMagnet?.buttonLabel}</a>
+      <div className="rounded-xl border bg-white p-7 shadow-sm">
+        <h4 className="font-semibold text-slate-900 text-xl">{cfg.leadMagnet?.title}</h4>
+        <p className="text-slate-600 text-base mt-2">{cfg.leadMagnet?.subtitle}</p>
+        <div className="mt-4 flex gap-3">
+          <input type="email" placeholder={cfg.leadMagnet?.placeholder} className="flex-1 rounded-md border px-4 py-3 text-base" />
+          <a href={cfg.leadMagnet?.href} className="rounded-md bg-slate-900 text-white px-4 py-3 text-base hover:bg-slate-800">{cfg.leadMagnet?.buttonLabel}</a>
         </div>
       </div>
 
       {/* About */}
-      <div className="rounded-xl border bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-3">
-          <img src={cfg.about?.avatarUrl} alt={cfg.about?.name} className="h-12 w-12 rounded-full object-cover" />
+      <div className="rounded-xl border bg-white p-7 shadow-sm">
+        <div className="flex items-center gap-4">
+          <img src={cfg.about?.avatarUrl} alt={cfg.about?.name} className="h-16 w-16 rounded-full object-cover" />
           <div>
-            <div className="font-semibold text-slate-900">{cfg.about?.name}</div>
-            <div className="text-sm text-slate-600">{cfg.about?.role}</div>
+            <div className="font-semibold text-slate-900 text-xl">{cfg.about?.name}</div>
+            <div className="text-base text-slate-600">{cfg.about?.role}</div>
           </div>
         </div>
-        <p className="text-sm text-slate-700 mt-3">{cfg.about?.bio}</p>
+        <p className="text-base text-slate-700 mt-4">{cfg.about?.bio}</p>
         {cfg.about?.links && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap gap-3">
             {cfg.about.links.map((l, i) => (
-              <a key={i} href={l.href} className="text-sm text-teal-700 hover:underline">{l.label}</a>
+              <a key={i} href={l.href} className="text-base text-teal-700 hover:underline">{l.label}</a>
             ))}
           </div>
         )}
       </div>
 
       {/* Case studies */}
-      <div className="rounded-xl border bg-white p-5 shadow-sm">
-        <h4 className="font-semibold text-slate-900">{cfg.caseStudies?.title}</h4>
-        <ul className="mt-2 space-y-2">
+      <div className="rounded-xl border bg-white p-7 shadow-sm">
+        <h4 className="font-semibold text-slate-900 text-xl">{cfg.caseStudies?.title}</h4>
+        <ul className="mt-3 space-y-3">
           {(cfg.caseStudies?.items || []).map((it, i) => (
-            <li key={i}><a className="text-sm text-slate-700 hover:text-teal-700 hover:underline" href={it.href}>{it.title}</a></li>
+            <li key={i}><a className="text-base text-slate-700 hover:text-teal-700 hover:underline" href={it.href}>{it.title}</a></li>
           ))}
         </ul>
       </div>
 
       {/* Traffic CTA */}
-      <div className="rounded-xl border bg-gradient-to-br from-orange-50 to-white p-5 shadow-sm">
-        <h4 className="font-semibold text-slate-900">{cfg.traffic?.title}</h4>
-        <p className="text-sm text-slate-700 mt-1">{cfg.traffic?.subtitle}</p>
-        <Link to={cfg.traffic?.buttonHref || '/contact'} className="mt-3 inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-white hover:bg-orange-700">
+      <div className="rounded-xl border bg-gradient-to-br from-orange-50 to-white p-7 shadow-sm">
+        <h4 className="font-semibold text-slate-900 text-xl">{cfg.traffic?.title}</h4>
+        <p className="text-base text-slate-700 mt-2">{cfg.traffic?.subtitle}</p>
+        <Link to={cfg.traffic?.buttonHref || '/contact'} className="mt-4 inline-flex items-center justify-center rounded-lg bg-orange-600 px-5 py-3 text-white text-base hover:bg-orange-700">
           {cfg.traffic?.buttonLabel}
         </Link>
       </div>
     </aside>
   );
 }
+
 
 
