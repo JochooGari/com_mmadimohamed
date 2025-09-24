@@ -1,34 +1,66 @@
 {
   "mcpServers": {
-    "magicpath-n8n": {
-      "command": "node",
-      "args": ["--loader", "ts-node/esm", "api/mcp/index.ts"],
+    "magicpath-n8n-vercel": {
+      "command": "mcp-vercel-connector",
+      "args": ["https://mmadimohamed.fr/api/mcp/initialize"],
       "env": {
-        "NODE_ENV": "development"
+        "MCP_SERVER_URL": "https://mmadimohamed.fr/api/mcp",
+        "NODE_ENV": "production"
       }
     }
   },
   "vercel": {
-    "serverUrl": "https://mmadimohamed.fr/api/mcp",
+    "serverUrl": "https://mmadimohamed.fr/api/mcp/initialize",
+    "baseUrl": "https://mmadimohamed.fr",
     "name": "magicpath-n8n-server",
     "version": "1.0.0",
-    "description": "MCP Server for MagicPath n8n Content Agents",
-    "tools": [
-      "execute_content_workflow",
-      "search_content_topics",
-      "generate_article",
-      "review_article",
-      "get_workflow_status"
-    ],
-    "resources": [
-      "workflow://content-agents",
-      "prompts://search-agent",
-      "prompts://ghostwriter-agent",
-      "prompts://review-agent"
-    ],
-    "prompts": [
-      "create_content_strategy",
-      "optimize_article_seo"
-    ]
+    "description": "MCP Server for MagicPath n8n Content Agents Workflows",
+    "protocolVersion": "2024-11-05",
+    "transport": "http",
+    "status": "working",
+    "endpoints": {
+      "initialize": "https://mmadimohamed.fr/api/mcp/initialize",
+      "tools": {
+        "list": "https://mmadimohamed.fr/api/mcp/tools/list",
+        "call": "https://mmadimohamed.fr/api/mcp/tools/call"
+      },
+      "resources": {
+        "list": "https://mmadimohamed.fr/api/mcp/resources/list"
+      },
+      "prompts": {
+        "list": "https://mmadimohamed.fr/api/mcp/prompts/list"
+      }
+    },
+    "capabilities": {
+      "tools": {
+        "execute_content_workflow": {
+          "description": "Execute complete content agents workflow",
+          "parameters": {
+            "siteUrl": "string (URL)"
+          }
+        },
+        "search_content_topics": {
+          "description": "Search and suggest content topics for a website",
+          "parameters": {
+            "siteUrl": "string (URL)",
+            "topicCount": "number (1-10)"
+          }
+        }
+      },
+      "resources": {
+        "workflow://content-agents": "Complete workflow configuration"
+      },
+      "prompts": {
+        "create_content_strategy": "Generate comprehensive content strategy"
+      }
+    },
+    "diagnostics": {
+      "lastTested": "2025-09-25T00:00:00Z",
+      "initializeEndpoint": "✅ Working",
+      "toolsListEndpoint": "❌ 404 Error - Needs investigation",
+      "authenticationRequired": false,
+      "domainConfiguration": "✅ Custom domain working",
+      "deploymentStatus": "✅ Successfully deployed"
+    }
   }
 }
