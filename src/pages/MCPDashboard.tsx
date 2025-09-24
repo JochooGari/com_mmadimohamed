@@ -13,7 +13,7 @@ import {
   Server,
   Play,
   Settings,
-  Tool,
+  Wrench,
   FileText,
   MessageSquare,
   CheckCircle,
@@ -199,7 +199,7 @@ export default function MCPDashboard() {
       <Tabs defaultValue="tools" className="space-y-6">
         <TabsList>
           <TabsTrigger value="tools" className="flex items-center gap-2">
-            <Tool className="w-4 h-4" />
+            <Wrench className="w-4 h-4" />
             Tools ({tools.length})
           </TabsTrigger>
           <TabsTrigger value="resources" className="flex items-center gap-2">
