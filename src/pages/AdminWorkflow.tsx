@@ -245,7 +245,9 @@ Mots-clés à optimiser : {keywords}`,
             agentId: step.nodeId,
             output: step.output,
             error: step.error,
-            duration: step.duration || 0
+            duration: step.duration || 0,
+            debug: step.debug || null,
+            completedAt: step.completedAt || null
           });
         });
 
@@ -473,6 +475,16 @@ Mots-clés à optimiser : {keywords}`,
                               {result.output}
                             </pre>
                           </ScrollArea>
+                        )}
+                        {result.debug && (
+                          <div className="mt-2">
+                            <div className="text-[11px] text-gray-500 mb-1">{result.debug.provider}/{result.debug.model}</div>
+                            <ScrollArea className="h-24">
+                              <pre className="text-[11px] whitespace-pre-wrap bg-white p-2 rounded border">
+                                {Array.isArray(result.debug.raw) ? result.debug.raw.join('\n\n---\n\n') : String(result.debug.raw)}
+                              </pre>
+                            </ScrollArea>
+                          </div>
                         )}
                       </div>
                     ))}

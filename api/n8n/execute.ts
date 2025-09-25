@@ -243,9 +243,20 @@ async function callProvider(provider: string, model: string, apiKey: string | un
 
 function extractJson(text: string): any {
   const t = (text || '').trim();
-  const m = t.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('No JSON block found');
-  return JSON.parse(m[0]);
+  // Prefer fenced code block first
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidates: string[] = [];
+  if (fence && fence[1]) candidates.push(fence[1].trim());
+  // Then try lazy curly matches (multiple)
+  const re = /\{[\s\S]*?\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(t)) !== null) {
+    candidates.push(m[0]);
+  }
+  for (const c of candidates) {
+    try { return JSON.parse(c); } catch {}
+  }
+  throw new Error('No JSON block found');
 }
 
 function tryExtractJson(text: string): any | null {
