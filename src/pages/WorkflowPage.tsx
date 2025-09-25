@@ -80,7 +80,7 @@ export default function WorkflowPage() {
       name: 'Agent Search Content',
       description: 'Analyse votre site et propose des sujets d\'articles ou utilise vos sujets personnalisés',
       provider: 'perplexity',
-      model: 'llama-3.1-sonar-large-128k-online',
+      model: 'sonar',
       temperature: 0.7,
       maxTokens: 2000,
       status: 'inactive',

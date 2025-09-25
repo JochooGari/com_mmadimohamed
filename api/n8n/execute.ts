@@ -183,17 +183,18 @@ async function callProvider(provider: string, model: string, apiKey: string | un
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   let url = '';
   let body: any = {};
+  const normalizedModel = normalizeModel(provider, model);
 
   if (provider === 'openai') {
-    const useResponses = /^(gpt-4o|o)/i.test(String(model));
+    const useResponses = /^(gpt-4o|o)/i.test(String(normalizedModel));
     headers.Authorization = `Bearer ${apiKey}`;
     if (useResponses) {
       url = 'https://api.openai.com/v1/responses';
       const input = messages.map((m:any)=> `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-      body = { model, input, temperature, max_completion_tokens: maxTokens };
+      body = { model: normalizedModel, input, temperature, max_completion_tokens: maxTokens };
     } else {
       url = 'https://api.openai.com/v1/chat/completions';
-      body = { model, messages, temperature, max_tokens: maxTokens };
+      body = { model: normalizedModel, messages, temperature, max_tokens: maxTokens };
     }
   } else if (provider === 'anthropic') {
     url = 'https://api.anthropic.com/v1/messages';
@@ -201,11 +202,11 @@ async function callProvider(provider: string, model: string, apiKey: string | un
     headers['anthropic-version'] = '2023-06-01';
     const system = messages.find(m=> m.role==='system')?.content;
     const convo = messages.filter(m=> m.role !== 'system');
-    body = { model, max_tokens: maxTokens, temperature, system, messages: convo };
+    body = { model: normalizedModel, max_tokens: maxTokens, temperature, system, messages: convo };
   } else if (provider === 'perplexity') {
     url = 'https://api.perplexity.ai/chat/completions';
     headers.Authorization = `Bearer ${apiKey}`;
-    body = { model, messages, temperature, max_tokens: maxTokens };
+    body = { model: normalizedModel, messages, temperature, max_tokens: maxTokens };
   } else {
     throw new Error(`Unknown provider ${provider}`);
   }
@@ -226,4 +227,15 @@ function extractJson(text: string): any {
   const m = t.match(/\{[\s\S]*\}/);
   if (!m) throw new Error('No JSON block found');
   return JSON.parse(m[0]);
+}
+
+function normalizeModel(provider: string, rawModel: string): string {
+  const m = String(rawModel || '').trim();
+  if (provider.toLowerCase() === 'perplexity') {
+    // Map legacy/verbose sonar model ids to supported ones
+    if (/large|pro/i.test(m)) return 'sonar-pro';
+    if (/sonar/i.test(m)) return 'sonar';
+    return 'sonar';
+  }
+  return m;
 }
