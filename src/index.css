@@ -161,10 +161,10 @@ body {
 }
 
 .neil-patel-style .article-body h1 {
-  font-size: 48px;
-  line-height: 1.1;
-  margin-bottom: 24px;
-  font-weight: 700;
+  font-size: clamp(2.4rem, 5vw, 3.5rem);
+  line-height: 1.12;
+  margin-bottom: 20px;
+  font-weight: 800;
 }
 
 .neil-patel-style .article-body h2 {
@@ -189,7 +189,7 @@ body {
 }
 
 .neil-patel-style .article-body a {
-  color: #0066cc;
+  color: var(--np-accent);
   text-decoration: none;
 }
 .neil-patel-style .article-body a:hover { text-decoration: underline; }
@@ -240,7 +240,7 @@ body {
 .checklist-item::before { content: "✓"; background: rgba(255,255,255,0.2); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-weight: bold; }
 
 /* Micro CTA */
-.micro-cta { display:inline-flex; align-items:center; gap:10px; padding:12px 14px; border-radius:12px; background:#f1f5f9; color:#0066cc; font-weight:600; transition:background .2s ease; }
+.micro-cta { display:inline-flex; align-items:center; gap:10px; padding:12px 14px; border-radius:12px; background:#f1f5f9; color:#044943; font-weight:600; transition:background .2s ease; }
 .micro-cta:hover { background:#e2e8f0; text-decoration:none; }
 .micro-cta .icon { font-size:18px; }
 
@@ -260,8 +260,8 @@ body {
   --np-muted: #666;
   --np-bg: #fff;
   --np-border: #eaeaea;
-  --np-accent: #f05a28;
-  --np-accent-dark: #d24e22;
+  --np-accent: #044943;
+  --np-accent-dark: #033a36;
   --np-code-bg: #f6f8fa;
   color: var(--np-text);
 }
@@ -286,6 +286,13 @@ body {
 .neil-patel-style .article-body .cta { border-color: var(--np-accent); background: linear-gradient(0deg, #fff, #fff6f2); }
 .neil-patel-style .article-body .cta .btn { display: inline-block; margin-top: 10px; padding: 12px 18px; border-radius: 999px; background: var(--np-accent); color: #fff; font-weight: 700; text-decoration: none; }
 .neil-patel-style .article-body .cta .btn:hover { background: var(--np-accent-dark); }
+.read-progress{ position:fixed; top:0; left:0; height:4px; width:0; background: var(--np-accent); z-index:9999 }
+
+/* TOC in black */
+.article-page .article-body nav.toc,
+.article-page .article-body .toc,
+.article-page .article-body .toc a,
+.article-page .article-body nav.toc a { color:#000 !important; }
 .neil-patel-style .article-body code { background: var(--np-code-bg); padding: .15em .35em; border-radius: 6px; }
 .neil-patel-style .article-body pre { background: var(--np-code-bg); padding: 16px; border-radius: 10px; overflow: auto; }
 .neil-patel-style .article-body table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: .98rem; }

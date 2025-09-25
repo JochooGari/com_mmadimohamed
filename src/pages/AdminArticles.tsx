@@ -84,6 +84,8 @@ export default function AdminArticles() {
   const [chatOpen, setChatOpen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type:'success'|'error'|'info'; text:string }|null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [lastPublishedAt, setLastPublishedAt] = useState<string | null>(null);
 
   // Ctrl+S to save
   useEffect(() => {
@@ -207,6 +209,7 @@ export default function AdminArticles() {
       const saved = await upsertArticleSupabase(article);
       if (saved?.id) article.id = saved.id;
       setSaveMsg({ type:'success', text:'Article sauvegardé.' });
+      setLastSavedAt(new Date().toISOString());
     } catch (e:any) { 
       setSaveMsg({ type:'error', text:'Erreur sauvegarde: ' + (e?.message||'unknown') });
     }
@@ -233,8 +236,11 @@ export default function AdminArticles() {
     };
     try { 
       setSaving(true); setSaveMsg({ type:'info', text:'Publication…' });
-      await upsertArticleSupabase(article);
+      const saved = await upsertArticleSupabase(article);
       setSaveMsg({ type:'success', text:'Article publié.' });
+      const nowIso = new Date().toISOString();
+      setLastSavedAt(nowIso);
+      setLastPublishedAt((saved as any)?.published_at || nowIso);
     } catch (e:any) { setSaveMsg({ type:'error', text:'Erreur publication: ' + (e?.message||'unknown') }); setSaving(false); return; }
     setSaving(false);
     setArticles(prev => [article, ...prev.filter(a => a.id !== article.id)]);
@@ -424,6 +430,15 @@ export default function AdminArticles() {
                     <Button size="sm" onClick={handlePublishArticle} className="bg-green-600 hover:bg-green-700" disabled={saving}>Publier</Button>
                     <Button size="sm" variant="outline" onClick={()=> setShowForm(false)}>Fermer</Button>
                   </div>
+                </div>
+                {/* Status line: last save / publish */}
+                <div className="px-4 pt-2 text-xs text-gray-500 flex items-center gap-4">
+                  {lastSavedAt && (
+                    <div>Dernière sauvegarde: {formatDate(lastSavedAt)}</div>
+                  )}
+                  {lastPublishedAt && (
+                    <div>Dernière publication: {formatDate(lastPublishedAt)}</div>
+                  )}
                 </div>
 
                 <CardHeader>

@@ -78,7 +78,7 @@ export default function ArticleDetailPage() {
       <div className="max-w-7xl mx-auto">
         <Breadcrumbs items={[{ label: 'Accueil', href: '/' }, { label: 'Blog', href: '/blog' }, { label: article.title }]} />
         <header className="mb-6">
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 mb-3">{article.title}</h1>
+          <h1 className="text-[42px] md:text-[56px] leading-tight font-extrabold tracking-tight text-[#111] mb-3">{article.title}</h1>
           {article.excerpt && <p className="text-slate-600 text-lg">{article.excerpt}</p>}
         </header>
 
