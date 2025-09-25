@@ -116,6 +116,7 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
       const provider = (cfg?.reviewerAgent?.provider || 'anthropic') as string;
       const model = cfg?.reviewerAgent?.model || 'claude-3-sonnet-20240229';
       const apiKey = cfg?.reviewerAgent?.apiKey || getEnvKey(provider);
+      const isClaude4 = /^claude[-_]?sonnet[-_]?4/i.test(String(model));
       const reviewMessages = [
         { role: 'user', content: `Analyse cet article et donne un score détaillé.\n\nRetourne UNIQUEMENT un JSON valide avec cette structure :\n{\n  "review": {\n    "globalScore": 85,\n    "detailedScores": {\n      "writing": 22,\n      "relevance": 18,\n      "seo": 17,\n      "geo": 13,\n      "structure": 13,\n      "engagement": 8,\n      "briefCompliance": 9\n    },\n    "strengths": ["Point fort 1", "Point fort 2"],\n    "improvements": ["Amélioration 1", "Amélioration 2"],\n    "recommendations": ["Recommandation 1", "Recommandation 2"],\n    "actions": ["Action 1", "Action 2"],\n    "targetScore": 95\n  }\n}\n\nArticle à analyser : ${JSON.stringify(article)}` }
       ];
@@ -124,8 +125,8 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
         model,
         apiKey,
         reviewMessages,
-        Number(cfg?.reviewerAgent?.temperature ?? 0.3),
-        Number(cfg?.reviewerAgent?.maxTokens ?? 2000)
+        Number(cfg?.reviewerAgent?.temperature ?? (isClaude4 ? 0.7 : 0.3)),
+        Number(cfg?.reviewerAgent?.maxTokens ?? (isClaude4 ? 8000 : 2000))
       );
       const json = extractJson(text);
       if (!json?.review) throw new Error('Réponse Reviewer invalide');
