@@ -12,12 +12,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const pathSegments = req.query.path as string[] | string | undefined;
-    const fullPath = Array.isArray(pathSegments)
+    // Debug: log the raw URL and query
+    console.log('Raw URL:', req.url);
+    console.log('Query object:', JSON.stringify(req.query, null, 2));
+
+    // Try to get path from query first
+    let pathSegments = req.query.path as string[] | string | undefined;
+    let fullPath = Array.isArray(pathSegments)
       ? pathSegments.join('/')
       : pathSegments || '';
 
-    console.log('MCP Request:', req.method, fullPath, req.query, req.body);
+    // Fallback: parse from URL if query.path is empty
+    if (!fullPath && req.url) {
+      const urlMatch = req.url.match(/\/api\/mcp\/(.+)/);
+      if (urlMatch && urlMatch[1]) {
+        fullPath = urlMatch[1].split('?')[0]; // Remove query params
+        console.log('Extracted path from URL:', fullPath);
+      }
+    }
+
+    // Additional debug
+    console.log('Path segments:', pathSegments);
+    console.log('Full path:', fullPath);
+    console.log('MCP Request:', req.method, fullPath);
 
     // Handle different MCP endpoints
     switch (fullPath) {
