@@ -71,12 +71,12 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
       );
       const json = extractJson(text);
       topics = json?.topics || [];
-      execution.steps.push({
-        nodeId: 'search-content',
-        status: 'completed',
+    execution.steps.push({
+      nodeId: 'search-content',
+      status: 'completed',
         output: { topics },
-        completedAt: new Date().toISOString()
-      });
+      completedAt: new Date().toISOString()
+    });
     }
 
     // Step 2: Agent Ghostwriting
@@ -191,7 +191,7 @@ async function callProvider(provider: string, model: string, apiKey: string | un
     if (useResponses) {
       url = 'https://api.openai.com/v1/responses';
       const input = messages.map((m:any)=> `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-      body = { model: normalizedModel, input, temperature, max_completion_tokens: maxTokens };
+      body = { model: normalizedModel, input, temperature, max_output_tokens: maxTokens };
     } else {
       url = 'https://api.openai.com/v1/chat/completions';
       body = { model: normalizedModel, messages, temperature, max_tokens: maxTokens };
