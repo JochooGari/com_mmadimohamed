@@ -55,6 +55,8 @@ interface WorkflowExecution {
     output?: string;
     error?: string;
     duration?: number;
+    debug?: any;
+    completedAt?: string | Date | null;
   }[];
 }
 
