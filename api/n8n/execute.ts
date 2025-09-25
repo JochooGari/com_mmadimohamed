@@ -43,6 +43,9 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
   };
 
   try {
+    // Load prompts saved from the admin UI
+    const prompts = await loadWorkflowPrompts().catch(() => ({} as any));
+
     // Step 1: Agent Search Content (can be skipped if custom topics provided)
     let topics: any[] = [];
     if (Array.isArray(data?.customTopics) && data.customTopics.length > 0) {
@@ -55,12 +58,13 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
       });
     } else {
       const provider = (cfg?.searchAgent?.provider || 'perplexity') as string;
-      const model = cfg?.searchAgent?.model || 'llama-3.1-sonar-large-128k-online';
+      const model = cfg?.searchAgent?.model || normalizedDefaultModel(provider);
       const apiKey = cfg?.searchAgent?.apiKey || getEnvKey(provider);
-      const searchMessages = [
-        { role: 'system', content: `Tu es un agent spécialisé dans l'analyse de contenu web et la proposition de sujets d'articles.\n\nAnalyse le site web fourni et propose 3-5 sujets d'articles pertinents.\n\nRetourne UNIQUEMENT un JSON valide avec cette structure :\n{\n  "topics": [\n    {\n      "title": "Titre suggéré",\n      "keywords": ["mot-clé1", "mot-clé2"],\n      "angle": "Description de l'angle",\n      "audience": "Description du public cible",\n      "sources": ["source1", "source2"]\n    }\n  ]\n}` },
-        { role: 'user', content: `Analyse le site ${data.siteUrl || 'https://www.mmadimohamed.fr/'} et propose des sujets d'articles.` }
-      ];
+      const searchPrompt = String(prompts?.['search-content']?.prompt || '').trim();
+      if (!searchPrompt) {
+        throw new Error("Prompt manquant pour l'agent Search Content. Veuillez le renseigner dans l'interface (Onglet Agents > Prompt).");
+      }
+      const searchMessages = [ { role: 'user', content: replaceVars(searchPrompt, { siteUrl: data.siteUrl || '' }) } ];
       const text = await callProvider(
         provider,
         model,
@@ -83,19 +87,20 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
     const articles: any[] = [];
     for (const topic of topics) {
       const provider = (cfg?.ghostwriterAgent?.provider || 'openai') as string;
-      const model = cfg?.ghostwriterAgent?.model || 'gpt-4o';
+      const model = cfg?.ghostwriterAgent?.model || normalizedDefaultModel(provider);
       const apiKey = cfg?.ghostwriterAgent?.apiKey || getEnvKey(provider);
-      const ghostMessages = [
-        { role: 'system', content: `Tu es un rédacteur expert. Rédige un article complet et optimisé SEO.\n\nRetourne UNIQUEMENT un JSON valide avec cette structure :\n{\n  "article": {\n    "title": "Titre H1",\n    "metaDescription": "Meta description SEO (150-160 caractères)",\n    "introduction": "Introduction engageante",\n    "content": "Corps de l'article en HTML avec balises H2, H3, p, ul, li",\n    "conclusion": "Conclusion avec call-to-action",\n    "images": ["suggestion1.jpg", "suggestion2.jpg"],\n    "wordCount": 1500\n  }\n}` },
-        { role: 'user', content: `Rédige un article basé sur ce sujet : ${JSON.stringify(topic)}` }
-      ];
+      const ghostPrompt = String(prompts?.['ghostwriter']?.prompt || '').trim();
+      if (!ghostPrompt) {
+        throw new Error("Prompt manquant pour l'agent Ghostwriter. Veuillez le renseigner dans l'interface (Onglet Agents > Prompt).");
+      }
+      const ghostMessages = [ { role: 'user', content: replaceVars(ghostPrompt, { topic: JSON.stringify(topic) }) } ];
       const text = await callProvider(
         provider,
         model,
         apiKey,
         ghostMessages,
         Number(cfg?.ghostwriterAgent?.temperature ?? 0.8),
-        Number(cfg?.ghostwriterAgent?.maxTokens ?? 4000)
+        Number(cfg?.ghostwriterAgent?.maxTokens ?? 8000)
       );
       const json = extractJson(text);
       if (!json?.article) throw new Error('Réponse Ghostwriter invalide');
@@ -114,12 +119,14 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
     const reviews: any[] = [];
     for (const article of articles) {
       const provider = (cfg?.reviewerAgent?.provider || 'anthropic') as string;
-      const model = cfg?.reviewerAgent?.model || 'claude-3-sonnet-20240229';
+      const model = cfg?.reviewerAgent?.model || normalizedDefaultModel(provider);
       const apiKey = cfg?.reviewerAgent?.apiKey || getEnvKey(provider);
       const isClaude4 = /^claude[-_]?sonnet[-_]?4/i.test(String(model));
-      const reviewMessages = [
-        { role: 'user', content: `Analyse cet article et donne un score détaillé.\n\nRetourne UNIQUEMENT un JSON valide avec cette structure :\n{\n  "review": {\n    "globalScore": 85,\n    "detailedScores": {\n      "writing": 22,\n      "relevance": 18,\n      "seo": 17,\n      "geo": 13,\n      "structure": 13,\n      "engagement": 8,\n      "briefCompliance": 9\n    },\n    "strengths": ["Point fort 1", "Point fort 2"],\n    "improvements": ["Amélioration 1", "Amélioration 2"],\n    "recommendations": ["Recommandation 1", "Recommandation 2"],\n    "actions": ["Action 1", "Action 2"],\n    "targetScore": 95\n  }\n}\n\nArticle à analyser : ${JSON.stringify(article)}` }
-      ];
+      const reviewPrompt = String(prompts?.['review-content']?.prompt || '').trim();
+      if (!reviewPrompt) {
+        throw new Error("Prompt manquant pour l'agent Reviewer. Veuillez le renseigner dans l'interface (Onglet Agents > Prompt).");
+      }
+      const reviewMessages = [ { role: 'user', content: replaceVars(reviewPrompt, { article: JSON.stringify(article) }) } ];
       const text = await callProvider(
         provider,
         model,
@@ -238,4 +245,28 @@ function normalizeModel(provider: string, rawModel: string): string {
     return 'sonar';
   }
   return m;
+}
+
+function normalizedDefaultModel(provider: string): string {
+  const p = (provider || '').toLowerCase();
+  if (p === 'perplexity') return 'sonar';
+  if (p === 'openai') return 'gpt-4o';
+  if (p === 'anthropic') return 'claude-3-sonnet-20240229';
+  return 'gpt-4o';
+}
+
+async function loadWorkflowPrompts(): Promise<Record<string, { prompt: string }>> {
+  const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
+  const url = `${base}/api/storage?agent=workflow&type=prompts`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Impossible de charger les prompts');
+  return r.json();
+}
+
+function replaceVars(template: string, vars: Record<string, string>): string {
+  let out = template;
+  Object.entries(vars).forEach(([k, v]) => {
+    out = out.replaceAll(`{${k}}`, v);
+  });
+  return out;
 }
