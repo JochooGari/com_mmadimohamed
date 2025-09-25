@@ -10,6 +10,7 @@ import { Textarea } from '../components/ui/textarea';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
 import { AI_PROVIDERS } from '../lib/aiProviders';
+import { Editor } from '@tinymce/tinymce-react';
 import {
   Play,
   Pause,
@@ -168,9 +169,15 @@ Mots-clés à optimiser : {keywords}`,
   const [siteUrl, setSiteUrl] = useState('https://magicpath.ai');
   const [activeTab, setActiveTab] = useState('workflow');
   const [editingAgent, setEditingAgent] = useState<string | null>(null);
+  const [finalArticle, setFinalArticle] = useState<{title: string; content: string} | null>(null);
 
-  // Lancer le workflow complet
+  // Lancer le workflow complet avec API réelle
   const handleLaunchWorkflow = async () => {
+    if (!siteUrl.trim()) {
+      alert('Veuillez saisir une URL de site web à analyser');
+      return;
+    }
+
     const execution: WorkflowExecution = {
       id: `exec-${Date.now()}`,
       status: 'running',
@@ -181,96 +188,90 @@ Mots-clés à optimiser : {keywords}`,
     setCurrentExecution(execution);
 
     try {
-      // Étape 1: Search Content
-      setAgents(prev => prev.map(a =>
-        a.id === 'search-content' ? {...a, status: 'running'} : a
-      ));
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const searchResult = {
-        agentId: 'search-content',
-        output: `Sujets suggérés pour ${siteUrl}:
-1. "Les 10 tendances IA à surveiller en 2025"
-2. "Comment automatiser votre workflow de contenu"
-3. "ROI des solutions IA pour PME"`,
-        duration: 2000
+      // Préparer la configuration des agents
+      const workflowConfig = {
+        agents: agents.map(agent => ({
+          id: agent.id,
+          provider: agent.provider,
+          model: agent.model,
+          systemPrompt: agent.systemPrompt,
+          userPrompt: agent.userPrompt,
+          contextPrompt: agent.contextPrompt
+        }))
       };
 
-      execution.results.push(searchResult);
+      // Appel à l'API réelle
+      setAgents(prev => prev.map(a => ({...a, status: 'running'})));
+
+      const response = await fetch('/api/n8n/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          workflowId: 'content-agents-workflow',
+          data: {
+            siteUrl,
+            config: workflowConfig
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erreur réseau inconnue' }));
+        throw new Error(`Erreur API (${response.status}): ${errorData.error || response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      // Traiter les résultats réels
+      if (result.steps && result.steps.length > 0) {
+        result.steps.forEach((step: any) => {
+          execution.results.push({
+            agentId: step.nodeId,
+            output: step.output,
+            error: step.error,
+            duration: step.duration || 0
+          });
+        });
+
+        execution.status = result.status === 'completed' ? 'completed' : 'failed';
+        execution.endTime = new Date();
+
+        // Extraire l'article final du dernier agent (reviewer)
+        const finalStep = result.steps[result.steps.length - 1];
+        if (finalStep && finalStep.output && execution.status === 'completed') {
+          // Tenter d'extraire le titre et le contenu
+          const content = finalStep.output;
+          let title = 'Article généré';
+
+          // Extraire le titre du markdown (première ligne # ou H1)
+          const titleMatch = content.match(/^#\s+(.+)$/m);
+          if (titleMatch) {
+            title = titleMatch[1];
+          }
+
+          setFinalArticle({ title, content });
+        }
+      } else {
+        throw new Error('Aucun résultat retourné par le workflow');
+      }
+
       setCurrentExecution({...execution});
+      setAgents(prev => prev.map(a => ({...a, status: 'active', lastRun: new Date()})));
 
-      setAgents(prev => prev.map(a =>
-        a.id === 'search-content' ? {...a, status: 'active', lastRun: new Date()} : a
-      ));
+    } catch (error: any) {
+      console.error('Erreur workflow:', error);
 
-      // Étape 2: Ghostwriter
-      setAgents(prev => prev.map(a =>
-        a.id === 'ghostwriter' ? {...a, status: 'running'} : a
-      ));
-
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      const ghostwriterResult = {
-        agentId: 'ghostwriter',
-        output: `Article rédigé: "Les 10 tendances IA à surveiller en 2025"
-
-# Les 10 tendances IA à surveiller en 2025
-
-L'intelligence artificielle continue sa révolution...
-
-## 1. L'IA générative devient mainstream
-## 2. Automatisation des workflows créatifs
-## 3. IA conversationnelle avancée
-
-[Article complet de 2000 mots...]`,
-        duration: 3000
-      };
-
-      execution.results.push(ghostwriterResult);
-      setCurrentExecution({...execution});
-
-      setAgents(prev => prev.map(a =>
-        a.id === 'ghostwriter' ? {...a, status: 'active', lastRun: new Date()} : a
-      ));
-
-      // Étape 3: Reviewer
-      setAgents(prev => prev.map(a =>
-        a.id === 'reviewer' ? {...a, status: 'running'} : a
-      ));
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const reviewResult = {
-        agentId: 'reviewer',
-        output: `Article révisé avec score qualité: 94/100
-
-Améliorations apportées:
-✅ Structure H1/H2/H3 optimisée
-✅ Mots-clés mieux intégrés
-✅ CTA renforcé
-✅ Lisibilité améliorée
-
-Article prêt pour publication!`,
-        duration: 2000
-      };
-
-      execution.results.push(reviewResult);
-
-      // Finalisation
-      execution.status = 'completed';
-      execution.endTime = new Date();
-      setCurrentExecution({...execution});
-
-      setAgents(prev => prev.map(a =>
-        a.id === 'reviewer' ? {...a, status: 'active', lastRun: new Date()} : a
-      ));
-
-    } catch (error) {
       execution.status = 'failed';
       execution.endTime = new Date();
-      setCurrentExecution({...execution});
+      execution.results.push({
+        agentId: 'error',
+        error: error.message || 'Erreur inconnue lors de l\'exécution du workflow',
+        duration: 0
+      });
 
+      setCurrentExecution({...execution});
       setAgents(prev => prev.map(a => ({...a, status: 'active'})));
     }
   };
@@ -407,18 +408,42 @@ Article prêt pour publication!`,
 
                   <div className="space-y-3">
                     {currentExecution.results.map((result, index) => (
-                      <div key={index} className="border-l-4 border-green-400 pl-4 py-2 bg-green-50 rounded-r">
+                      <div key={index} className={`border-l-4 pl-4 py-2 rounded-r ${
+                        result.error
+                          ? 'border-red-400 bg-red-50'
+                          : 'border-green-400 bg-green-50'
+                      }`}>
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-green-800">
-                            {agents.find(a => a.id === result.agentId)?.name}
+                          <h4 className={`font-medium ${
+                            result.error ? 'text-red-800' : 'text-green-800'
+                          }`}>
+                            {result.agentId === 'error' ? 'Erreur Workflow' :
+                             agents.find(a => a.id === result.agentId)?.name || result.agentId}
                           </h4>
-                          <span className="text-xs text-green-600">
-                            {result.duration}ms
-                          </span>
+                          <div className="flex items-center space-x-2">
+                            {result.error ? (
+                              <AlertCircle className="w-4 h-4 text-red-500" />
+                            ) : (
+                              <CheckCircle className="w-4 h-4 text-green-500" />
+                            )}
+                            <span className={`text-xs ${
+                              result.error ? 'text-red-600' : 'text-green-600'
+                            }`}>
+                              {result.duration || 0}ms
+                            </span>
+                          </div>
                         </div>
-                        <pre className="text-xs text-green-700 whitespace-pre-wrap">
-                          {result.output}
-                        </pre>
+                        {result.error ? (
+                          <div className="text-xs text-red-700 bg-red-100 p-2 rounded">
+                            <strong>Erreur:</strong> {result.error}
+                          </div>
+                        ) : (
+                          <ScrollArea className="h-24">
+                            <pre className="text-xs text-green-700 whitespace-pre-wrap">
+                              {result.output}
+                            </pre>
+                          </ScrollArea>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -601,48 +626,181 @@ Paramètre: {param}"
 
         {/* Onglet Résultats */}
         <TabsContent value="results" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <FileText className="w-5 h-5 mr-2 text-green-600" />
-                Derniers Articles Générés
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {currentExecution?.status === 'completed' ? (
-                <div className="space-y-4">
-                  {currentExecution.results.map((result, index) => (
-                    <div key={index} className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium">
-                          {agents.find(a => a.id === result.agentId)?.name}
-                        </h4>
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                      </div>
-                      <ScrollArea className="h-32">
-                        <pre className="text-sm text-gray-700 whitespace-pre-wrap">
-                          {result.output}
-                        </pre>
-                      </ScrollArea>
-                    </div>
-                  ))}
+          {finalArticle ? (
+            <div className="space-y-6">
+              {/* Titre de l'article */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <FileText className="w-5 h-5 mr-2 text-green-600" />
+                    Article Généré : {finalArticle.title}
+                  </CardTitle>
+                </CardHeader>
+              </Card>
 
-                  <div className="flex justify-center pt-4">
-                    <Button className="bg-teal-500 hover:bg-teal-600">
-                      <FileText className="w-4 h-4 mr-2" />
-                      Publier l'Article
+              {/* Preview TinyMCE */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Preview de l'Article</CardTitle>
+                    <div className="flex items-center space-x-2">
+                      <Badge className="bg-green-100 text-green-800">
+                        Prêt à publier
+                      </Badge>
+                      <Button
+                        size="sm"
+                        className="bg-teal-500 hover:bg-teal-600"
+                        onClick={() => {
+                          // TODO: Intégrer avec le système de publication
+                          alert('Fonctionnalité de publication à intégrer');
+                        }}
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        Publier
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Editor
+                      apiKey="your-tinymce-api-key" // Remplacez par votre clé TinyMCE
+                      value={finalArticle.content}
+                      onEditorChange={(content) => setFinalArticle(prev =>
+                        prev ? {...prev, content} : null
+                      )}
+                      init={{
+                        height: 500,
+                        menubar: false,
+                        plugins: [
+                          'advlist', 'autolink', 'lists', 'link', 'image', 'charmap',
+                          'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                          'insertdatetime', 'media', 'table', 'preview', 'help', 'wordcount'
+                        ],
+                        toolbar: 'undo redo | blocks | ' +
+                          'bold italic forecolor | alignleft aligncenter ' +
+                          'alignright alignjustify | bullist numlist outdent indent | ' +
+                          'removeformat | help',
+                        content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }',
+                        paste_as_text: false,
+                        paste_auto_cleanup_on_paste: true,
+                        convert_urls: false,
+                        relative_urls: false,
+                      }}
+                    />
+                  </div>
+
+                  {/* Statistiques de l'article */}
+                  <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
+                    <div className="flex items-center space-x-4">
+                      <span>
+                        Mots: {finalArticle.content.split(/\s+/).filter(w => w.length > 0).length}
+                      </span>
+                      <span>
+                        Caractères: {finalArticle.content.length}
+                      </span>
+                      <span>
+                        Temps de lecture: ~{Math.ceil(finalArticle.content.split(/\s+/).length / 200)} min
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="outline">Article SEO</Badge>
+                      <Badge variant="outline">IA Optimisé</Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Détails de l'exécution */}
+              {currentExecution && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Détails de Génération</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <Label className="text-gray-500">Durée totale</Label>
+                        <p className="font-medium">
+                          {currentExecution.endTime && currentExecution.startTime
+                            ? `${Math.round((currentExecution.endTime.getTime() - currentExecution.startTime.getTime()) / 1000)}s`
+                            : 'En cours...'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-gray-500">Agents utilisés</Label>
+                        <p className="font-medium">{currentExecution.results.length} agents</p>
+                      </div>
+                      <div>
+                        <Label className="text-gray-500">Statut</Label>
+                        <Badge className={`${getStatusBadgeColor(currentExecution.status)}`}>
+                          {currentExecution.status === 'completed' ? 'Terminé' :
+                           currentExecution.status === 'running' ? 'En cours' : 'Échec'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          ) : currentExecution?.status === 'failed' ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-red-600">
+                  <AlertCircle className="w-5 h-5 mr-2" />
+                  Erreur de Génération d'Article
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <h4 className="font-medium text-red-800 mb-2">Le workflow a échoué</h4>
+                  {currentExecution.results.map((result, index) => (
+                    result.error && (
+                      <div key={index} className="text-sm text-red-700 mb-2">
+                        <strong>{result.agentId === 'error' ? 'Erreur générale' :
+                                agents.find(a => a.id === result.agentId)?.name}:</strong> {result.error}
+                      </div>
+                    )
+                  ))}
+                  <div className="mt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setCurrentExecution(null);
+                        setFinalArticle(null);
+                      }}
+                      className="text-red-600 border-red-300 hover:bg-red-50"
+                    >
+                      Réessayer
                     </Button>
                   </div>
                 </div>
-              ) : (
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <FileText className="w-5 h-5 mr-2 text-gray-400" />
+                  Aucun Article Généré
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div className="text-center py-8 text-gray-500">
                   <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>Aucun article généré récemment</p>
-                  <p className="text-sm">Lancez le workflow pour voir les résultats ici</p>
+                  <p className="text-lg font-medium mb-2">Aucun article généré récemment</p>
+                  <p className="text-sm mb-6">Lancez le workflow pour générer un article avec vos agents IA</p>
+                  <Button
+                    onClick={() => setActiveTab('workflow')}
+                    className="bg-teal-500 hover:bg-teal-600"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    Lancer le Workflow
+                  </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>

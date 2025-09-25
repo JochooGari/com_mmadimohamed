@@ -88,28 +88,56 @@ GET  /api/n8n/workflows           - ✅ Workflows n8n
 POST /api/n8n/execute             - ✅ Exécution n8n
 ```
 
-### **4. Outils MCP disponibles**
+### **4. Workflow de Génération d'Articles - Configuration Complète**
+
+#### **🎯 Pipeline de 3 Agents IA :**
+
+**Agent Search Content** (Perplexity sonar-pro)
+- **Rôle** : Analyse de site web et suggestion de sujets
+- **Prompts** : Système + Utilisateur + Contexte (3 étapes)
+- **Variables** : `{siteUrl}`, `{industry}`, `{audience}`, `{goals}`
+
+**Agent Ghostwriter** (OpenAI GPT-5)
+- **Rôle** : Rédaction d'articles SEO optimisés
+- **Prompts** : 3 étapes avec variables dynamiques
+- **Variables** : `{contentBrief}`, `{audience}`, `{keywords}`, `{conversionGoal}`
+
+**Agent Reviewer** (Anthropic Claude-3-Opus)
+- **Rôle** : Révision et amélioration qualité
+- **Prompts** : 3 étapes avec scoring qualité
+- **Variables** : `{article}`, `{keywords}`, score cible 90/100
+
+#### **📋 Interface Admin/Workflow**
+```
+Onglets :
+├── Workflow     → Pipeline visuel + Bouton "Lancer le Workflow"
+├── Agents       → Configuration IA (Provider/Modèle/Prompts)
+└── Résultats    → Preview TinyMCE + Articles générés
+```
+
+#### **⚙️ Providers IA Configurables**
 ```json
 {
-  "tools": [
-    {
-      "name": "execute_content_workflow",
-      "description": "Execute the complete content agents workflow (Search + Ghostwriting + Review)",
-      "inputSchema": {
-        "siteUrl": "string (required)",
-        "default": "https://magicpath.ai"
-      }
-    },
-    {
-      "name": "search_content_topics",
-      "description": "Use Agent Search Content to analyze a website and suggest article topics",
-      "inputSchema": {
-        "siteUrl": "string (required)",
-        "topicCount": "number (1-10, default: 5)"
-      }
-    }
-  ]
+  "openai": ["gpt-5", "gpt-4-turbo", "gpt-4", "gpt-4o"],
+  "anthropic": ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku"],
+  "perplexity": ["sonar", "sonar-pro", "llama-3.1-sonar-small-128k-online"],
+  "google": ["gemini-pro", "gemini-pro-vision"],
+  "mistral": ["mistral-large", "mistral-medium", "mistral-small"]
 }
+```
+
+#### **🔗 API Endpoints Workflow**
+```
+POST /api/n8n/execute
+- workflowId: "content-agents-workflow"
+- data: { siteUrl, agents, prompts }
+
+GET /api/n8n/workflows
+- Liste des workflows disponibles
+
+POST /api/mcp/tools/call
+- name: "execute_content_workflow"
+- arguments: { siteUrl, config }
 ```
 
 ### **5. Tests à effectuer**
