@@ -174,6 +174,19 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
   });
   const [isAddingTopic, setIsAddingTopic] = useState(false);
 
+  // Load persisted prompts
+  useEffect(() => { (async () => {
+    try {
+      const r = await fetch('/api/storage?agent=workflow&type=prompts');
+      if (r.ok) {
+        const data = await r.json();
+        if (data && typeof data === 'object') {
+          setAgents(prev => prev.map(a => ({ ...a, prompt: data[a.id]?.prompt ?? a.prompt })));
+        }
+      }
+    } catch {}
+  })(); }, []);
+
   // Validate configuration
   const validateConfig = (): boolean => {
     const errors: string[] = [];
@@ -304,11 +317,15 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
 
   const handleSavePrompt = () => {
     if (selectedAgent) {
-      setAgents(prev => prev.map(agent =>
+      const updated = agents.map(agent =>
         agent.id === selectedAgent.id
           ? { ...agent, prompt: tempPrompt }
-          : agent
-      ));
+          : agent);
+      setAgents(updated);
+      // persist prompts mapping { [agentId]: { prompt } }
+      const mapping: Record<string, { prompt: string }> = {};
+      updated.forEach(a => { mapping[a.id] = { prompt: a.prompt || '' }; });
+      fetch('/api/storage', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'save_workflow_prompts', data: mapping }) }).catch(()=>{});
       setEditingPrompt(false);
       setSelectedAgent(null);
     }

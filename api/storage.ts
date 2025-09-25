@@ -170,6 +170,9 @@ async function handlePost(req: any, res: any, action: string, agentType: string,
     case 'save_site_theme':
       return await saveSiteTheme(res, data);
 
+    case 'save_workflow_prompts':
+      return await saveWorkflowPrompts(res, data);
+
     case 'save_css_templates':
       return await saveCssTemplates(res, data);
 
@@ -252,6 +255,17 @@ async function saveSiteTheme(res: any, payload: any) {
   await fs.promises.writeFile(filePath, css, 'utf8');
   try { await putObject('agents', `site/inputs/theme.css`, css, 'text/css'); } catch {}
   return res.json({ success: true, bytes: css.length, savedAt: new Date().toISOString() });
+}
+
+async function saveWorkflowPrompts(res: any, payload: any) {
+  // payload is an object: { [agentId]: { prompt: string } }
+  const agentPath = path.join(DATA_DIR, 'agents', 'workflow', 'inputs');
+  const filePath = path.join(agentPath, 'prompts.json');
+  await ensureDirectoryExists(agentPath);
+  const text = JSON.stringify(payload || {}, null, 2);
+  await fs.promises.writeFile(filePath, text, 'utf8');
+  try { await putObject('agents', `workflow/inputs/prompts.json`, text, 'application/json'); } catch {}
+  return res.json({ success: true, savedAt: new Date().toISOString() });
 }
 
 async function saveCssTemplates(res: any, templates: any[]) {
