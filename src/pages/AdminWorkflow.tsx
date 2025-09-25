@@ -28,6 +28,7 @@ import {
   Brain,
   Target
 } from 'lucide-react';
+import { Alert, AlertDescription } from '../components/ui/alert';
 
 interface WorkflowAgent {
   id: string;
@@ -170,6 +171,9 @@ Mots-clés à optimiser : {keywords}`,
   const [activeTab, setActiveTab] = useState('workflow');
   const [editingAgent, setEditingAgent] = useState<string | null>(null);
   const [finalArticle, setFinalArticle] = useState<{title: string; content: string} | null>(null);
+  // Sujets personnalisés
+  const [customTopics, setCustomTopics] = useState<{ title:string; keywords:string[]; angle:string; audience:string }[]>([]);
+  const [newTopic, setNewTopic] = useState<{ title:string; keywords:string[]; angle:string; audience:string }>({ title:'', keywords:[], angle:'', audience:'' });
 
   // Lancer le workflow complet avec API réelle
   const handleLaunchWorkflow = async () => {
@@ -189,15 +193,13 @@ Mots-clés à optimiser : {keywords}`,
 
     try {
       // Préparer la configuration des agents
+      const searchA = agents.find(a=> a.id==='search-content');
+      const ghostA = agents.find(a=> a.id==='ghostwriter');
+      const reviewA = agents.find(a=> a.id==='reviewer');
       const workflowConfig = {
-        agents: agents.map(agent => ({
-          id: agent.id,
-          provider: agent.provider,
-          model: agent.model,
-          systemPrompt: agent.systemPrompt,
-          userPrompt: agent.userPrompt,
-          contextPrompt: agent.contextPrompt
-        }))
+        searchAgent: { provider: searchA?.provider, model: searchA?.model },
+        ghostwriterAgent: { provider: ghostA?.provider, model: ghostA?.model },
+        reviewerAgent: { provider: reviewA?.provider, model: reviewA?.model }
       };
 
       // Appel à l'API réelle
@@ -212,8 +214,9 @@ Mots-clés à optimiser : {keywords}`,
           workflowId: 'content-agents-workflow',
           data: {
             siteUrl,
-            config: workflowConfig
-          }
+            customTopics: customTopics.length ? customTopics : undefined
+          },
+          config: workflowConfig
         })
       });
 
@@ -337,8 +340,9 @@ Mots-clés à optimiser : {keywords}`,
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="workflow">Workflow</TabsTrigger>
+          <TabsTrigger value="topics">Idées de textes</TabsTrigger>
           <TabsTrigger value="agents">Agents</TabsTrigger>
           <TabsTrigger value="results">Résultats</TabsTrigger>
         </TabsList>
@@ -451,6 +455,63 @@ Mots-clés à optimiser : {keywords}`,
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Onglet Idées de textes */}
+        <TabsContent value="topics" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Vos sujets personnalisés</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {customTopics.length === 0 && (
+                <Alert>
+                  <AlertDescription>
+                    Ajoutez ici vos idées (titre, mots-clés, angle, audience). Si vide, l'agent analysera votre site pour proposer des sujets.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {customTopics.length > 0 && (
+                <div className="space-y-2">
+                  {customTopics.map((t, i)=> (
+                    <div key={i} className="flex items-center justify-between border rounded p-3">
+                      <div>
+                        <div className="font-medium">{t.title}</div>
+                        <div className="text-xs text-gray-600">{t.keywords.join(', ')} • {t.audience}</div>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={()=> setCustomTopics(prev=> prev.filter((_,idx)=> idx!==i))}><Trash2 className="w-4 h-4" /></Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <Label>Titre</Label>
+                  <Input value={newTopic.title} onChange={e=> setNewTopic({...newTopic, title:e.target.value})} placeholder="Ex: Étude de cas CFO" />
+                </div>
+                <div>
+                  <Label>Mots-clés (séparés par des virgules)</Label>
+                  <Input value={newTopic.keywords.join(', ')} onChange={e=> setNewTopic({...newTopic, keywords: e.target.value.split(',').map(x=> x.trim()).filter(Boolean)})} placeholder="cfo, power bi, automatisation" />
+                </div>
+                <div>
+                  <Label>Angle</Label>
+                  <Input value={newTopic.angle} onChange={e=> setNewTopic({...newTopic, angle:e.target.value})} placeholder="Guide pratique / ROI / Benchmark" />
+                </div>
+                <div>
+                  <Label>Audience</Label>
+                  <Input value={newTopic.audience} onChange={e=> setNewTopic({...newTopic, audience:e.target.value})} placeholder="DAF, CFO, PME" />
+                </div>
+              </div>
+              <div>
+                <Button onClick={()=> {
+                  if (!newTopic.title.trim()) return;
+                  setCustomTopics(prev=> [...prev, { ...newTopic }]);
+                  setNewTopic({ title:'', keywords:[], angle:'', audience:'' });
+                }}>Ajouter</Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Onglet Agents */}
