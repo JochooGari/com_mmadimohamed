@@ -54,12 +54,16 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
         completedAt: new Date().toISOString()
       });
     } else {
-      const searchResult = await executeSearchContent(
-        data.siteUrl || 'https://www.mmadimohamed.fr/',
-        cfg?.searchAgent?.model || 'llama-3.1-sonar-large-128k-online',
-        cfg?.searchAgent?.apiKey || process.env.PERPLEXITY_API_KEY
-      );
-      topics = searchResult.topics || [];
+      const provider = (cfg?.searchAgent?.provider || 'perplexity') as string;
+      const model = cfg?.searchAgent?.model || 'llama-3.1-sonar-large-128k-online';
+      const apiKey = cfg?.searchAgent?.apiKey || getEnvKey(provider);
+      const searchMessages = [
+        { role: 'system', content: `Tu es un agent spécialisé dans l'analyse de contenu web et la proposition de sujets d'articles.\n\nAnalyse le site web fourni et propose 3-5 sujets d'articles pertinents.\n\nRetourne UNIQUEMENT un JSON valide avec cette structure :\n{\n  "topics": [\n    {\n      "title": "Titre suggéré",\n      "keywords": ["mot-clé1", "mot-clé2"],\n      "angle": "Description de l'angle",\n      "audience": "Description du public cible",\n      "sources": ["source1", "source2"]\n    }\n  ]\n}` },
+        { role: 'user', content: `Analyse le site ${data.siteUrl || 'https://www.mmadimohamed.fr/'} et propose des sujets d'articles.` }
+      ];
+      const text = await callProvider(provider, model, apiKey, searchMessages, 0.7, 2000);
+      const json = extractJson(text);
+      topics = json?.topics || [];
       execution.steps.push({
         nodeId: 'search-content',
         status: 'completed',
@@ -71,11 +75,17 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
     // Step 2: Agent Ghostwriting
     const articles: any[] = [];
     for (const topic of topics) {
-      const article = await executeGhostwriting(
-        topic,
-        cfg?.ghostwriterAgent?.model || 'gpt-4',
-        cfg?.ghostwriterAgent?.apiKey || process.env.OPENAI_API_KEY
-      );
+      const provider = (cfg?.ghostwriterAgent?.provider || 'openai') as string;
+      const model = cfg?.ghostwriterAgent?.model || 'gpt-4o';
+      const apiKey = cfg?.ghostwriterAgent?.apiKey || getEnvKey(provider);
+      const ghostMessages = [
+        { role: 'system', content: `Tu es un rédacteur expert. Rédige un article complet et optimisé SEO.\n\nRetourne UNIQUEMENT un JSON valide avec cette structure :\n{\n  "article": {\n    "title": "Titre H1",\n    "metaDescription": "Meta description SEO (150-160 caractères)",\n    "introduction": "Introduction engageante",\n    "content": "Corps de l'article en HTML avec balises H2, H3, p, ul, li",\n    "conclusion": "Conclusion avec call-to-action",\n    "images": ["suggestion1.jpg", "suggestion2.jpg"],\n    "wordCount": 1500\n  }\n}` },
+        { role: 'user', content: `Rédige un article basé sur ce sujet : ${JSON.stringify(topic)}` }
+      ];
+      const text = await callProvider(provider, model, apiKey, ghostMessages, 0.8, 4000);
+      const json = extractJson(text);
+      if (!json?.article) throw new Error('Réponse Ghostwriter invalide');
+      const article = json.article;
       articles.push(article);
     }
 
@@ -89,11 +99,16 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
     // Step 3: Agent Review Content
     const reviews: any[] = [];
     for (const article of articles) {
-      const review = await executeReviewContent(
-        article,
-        cfg?.reviewerAgent?.model || 'claude-3-sonnet-20240229',
-        cfg?.reviewerAgent?.apiKey || process.env.ANTHROPIC_API_KEY
-      );
+      const provider = (cfg?.reviewerAgent?.provider || 'anthropic') as string;
+      const model = cfg?.reviewerAgent?.model || 'claude-3-sonnet-20240229';
+      const apiKey = cfg?.reviewerAgent?.apiKey || getEnvKey(provider);
+      const reviewMessages = [
+        { role: 'user', content: `Analyse cet article et donne un score détaillé.\n\nRetourne UNIQUEMENT un JSON valide avec cette structure :\n{\n  "review": {\n    "globalScore": 85,\n    "detailedScores": {\n      "writing": 22,\n      "relevance": 18,\n      "seo": 17,\n      "geo": 13,\n      "structure": 13,\n      "engagement": 8,\n      "briefCompliance": 9\n    },\n    "strengths": ["Point fort 1", "Point fort 2"],\n    "improvements": ["Amélioration 1", "Amélioration 2"],\n    "recommendations": ["Recommandation 1", "Recommandation 2"],\n    "actions": ["Action 1", "Action 2"],\n    "targetScore": 95\n  }\n}\n\nArticle à analyser : ${JSON.stringify(article)}` }
+      ];
+      const text = await callProvider(provider, model, apiKey, reviewMessages, 0.3, 2000);
+      const json = extractJson(text);
+      if (!json?.review) throw new Error('Réponse Reviewer invalide');
+      const review = json.review;
       reviews.push(review);
     }
 
@@ -131,198 +146,55 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
   }
 }
 
-async function executeSearchContent(siteUrl: string, model: string, apiKey?: string) {
-  const perplexityKey = apiKey || process.env.PERPLEXITY_API_KEY;
-
-  if (!perplexityKey) {
-    throw new Error('PERPLEXITY_API_KEY not configured');
-  }
-
-  const response = await fetch('https://api.perplexity.ai/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${perplexityKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: `Tu es un agent spécialisé dans l'analyse de contenu web et la proposition de sujets d'articles.
-
-Analyse le site web fourni et propose 3-5 sujets d'articles pertinents.
-
-Retourne UNIQUEMENT un JSON valide avec cette structure :
-{
-  "topics": [
-    {
-      "title": "Titre suggéré",
-      "keywords": ["mot-clé1", "mot-clé2"],
-      "angle": "Description de l'angle",
-      "audience": "Description du public cible",
-      "sources": ["source1", "source2"]
-    }
-  ]
-}`
-        },
-        {
-          role: 'user',
-          content: `Analyse le site ${siteUrl} et propose des sujets d'articles.`
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`Perplexity API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices[0].message.content;
-
-  // Extract JSON from response
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-  } catch (e) {
-    console.error('JSON parsing error:', e);
-  }
-
-  throw new Error('Perplexity response did not contain valid JSON topics');
-}
-
-async function executeGhostwriting(topic: any, model: string, apiKey?: string) {
-  const openaiKey = apiKey || process.env.OPENAI_API_KEY;
-
-  if (!openaiKey) {
-    throw new Error('OPENAI_API_KEY not configured');
-  }
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${openaiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: `Tu es un rédacteur expert. Rédige un article complet et optimisé SEO.
-
-Retourne UNIQUEMENT un JSON valide avec cette structure :
-{
-  "article": {
-    "title": "Titre H1",
-    "metaDescription": "Meta description SEO (150-160 caractères)",
-    "introduction": "Introduction engageante",
-    "content": "Corps de l'article en HTML avec balises H2, H3, p, ul, li",
-    "conclusion": "Conclusion avec call-to-action",
-    "images": ["suggestion1.jpg", "suggestion2.jpg"],
-    "wordCount": 1500
-  }
-}`
-        },
-        {
-          role: 'user',
-          content: `Rédige un article basé sur ce sujet : ${JSON.stringify(topic)}`
-        }
-      ],
-      temperature: 0.8,
-      max_tokens: 4000
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices[0].message.content;
-
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return parsed.article;
-    }
-  } catch (e) {
-    console.error('JSON parsing error:', e);
-  }
-
-  throw new Error('OpenAI response did not contain valid JSON article');
-}
-
-async function executeReviewContent(article: any, model: string, apiKey?: string) {
-  const anthropicKey = apiKey || process.env.ANTHROPIC_API_KEY;
-
-  if (!anthropicKey) {
-    throw new Error('ANTHROPIC_API_KEY not configured');
-  }
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': anthropicKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 2000,
-      messages: [
-        {
-          role: 'user',
-          content: `Analyse cet article et donne un score détaillé.
-
-Retourne UNIQUEMENT un JSON valide avec cette structure :
-{
-  "review": {
-    "globalScore": 85,
-    "detailedScores": {
-      "writing": 22,
-      "relevance": 18,
-      "seo": 17,
-      "structure": 13,
-      "engagement": 8,
-      "briefCompliance": 9
-    },
-    "strengths": ["Point fort 1", "Point fort 2"],
-    "improvements": ["Amélioration 1", "Amélioration 2"],
-    "recommendations": ["Recommandation 1", "Recommandation 2"],
-    "actions": ["Action 1", "Action 2"],
-    "targetScore": 95
+// Helpers
+function getEnvKey(provider: string | undefined): string | undefined {
+  switch ((provider || '').toLowerCase()) {
+    case 'openai': return process.env.OPENAI_API_KEY;
+    case 'anthropic': return process.env.ANTHROPIC_API_KEY;
+    case 'perplexity': return process.env.PERPLEXITY_API_KEY;
+    default: return undefined;
   }
 }
 
-Article à analyser : ${JSON.stringify(article)}`
-        }
-      ]
-    })
-  });
+async function callProvider(provider: string, model: string, apiKey: string | undefined, messages: any[], temperature = 0.3, maxTokens = 1000): Promise<string> {
+  if (!apiKey) throw new Error(`${provider} API key not configured`);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  let url = '';
+  let body: any = {};
 
-  if (!response.ok) {
-    throw new Error(`Anthropic API error: ${response.statusText}`);
+  if (provider === 'openai') {
+    url = 'https://api.openai.com/v1/chat/completions';
+    headers.Authorization = `Bearer ${apiKey}`;
+    body = { model, messages, temperature, max_tokens: maxTokens };
+  } else if (provider === 'anthropic') {
+    url = 'https://api.anthropic.com/v1/messages';
+    headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+    const system = messages.find(m=> m.role==='system')?.content;
+    const convo = messages.filter(m=> m.role !== 'system');
+    body = { model, max_tokens: maxTokens, temperature, system, messages: convo };
+  } else if (provider === 'perplexity') {
+    url = 'https://api.perplexity.ai/chat/completions';
+    headers.Authorization = `Bearer ${apiKey}`;
+    body = { model, messages, temperature, max_tokens: maxTokens };
+  } else {
+    throw new Error(`Unknown provider ${provider}`);
   }
 
-  const data = await response.json();
-  const content = data.content[0].text;
+  const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(`${provider} API error: ${d?.error?.message || r.statusText}`);
 
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return parsed.review;
-    }
-  } catch (e) {
-    console.error('JSON parsing error:', e);
+  // Normalize
+  if (provider === 'anthropic') {
+    return d?.content?.[0]?.text || '';
   }
+  return d?.choices?.[0]?.message?.content || '';
+}
 
-  throw new Error('Anthropic response did not contain valid JSON review');
+function extractJson(text: string): any {
+  const t = (text || '').trim();
+  const m = t.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('No JSON block found');
+  return JSON.parse(m[0]);
 }

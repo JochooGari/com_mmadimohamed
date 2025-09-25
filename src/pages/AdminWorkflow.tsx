@@ -101,7 +101,7 @@ Objectifs marketing : {goals}`,
       description: 'Rédige des articles optimisés SEO basés sur les briefs',
       status: 'active',
       provider: 'openai',
-      model: 'gpt-5',
+      model: 'gpt-4o',
       systemPrompt: `Tu es un ghostwriter expert en création de contenu web de haute qualité.
 
 Tes spécialités :
