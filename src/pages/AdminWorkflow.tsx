@@ -172,6 +172,16 @@ Mots-clés à optimiser : {keywords}`,
   const [activeTab, setActiveTab] = useState('workflow');
   const [editingAgent, setEditingAgent] = useState<string | null>(null);
   const [finalArticle, setFinalArticle] = useState<{title: string; content: string} | null>(null);
+  // Load persisted prompts for admin workflow too
+  useEffect(() => { (async () => {
+    try {
+      const r = await fetch('/api/storage?agent=workflow&type=prompts');
+      if (r.ok) {
+        const data = await r.json();
+        setAgents(prev => prev.map(a => ({ ...a, userPrompt: data?.[a.id]?.prompt ?? a.userPrompt })));
+      }
+    } catch {}
+  })(); }, []);
   // Sujets personnalisés
   const [customTopics, setCustomTopics] = useState<{ title:string; keywords:string[]; angle:string; audience:string }[]>([]);
   const [newTopic, setNewTopic] = useState<{ title:string; keywords:string[]; angle:string; audience:string }>({ title:'', keywords:[], angle:'', audience:'' });
@@ -285,6 +295,21 @@ Mots-clés à optimiser : {keywords}`,
     setAgents(prev => prev.map(agent =>
       agent.id === agentId ? {...agent, ...updates} : agent
     ));
+  };
+
+  const saveAllPrompts = async () => {
+    const mapping: Record<string, { prompt: string }> = {};
+    agents.forEach(a => { mapping[a.id] = { prompt: a.userPrompt || '' }; });
+    await fetch('/api/storage', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'save_workflow_prompts', data: mapping }) }).catch(()=>{});
+  };
+
+  const loadAllPrompts = async () => {
+    try {
+      const r = await fetch('/api/storage?agent=workflow&type=prompts');
+      if (!r.ok) return;
+      const data = await r.json();
+      setAgents(prev => prev.map(a => ({ ...a, userPrompt: data?.[a.id]?.prompt ?? a.userPrompt })));
+    } catch {}
   };
 
   const getStatusBadgeColor = (status: string) => {
@@ -517,6 +542,10 @@ Mots-clés à optimiser : {keywords}`,
 
         {/* Onglet Agents */}
         <TabsContent value="agents" className="space-y-6">
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={loadAllPrompts}>Charger prompts sauvegardés</Button>
+            <Button variant="outline" size="sm" onClick={saveAllPrompts}>Sauvegarder tous les prompts</Button>
+          </div>
           <div className="grid gap-6">
             {agents.map((agent) => (
               <Card key={agent.id}>
@@ -664,7 +693,7 @@ Paramètre: {param}"
                           Annuler
                         </Button>
                         <Button
-                          onClick={() => setEditingAgent(null)}
+                          onClick={() => { setEditingAgent(null); saveAllPrompts(); }}
                           className="bg-teal-500 hover:bg-teal-600"
                         >
                           <Save className="w-4 h-4 mr-2" />
