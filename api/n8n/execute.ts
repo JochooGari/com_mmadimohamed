@@ -102,9 +102,14 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
         Number(cfg?.ghostwriterAgent?.temperature ?? 0.8),
         Number(cfg?.ghostwriterAgent?.maxTokens ?? 8000)
       );
-      const json = extractJson(text);
-      if (!json?.article) throw new Error('Réponse Ghostwriter invalide');
-      const article = json.article;
+      // Accept either strict JSON or free-form content
+      const json = tryExtractJson(text);
+      let article: any;
+      if (json?.article) {
+        article = json.article;
+      } else {
+        article = buildArticleFromText(text);
+      }
       articles.push(article);
     }
 
@@ -234,6 +239,36 @@ function extractJson(text: string): any {
   const m = t.match(/\{[\s\S]*\}/);
   if (!m) throw new Error('No JSON block found');
   return JSON.parse(m[0]);
+}
+
+function tryExtractJson(text: string): any | null {
+  try { return extractJson(text); } catch { return null; }
+}
+
+function buildArticleFromText(text: string) {
+  const t = (text || '').trim();
+  // Try to extract title from HTML H1 or markdown H1
+  let title = '';
+  const h1 = t.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  if (h1 && h1[1]) {
+    title = h1[1].replace(/<[^>]+>/g, '').trim();
+  }
+  if (!title) {
+    const md = t.match(/^#\s+(.+)$/m);
+    if (md && md[1]) title = md[1].trim();
+  }
+  if (!title) {
+    // fallback first non-empty line
+    const first = t.split(/\n+/).find(l => l.trim().length > 0) || '';
+    title = first.replace(/^#+\s*/, '').slice(0, 120) || 'Article';
+  }
+  return {
+    title,
+    metaDescription: '',
+    introduction: '',
+    content: t,
+    conclusion: ''
+  };
 }
 
 function normalizeModel(provider: string, rawModel: string): string {
