@@ -226,7 +226,8 @@ export default function AdminArticles() {
               title: draft.title || '',
               slug: draft.slug || '',
               excerpt: draft.excerpt || '',
-              content_md: draft.content || ''
+              content_md: draft.content || '',
+              content_html: draft.content || '' // Assurez-vous que le contenu HTML est aussi passé
             }}
             onSave={(content) => {
               setDraft(d => ({

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 
 // Execute workflow via direct AI API calls
@@ -19,10 +20,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { workflowId, data } = req.body;
+    const { workflowId, data, config } = req.body;
 
     if (workflowId === 'content-agents-workflow') {
-      return await executeContentAgentsWorkflow(req, res, data);
+      return await executeContentAgentsWorkflow(req, res, data, config);
     }
 
     return res.status(404).json({ error: 'Workflow not found' });
@@ -32,29 +33,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiResponse, data: any) {
-  const execution = {
+async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiResponse, data: any, cfg: any) {
+  const execution: any = {
     id: `exec-${Date.now()}`,
     workflowId: 'content-agents-workflow',
     status: 'running',
     startedAt: new Date().toISOString(),
-    steps: []
+    steps: [] as any[]
   };
 
   try {
-    // Step 1: Agent Search Content (Perplexity)
-    const searchResult = await executeSearchContent(data.siteUrl || 'https://magicpath.ai');
-    execution.steps.push({
-      nodeId: 'search-content',
-      status: 'completed',
-      output: searchResult,
-      completedAt: new Date().toISOString()
-    });
+    // Step 1: Agent Search Content (can be skipped if custom topics provided)
+    let topics: any[] = [];
+    if (Array.isArray(data?.customTopics) && data.customTopics.length > 0) {
+      topics = data.customTopics;
+      execution.steps.push({
+        nodeId: 'search-content',
+        status: 'completed',
+        output: { topics },
+        completedAt: new Date().toISOString()
+      });
+    } else {
+      const searchResult = await executeSearchContent(
+        data.siteUrl || 'https://www.mmadimohamed.fr/',
+        cfg?.searchAgent?.model || 'llama-3.1-sonar-large-128k-online',
+        cfg?.searchAgent?.apiKey || process.env.PERPLEXITY_API_KEY
+      );
+      topics = searchResult.topics || [];
+      execution.steps.push({
+        nodeId: 'search-content',
+        status: 'completed',
+        output: { topics },
+        completedAt: new Date().toISOString()
+      });
+    }
 
-    // Step 2: Agent Ghostwriting (GPT-4)
-    const articles = [];
-    for (const topic of searchResult.topics) {
-      const article = await executeGhostwriting(topic);
+    // Step 2: Agent Ghostwriting
+    const articles: any[] = [];
+    for (const topic of topics) {
+      const article = await executeGhostwriting(
+        topic,
+        cfg?.ghostwriterAgent?.model || 'gpt-4',
+        cfg?.ghostwriterAgent?.apiKey || process.env.OPENAI_API_KEY
+      );
       articles.push(article);
     }
 
@@ -65,10 +86,14 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
       completedAt: new Date().toISOString()
     });
 
-    // Step 3: Agent Review Content (Claude-3)
-    const reviews = [];
+    // Step 3: Agent Review Content
+    const reviews: any[] = [];
     for (const article of articles) {
-      const review = await executeReviewContent(article);
+      const review = await executeReviewContent(
+        article,
+        cfg?.reviewerAgent?.model || 'claude-3-sonnet-20240229',
+        cfg?.reviewerAgent?.apiKey || process.env.ANTHROPIC_API_KEY
+      );
       reviews.push(review);
     }
 
@@ -85,9 +110,13 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
       status: 'completed',
       finishedAt: new Date().toISOString(),
       output: {
-        topics: searchResult.topics,
+        topics,
         articles,
-        reviews
+        reviews,
+        summary: {
+          totalArticles: articles.length,
+          averageIterations: 1
+        }
       }
     };
 
@@ -102,8 +131,8 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
   }
 }
 
-async function executeSearchContent(siteUrl: string) {
-  const perplexityKey = process.env.PERPLEXITY_API_KEY;
+async function executeSearchContent(siteUrl: string, model: string, apiKey?: string) {
+  const perplexityKey = apiKey || process.env.PERPLEXITY_API_KEY;
 
   if (!perplexityKey) {
     throw new Error('PERPLEXITY_API_KEY not configured');
@@ -116,7 +145,7 @@ async function executeSearchContent(siteUrl: string) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'llama-3.1-sonar-large-128k-online',
+      model,
       messages: [
         {
           role: 'system',
@@ -164,29 +193,11 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
     console.error('JSON parsing error:', e);
   }
 
-  // Fallback topics if parsing fails
-  return {
-    topics: [
-      {
-        title: "L'avenir de l'Intelligence Artificielle dans les entreprises",
-        keywords: ["IA", "entreprise", "automation"],
-        angle: "Guide pratique pour les dirigeants",
-        audience: "Entrepreneurs et dirigeants",
-        sources: ["Études McKinsey", "Harvard Business Review"]
-      },
-      {
-        title: "Optimiser sa productivité avec les outils IA",
-        keywords: ["productivité", "outils", "IA"],
-        angle: "Comparatif et recommandations",
-        audience: "Professionnels et freelances",
-        sources: ["Tests utilisateurs", "Benchmarks"]
-      }
-    ]
-  };
+  throw new Error('Perplexity response did not contain valid JSON topics');
 }
 
-async function executeGhostwriting(topic: any) {
-  const openaiKey = process.env.OPENAI_API_KEY;
+async function executeGhostwriting(topic: any, model: string, apiKey?: string) {
+  const openaiKey = apiKey || process.env.OPENAI_API_KEY;
 
   if (!openaiKey) {
     throw new Error('OPENAI_API_KEY not configured');
@@ -199,7 +210,7 @@ async function executeGhostwriting(topic: any) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'gpt-4',
+      model,
       messages: [
         {
           role: 'system',
@@ -245,20 +256,11 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
     console.error('JSON parsing error:', e);
   }
 
-  // Fallback article
-  return {
-    title: topic.title,
-    metaDescription: `Découvrez ${topic.title.toLowerCase()} - Guide complet et conseils pratiques.`,
-    introduction: `Dans cet article, nous explorons ${topic.title.toLowerCase()} pour vous aider à mieux comprendre ce sujet crucial.`,
-    content: `<h2>Introduction</h2><p>Le sujet de ${topic.title.toLowerCase()} est devenu incontournable...</p><h2>Points clés</h2><ul><li>Point important 1</li><li>Point important 2</li></ul>`,
-    conclusion: "En conclusion, ce sujet mérite votre attention. Contactez-nous pour en savoir plus.",
-    images: ["article-image-1.jpg", "article-image-2.jpg"],
-    wordCount: 800
-  };
+  throw new Error('OpenAI response did not contain valid JSON article');
 }
 
-async function executeReviewContent(article: any) {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+async function executeReviewContent(article: any, model: string, apiKey?: string) {
+  const anthropicKey = apiKey || process.env.ANTHROPIC_API_KEY;
 
   if (!anthropicKey) {
     throw new Error('ANTHROPIC_API_KEY not configured');
@@ -272,7 +274,7 @@ async function executeReviewContent(article: any) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'claude-3-sonnet-20240229',
+      model,
       max_tokens: 2000,
       messages: [
         {
@@ -322,21 +324,5 @@ Article à analyser : ${JSON.stringify(article)}`
     console.error('JSON parsing error:', e);
   }
 
-  // Fallback review
-  return {
-    globalScore: 75,
-    detailedScores: {
-      writing: 18,
-      relevance: 16,
-      seo: 15,
-      structure: 12,
-      engagement: 7,
-      briefCompliance: 7
-    },
-    strengths: ["Structure claire", "Contenu informatif"],
-    improvements: ["Améliorer l'engagement", "Optimiser le SEO"],
-    recommendations: ["Ajouter plus d'exemples", "Inclure des statistiques"],
-    actions: ["Réécrire l'introduction", "Ajouter des sous-titres"],
-    targetScore: 90
-  };
+  throw new Error('Anthropic response did not contain valid JSON review');
 }

@@ -10,7 +10,7 @@ import Insights from './RightPanel/Insights';
 
 interface EnhancedEditorLayoutProps {
   articleId?: string;
-  initialContent?: { title?: string; slug?: string; excerpt?: string; content_md?: string; };
+  initialContent?: { title?: string; slug?: string; excerpt?: string; content_md?: string; content_html?: string; };
   onSave?: (content: any) => void;
   onSaveAction?: (content: any) => void | Promise<void>;
   onPublishAction?: (content: any) => void | Promise<void>;
@@ -23,7 +23,7 @@ export default function EnhancedEditorLayout({ articleId, initialContent, onSave
   const [settings, setSettings] = useState<EditorSettings>({ focusMode: false, zenMode: false, darkMode: false, leftPanelVisible: true, rightPanelVisible: true });
   const [activeRightTab, setActiveRightTab] = useState<'ai' | 'seo' | 'geo' | 'insights'>('ai');
   const [editorMode, setEditorMode] = useState<'visual'|'html'>('visual');
-  const [content, setContent] = useState({ title: initialContent?.title || '', slug: initialContent?.slug || '', excerpt: initialContent?.excerpt || '', content_md: initialContent?.content_md || '', content_html: '' as string, keywords: [] as string[], seoScore: 0, geoScore: 0 });
+  const [content, setContent] = useState({ title: initialContent?.title || '', slug: initialContent?.slug || '', excerpt: initialContent?.excerpt || '', content_md: initialContent?.content_md || '', content_html: (initialContent as any)?.content_html || initialContent?.content_md || '', keywords: [] as string[], seoScore: 0, geoScore: 0 });
   const [htmlSnippet, setHtmlSnippet] = useState<string>('');
   const [showHtmlPreview, setShowHtmlPreview] = useState<boolean>(false);
   const [showHtmlPanel, setShowHtmlPanel] = useState<boolean>(false);
