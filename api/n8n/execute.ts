@@ -78,13 +78,15 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
     execution.steps.push({
       nodeId: 'search-content',
       status: 'completed',
-        output: { topics },
+      output: { topics },
+      debug: { provider, model, raw: String(text).slice(0, 2000) },
       completedAt: new Date().toISOString()
     });
     }
 
     // Step 2: Agent Ghostwriting
     const articles: any[] = [];
+    const ghostDebug: string[] = [];
     for (const topic of topics) {
       const provider = (cfg?.ghostwriterAgent?.provider || 'openai') as string;
       const model = cfg?.ghostwriterAgent?.model || normalizedDefaultModel(provider);
@@ -102,6 +104,7 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
         Number(cfg?.ghostwriterAgent?.temperature ?? 0.8),
         Number(cfg?.ghostwriterAgent?.maxTokens ?? 8000)
       );
+      ghostDebug.push(String(text).slice(0, 2000));
       // Accept either strict JSON or free-form content
       const json = tryExtractJson(text);
       let article: any;
@@ -117,11 +120,13 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
       nodeId: 'ghostwriter',
       status: 'completed',
       output: { articles },
+      debug: { provider: (cfg?.ghostwriterAgent?.provider || 'openai'), model: (cfg?.ghostwriterAgent?.model || normalizedDefaultModel(cfg?.ghostwriterAgent?.provider || 'openai')), raw: ghostDebug },
       completedAt: new Date().toISOString()
     });
 
     // Step 3: Agent Review Content
     const reviews: any[] = [];
+    const reviewDebug: string[] = [];
     for (const article of articles) {
       const provider = (cfg?.reviewerAgent?.provider || 'anthropic') as string;
       const model = cfg?.reviewerAgent?.model || normalizedDefaultModel(provider);
@@ -140,6 +145,7 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
         Number(cfg?.reviewerAgent?.temperature ?? (isClaude4 ? 0.7 : 0.3)),
         Number(cfg?.reviewerAgent?.maxTokens ?? (isClaude4 ? 8000 : 2000))
       );
+      reviewDebug.push(String(text).slice(0, 2000));
       const json = extractJson(text);
       if (!json?.review) throw new Error('Réponse Reviewer invalide');
       const review = json.review;
@@ -150,6 +156,7 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
       nodeId: 'review-content',
       status: 'completed',
       output: { reviews },
+      debug: { provider: (cfg?.reviewerAgent?.provider || 'anthropic'), model: (cfg?.reviewerAgent?.model || normalizedDefaultModel(cfg?.reviewerAgent?.provider || 'anthropic')), raw: reviewDebug },
       completedAt: new Date().toISOString()
     });
 

@@ -785,16 +785,24 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
                         {execution.steps.length > 0 && (
                           <div className="mt-3 space-y-2">
                             <h4 className="font-medium text-sm">Étapes :</h4>
-                            {execution.steps.map((step, index) => (
-                              <div key={index} className="text-xs bg-muted p-2 rounded">
+                          {execution.steps.map((step, index) => (
+                            <div key={index} className="text-xs bg-muted p-2 rounded space-y-1">
+                              <div>
                                 <strong>{step.nodeId}:</strong> {step.status}
                                 {step.completedAt && (
-                                  <span className="ml-2 text-muted-foreground">
-                                    ({new Date(step.completedAt).toLocaleTimeString()})
-                                  </span>
+                                  <span className="ml-2 text-muted-foreground">({new Date(step.completedAt).toLocaleTimeString()})</span>
+                                )}
+                                {step.debug && (
+                                  <span className="ml-2 text-muted-foreground">[{step.debug.provider}/{step.debug.model}]</span>
                                 )}
                               </div>
-                            ))}
+                              {step.debug?.raw && (
+                                <pre className="whitespace-pre-wrap bg-white p-2 rounded border max-h-48 overflow-auto">
+                                  {Array.isArray(step.debug.raw) ? step.debug.raw.join('\n\n---\n\n') : step.debug.raw}
+                                </pre>
+                              )}
+                            </div>
+                          ))}
                           </div>
                         )}
 
