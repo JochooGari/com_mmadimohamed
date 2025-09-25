@@ -57,7 +57,7 @@ Critères de sélection :
 - Potentiel SEO
 - Intérêt pour l'audience
 - Faisabilité de rédaction`,
-      model: 'perplexity',
+      model: 'sonar',
       successRate: 87
     },
     {
