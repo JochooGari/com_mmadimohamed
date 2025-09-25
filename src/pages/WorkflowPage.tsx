@@ -339,6 +339,21 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
     ));
   };
 
+  const saveAllPrompts = async () => {
+    const mapping: Record<string, { prompt: string }> = {};
+    agents.forEach(a => { mapping[a.id] = { prompt: a.prompt || '' }; });
+    await fetch('/api/storage', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'save_workflow_prompts', data: mapping }) }).catch(()=>{});
+  };
+
+  const loadAllPrompts = async () => {
+    try {
+      const r = await fetch('/api/storage?agent=workflow&type=prompts');
+      if (!r.ok) return;
+      const data = await r.json();
+      setAgents(prev => prev.map(a => ({ ...a, prompt: data?.[a.id]?.prompt ?? a.prompt })));
+    } catch {}
+  };
+
   const handleAddCustomTopic = () => {
     if (newTopic.title.trim()) {
       setCustomTopics(prev => [...prev, { ...newTopic }]);
@@ -641,6 +656,10 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
         </TabsContent>
 
         <TabsContent value="agents" className="space-y-4">
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={loadAllPrompts}>Charger prompts sauvegardés</Button>
+            <Button variant="outline" size="sm" onClick={saveAllPrompts}>Sauvegarder tous les prompts</Button>
+          </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {agents.map((agent) => (
               <Card key={agent.id} className="relative">
