@@ -78,6 +78,20 @@ export default async function handler(req: any, res: any) {
 }
 
 async function handleGet(req: any, res: any, agent: string, type: string) {
+  // Special case: site theme CSS
+  if (agent === 'site' && type === 'theme') {
+    try {
+      const text = await getObjectText('agents', 'site/inputs/theme.css');
+      if (text) return res.status(200).send(text);
+    } catch {}
+    try {
+      const cssPath = path.join(DATA_DIR, 'agents', 'site', 'inputs', 'theme.css');
+      const text = await fs.promises.readFile(cssPath, 'utf8');
+      return res.status(200).send(text);
+    } catch {
+      return res.status(200).send('');
+    }
+  }
   if (agent === 'monitoring' && type === 'stats') {
     // Récupérer les stats de monitoring
     const indexFile = path.join(DATA_DIR, 'monitoring', 'monitoring_index.json');
@@ -136,6 +150,9 @@ async function handlePost(req: any, res: any, action: string, agentType: string,
 
     case 'save_site_sidebar':
       return await saveSiteSidebar(res, data);
+    
+    case 'save_site_theme':
+      return await saveSiteTheme(res, data);
     
     case 'create_structure':
       return await createDirectoryStructure(res);
@@ -206,6 +223,16 @@ async function saveSiteSidebar(res: any, payload: any) {
   await fs.promises.writeFile(filePath, JSON.stringify(payload, null, 2));
   try { await putObject('agents', `site/inputs/sidebar.json`, JSON.stringify(payload, null, 2), 'application/json'); } catch {}
   return res.json({ success: true });
+}
+
+async function saveSiteTheme(res: any, payload: any) {
+  const css: string = String(payload?.css || '');
+  const agentPath = path.join(DATA_DIR, 'agents', 'site', 'inputs');
+  const filePath = path.join(agentPath, 'theme.css');
+  await ensureDirectoryExists(agentPath);
+  await fs.promises.writeFile(filePath, css, 'utf8');
+  try { await putObject('agents', `site/inputs/theme.css`, css, 'text/css'); } catch {}
+  return res.json({ success: true, bytes: css.length, savedAt: new Date().toISOString() });
 }
 
 async function saveMonitoring(res: any, content: any) {
