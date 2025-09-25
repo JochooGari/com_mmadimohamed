@@ -18,6 +18,8 @@ interface WorkflowAgent {
   description: string;
   provider: 'perplexity' | 'openai' | 'anthropic';
   model: string;
+  temperature?: number;
+  maxTokens?: number;
   status: 'active' | 'inactive';
   prompt: string;
   lastRun?: Date;
@@ -79,6 +81,8 @@ export default function WorkflowPage() {
       description: 'Analyse votre site et propose des sujets d\'articles ou utilise vos sujets personnalisés',
       provider: 'perplexity',
       model: 'llama-3.1-sonar-large-128k-online',
+      temperature: 0.7,
+      maxTokens: 2000,
       status: 'inactive',
       prompt: `Tu es un agent spécialisé dans l'analyse de contenu web et la proposition de sujets d'articles.
 
@@ -102,7 +106,9 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
       name: 'Agent Ghostwriter',
       description: 'Rédige des articles complets et optimisés SEO',
       provider: 'openai',
-      model: 'gpt-4',
+      model: 'gpt-4o',
+      temperature: 0.8,
+      maxTokens: 4000,
       status: 'inactive',
       prompt: `Tu es un rédacteur expert. Rédige un article complet et optimisé SEO.
 
@@ -125,6 +131,8 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
       description: 'Analyse les articles et donne des scores SEO/GEO avec recommandations',
       provider: 'anthropic',
       model: 'claude-3-sonnet-20240229',
+      temperature: 0.3,
+      maxTokens: 2000,
       status: 'inactive',
       prompt: `Analyse cet article et donne un score détaillé.
 
@@ -210,16 +218,22 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
       searchAgent: {
         provider: agents.find(a => a.id === 'search-content')?.provider || 'perplexity',
         model: agents.find(a => a.id === 'search-content')?.model || 'llama-3.1-sonar-large-128k-online',
+        temperature: agents.find(a => a.id === 'search-content')?.temperature,
+        maxTokens: agents.find(a => a.id === 'search-content')?.maxTokens,
         apiKey: config.apiKeys.perplexity
       },
       ghostwriterAgent: {
         provider: agents.find(a => a.id === 'ghostwriter')?.provider || 'openai',
-        model: agents.find(a => a.id === 'ghostwriter')?.model || 'gpt-4',
+        model: agents.find(a => a.id === 'ghostwriter')?.model || 'gpt-4o',
+        temperature: agents.find(a => a.id === 'ghostwriter')?.temperature,
+        maxTokens: agents.find(a => a.id === 'ghostwriter')?.maxTokens,
         apiKey: config.apiKeys.openai
       },
       reviewerAgent: {
         provider: agents.find(a => a.id === 'review-content')?.provider || 'anthropic',
         model: agents.find(a => a.id === 'review-content')?.model || 'claude-3-sonnet-20240229',
+        temperature: agents.find(a => a.id === 'review-content')?.temperature,
+        maxTokens: agents.find(a => a.id === 'review-content')?.maxTokens,
         apiKey: config.apiKeys.anthropic
       },
       targetScores: config.targetScores,
@@ -652,6 +666,27 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
                         onChange={(e) => handleUpdateAgent(agent.id, { model: e.target.value })}
                         placeholder="Nom du modèle"
                       />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label>Température</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={agent.temperature ?? ''}
+                          onChange={(e)=> handleUpdateAgent(agent.id, { temperature: Number(e.target.value) })}
+                          placeholder="0.7"
+                        />
+                      </div>
+                      <div>
+                        <Label>Tokens max</Label>
+                        <Input
+                          type="number"
+                          value={agent.maxTokens ?? ''}
+                          onChange={(e)=> handleUpdateAgent(agent.id, { maxTokens: Number(e.target.value) })}
+                          placeholder="2000"
+                        />
+                      </div>
                     </div>
                     <div className="flex gap-2 mt-4">
                       <Button

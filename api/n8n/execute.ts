@@ -61,7 +61,14 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
         { role: 'system', content: `Tu es un agent spécialisé dans l'analyse de contenu web et la proposition de sujets d'articles.\n\nAnalyse le site web fourni et propose 3-5 sujets d'articles pertinents.\n\nRetourne UNIQUEMENT un JSON valide avec cette structure :\n{\n  "topics": [\n    {\n      "title": "Titre suggéré",\n      "keywords": ["mot-clé1", "mot-clé2"],\n      "angle": "Description de l'angle",\n      "audience": "Description du public cible",\n      "sources": ["source1", "source2"]\n    }\n  ]\n}` },
         { role: 'user', content: `Analyse le site ${data.siteUrl || 'https://www.mmadimohamed.fr/'} et propose des sujets d'articles.` }
       ];
-      const text = await callProvider(provider, model, apiKey, searchMessages, 0.7, 2000);
+      const text = await callProvider(
+        provider,
+        model,
+        apiKey,
+        searchMessages,
+        Number(cfg?.searchAgent?.temperature ?? 0.7),
+        Number(cfg?.searchAgent?.maxTokens ?? 2000)
+      );
       const json = extractJson(text);
       topics = json?.topics || [];
       execution.steps.push({
@@ -82,7 +89,14 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
         { role: 'system', content: `Tu es un rédacteur expert. Rédige un article complet et optimisé SEO.\n\nRetourne UNIQUEMENT un JSON valide avec cette structure :\n{\n  "article": {\n    "title": "Titre H1",\n    "metaDescription": "Meta description SEO (150-160 caractères)",\n    "introduction": "Introduction engageante",\n    "content": "Corps de l'article en HTML avec balises H2, H3, p, ul, li",\n    "conclusion": "Conclusion avec call-to-action",\n    "images": ["suggestion1.jpg", "suggestion2.jpg"],\n    "wordCount": 1500\n  }\n}` },
         { role: 'user', content: `Rédige un article basé sur ce sujet : ${JSON.stringify(topic)}` }
       ];
-      const text = await callProvider(provider, model, apiKey, ghostMessages, 0.8, 4000);
+      const text = await callProvider(
+        provider,
+        model,
+        apiKey,
+        ghostMessages,
+        Number(cfg?.ghostwriterAgent?.temperature ?? 0.8),
+        Number(cfg?.ghostwriterAgent?.maxTokens ?? 4000)
+      );
       const json = extractJson(text);
       if (!json?.article) throw new Error('Réponse Ghostwriter invalide');
       const article = json.article;
@@ -105,7 +119,14 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
       const reviewMessages = [
         { role: 'user', content: `Analyse cet article et donne un score détaillé.\n\nRetourne UNIQUEMENT un JSON valide avec cette structure :\n{\n  "review": {\n    "globalScore": 85,\n    "detailedScores": {\n      "writing": 22,\n      "relevance": 18,\n      "seo": 17,\n      "geo": 13,\n      "structure": 13,\n      "engagement": 8,\n      "briefCompliance": 9\n    },\n    "strengths": ["Point fort 1", "Point fort 2"],\n    "improvements": ["Amélioration 1", "Amélioration 2"],\n    "recommendations": ["Recommandation 1", "Recommandation 2"],\n    "actions": ["Action 1", "Action 2"],\n    "targetScore": 95\n  }\n}\n\nArticle à analyser : ${JSON.stringify(article)}` }
       ];
-      const text = await callProvider(provider, model, apiKey, reviewMessages, 0.3, 2000);
+      const text = await callProvider(
+        provider,
+        model,
+        apiKey,
+        reviewMessages,
+        Number(cfg?.reviewerAgent?.temperature ?? 0.3),
+        Number(cfg?.reviewerAgent?.maxTokens ?? 2000)
+      );
       const json = extractJson(text);
       if (!json?.review) throw new Error('Réponse Reviewer invalide');
       const review = json.review;
@@ -163,9 +184,16 @@ async function callProvider(provider: string, model: string, apiKey: string | un
   let body: any = {};
 
   if (provider === 'openai') {
-    url = 'https://api.openai.com/v1/chat/completions';
+    const useResponses = /^(gpt-4o|o)/i.test(String(model));
     headers.Authorization = `Bearer ${apiKey}`;
-    body = { model, messages, temperature, max_tokens: maxTokens };
+    if (useResponses) {
+      url = 'https://api.openai.com/v1/responses';
+      const input = messages.map((m:any)=> `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+      body = { model, input, temperature, max_completion_tokens: maxTokens };
+    } else {
+      url = 'https://api.openai.com/v1/chat/completions';
+      body = { model, messages, temperature, max_tokens: maxTokens };
+    }
   } else if (provider === 'anthropic') {
     url = 'https://api.anthropic.com/v1/messages';
     headers['x-api-key'] = apiKey;
