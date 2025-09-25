@@ -189,9 +189,9 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
 
   // Update agent status based on API key availability
   useEffect(() => {
-    const updatedAgents = agents.map(agent => ({
+    const updatedAgents: WorkflowAgent[] = agents.map(agent => ({
       ...agent,
-      status: config.apiKeys[agent.provider].trim() ? 'active' : 'inactive'
+      status: (config.apiKeys[agent.provider]?.trim() ? 'active' : 'inactive') as 'active' | 'inactive'
     }));
     setAgents(updatedAgents);
   }, [config.apiKeys]);
