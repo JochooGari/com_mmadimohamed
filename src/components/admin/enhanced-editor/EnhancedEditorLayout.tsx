@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Brain, BarChart3, Eye, EyeOff, Maximize2, Minimize2, Copy, ClipboardPaste } from 'lucide-react';
+import { FileText, Brain, BarChart3, Eye, EyeOff, Maximize2, Minimize2, Copy, ClipboardPaste, List } from 'lucide-react';
 import ArticleOutline from './LeftPanel/ArticleOutline';
 import ContentLibrary from './LeftPanel/ContentLibrary';
 import SmartEditor from './CenterEditor/SmartEditor';
@@ -67,6 +67,7 @@ export default function EnhancedEditorLayout({ articleId, initialContent, onSave
               <button className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors">Aperçu</button>
               <button onClick={handleExplicitPublish} className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">Publier</button>
               <button onClick={()=> setShowHtmlPanel(v=> !v)} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"><ClipboardPaste className="w-4 h-4" /> Coller HTML</button>
+              <button onClick={() => toggleSetting('leftPanelVisible')} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"><List className="w-4 h-4" /> {settings.leftPanelVisible ? 'Masquer structure' : 'Afficher structure'}</button>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -106,14 +107,14 @@ export default function EnhancedEditorLayout({ articleId, initialContent, onSave
                   <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Coller du HTML</h3>
                   <div className="flex items-center gap-2">
                     <button onClick={()=> { navigator.clipboard.writeText(htmlSnippet||''); }} disabled={!htmlSnippet} className="text-xs px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-1 disabled:opacity-50"><Copy className="w-3 h-3" /> Copier</button>
-                    <button onClick={()=> setShowHtmlPreview(v=> !v)} disabled={!htmlSnippet} className="text-xs px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">{showHtmlPreview? 'Masquer preview' : 'Prévisualiser'}</button>
+                    <button onClick={()=> setShowHtmlPreview(v=> !v)} disabled={!htmlSnippet} className="text-xs px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">{showHtmlPreview? 'Masquer aperçu' : 'Afficher aperçu'}</button>
                     <button onClick={()=> setHtmlSnippet('')} disabled={!htmlSnippet} className="text-xs px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">Vider</button>
                   </div>
                 </div>
                 <textarea value={htmlSnippet} onChange={(e)=> setHtmlSnippet(e.target.value)} rows={6} placeholder="Collez ici votre bloc HTML…" className="w-full text-sm font-mono border rounded p-2 bg-white dark:bg-gray-900 dark:text-white dark:border-gray-700"></textarea>
-                {showHtmlPreview && htmlSnippet && (<div className="border rounded p-3 bg-white dark:bg-gray-900 text-sm" dangerouslySetInnerHTML={{ __html: htmlSnippet }} />)}
+                {showHtmlPreview && htmlSnippet && (<div className="border rounded p-3 bg-white dark:bg-gray-900 text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: htmlSnippet }} />)}
                 <div className="flex items-center justify-end">
-                  <button onClick={()=> handleContentChange(editorMode==='html' ? { content_html: (content.content_html || '') + (content.content_html? '\n\n' : '') + htmlSnippet } : { content_md: (content.content_md || '') + (content.content_md? '\n\n' : '') + htmlSnippet })} disabled={!htmlSnippet} className="px-3 py-1.5 text-sm bg-teal-600 text-white rounded-md hover:bg-teal-700 disabled:opacity-50">Insérer dans l’article ({editorMode==='html' ? 'HTML' : 'Visuel'})</button>
+                  <button onClick={()=> { handleContentChange(editorMode==='html' ? { content_html: (content.content_html || '') + (content.content_html? '\n\n' : '') + htmlSnippet } : { content_md: (content.content_md || '') + (content.content_md? '\n\n' : '') + htmlSnippet }); setHtmlSnippet(''); setShowHtmlPreview(false); }} disabled={!htmlSnippet} className="px-3 py-1.5 text-sm bg-teal-600 text-white rounded-md hover:bg-teal-700 disabled:opacity-50">Insérer dans l'article ({editorMode==='html' ? 'HTML' : 'Visuel'})</button>
                 </div>
               </div>
             )}
