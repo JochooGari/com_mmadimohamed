@@ -1,359 +1,571 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Input } from '../components/ui/input';
-import WorkflowCanvas from '../components/admin/WorkflowCanvas';
-import { 
-  Play, 
-  Pause, 
-  RotateCcw, 
-  Save, 
-  Download, 
-  Upload,
-  Workflow,
-  Clock,
+import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Textarea } from '../components/ui/textarea';
+import { ScrollArea } from '../components/ui/scroll-area';
+import { Separator } from '../components/ui/separator';
+import {
+  Play,
+  Pause,
+  Settings,
+  Eye,
+  Edit,
+  Loader2,
+  FileText,
+  Save,
+  RefreshCw,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  Zap,
+  Brain,
+  Target
 } from 'lucide-react';
 
-type WorkflowTemplate = {
+interface WorkflowAgent {
   id: string;
   name: string;
   description: string;
-  category: string;
-  nodes: any[];
-  edges: any[];
-  lastUsed?: string;
-};
+  status: 'active' | 'inactive' | 'running';
+  prompt: string;
+  model: string;
+  provider: string;
+  lastRun?: Date;
+  successRate?: number;
+}
 
-const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
+interface WorkflowExecution {
+  id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  startTime: Date;
+  endTime?: Date;
+  results: {
+    agentId: string;
+    output?: string;
+    error?: string;
+    duration?: number;
+  }[];
+}
+
+interface AIModel {
+  provider: string;
+  models: string[];
+}
+
+// Configuration des modèles IA disponibles
+const AI_MODELS: AIModel[] = [
   {
-    id: 'content-pipeline',
-    name: 'Pipeline de Contenu Complet',
-    description: 'Research → Strategist → Ghostwriter → Lead Validation → CEO Approval → Publication',
-    category: 'Content',
-    nodes: [
-      { id: 'research', x: 50, y: 100, label: 'Research' },
-      { id: 'strategist', x: 200, y: 100, label: 'Strategist' },
-      { id: 'ghostwriter', x: 350, y: 100, label: 'Ghostwriter' },
-      { id: 'lead', x: 500, y: 100, label: 'Content Lead' },
-      { id: 'ceo', x: 650, y: 100, label: 'CEO Approval' },
-      { id: 'community', x: 800, y: 100, label: 'Community' },
-      { id: 'analyst', x: 950, y: 100, label: 'Analyst' }
-    ],
-    edges: [
-      { from: 'research', to: 'strategist' },
-      { from: 'strategist', to: 'ghostwriter' },
-      { from: 'ghostwriter', to: 'lead' },
-      { from: 'lead', to: 'ceo' },
-      { from: 'ceo', to: 'community' },
-      { from: 'community', to: 'analyst' }
-    ]
+    provider: 'OpenAI',
+    models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo']
   },
   {
-    id: 'seo-optimization',
-    name: 'Optimisation SEO',
-    description: 'Analyse des mots-clés → Optimisation du contenu → Validation technique',
-    category: 'SEO',
-    nodes: [
-      { id: 'topic', x: 50, y: 100, label: 'Topic' },
-      { id: 'keyword-research', x: 200, y: 100, label: 'Keyword Research' },
-      { id: 'seo-optimizer', x: 350, y: 100, label: 'SEO Optimizer' },
-      { id: 'technical-check', x: 500, y: 100, label: 'Technical Check' }
-    ],
-    edges: [
-      { from: 'topic', to: 'keyword-research' },
-      { from: 'keyword-research', to: 'seo-optimizer' },
-      { from: 'seo-optimizer', to: 'technical-check' }
-    ]
+    provider: 'Anthropic',
+    models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
   },
   {
-    id: 'social-media',
-    name: 'Publication Réseaux Sociaux',
-    description: 'Génération de posts adaptés pour LinkedIn, Twitter et Facebook',
-    category: 'Social Media',
-    nodes: [
-      { id: 'topic', x: 50, y: 100, label: 'Topic' },
-      { id: 'content-adapter', x: 200, y: 50, label: 'LinkedIn Adapter' },
-      { id: 'twitter-adapter', x: 200, y: 100, label: 'Twitter Adapter' },
-      { id: 'facebook-adapter', x: 200, y: 150, label: 'Facebook Adapter' },
-      { id: 'scheduler', x: 350, y: 100, label: 'Scheduler' }
-    ],
-    edges: [
-      { from: 'topic', to: 'content-adapter' },
-      { from: 'topic', to: 'twitter-adapter' },
-      { from: 'topic', to: 'facebook-adapter' },
-      { from: 'content-adapter', to: 'scheduler' },
-      { from: 'twitter-adapter', to: 'scheduler' },
-      { from: 'facebook-adapter', to: 'scheduler' }
-    ]
+    provider: 'Perplexity',
+    models: ['llama-3-sonar-large', 'llama-3-sonar-small', 'llama-3-70b-instruct']
   }
 ];
 
 export default function AdminWorkflow() {
-  const [selectedTemplate, setSelectedTemplate] = useState<WorkflowTemplate | null>(null);
-  const [workflowName, setWorkflowName] = useState('');
-  const [isRunning, setIsRunning] = useState(false);
-  const [executionLogs, setExecutionLogs] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState('canvas');
+  const [agents, setAgents] = useState<WorkflowAgent[]>([
+    {
+      id: 'search-content',
+      name: 'Agent Search Content',
+      description: 'Scanne votre site et propose des sujets d\'articles',
+      status: 'active',
+      provider: 'Perplexity',
+      model: 'llama-3-sonar-large',
+      prompt: `Tu es un agent spécialisé dans l'analyse de contenu web et la proposition de sujets d'articles.
 
-  const handleTemplateSelect = (template: WorkflowTemplate) => {
-    setSelectedTemplate(template);
-    setWorkflowName(template.name);
+Tâches :
+1. Scanner le site web fourni
+2. Analyser le contenu existant
+3. Identifier les lacunes et opportunités
+4. Proposer 3-5 sujets d'articles pertinents
+5. Fournir un brief pour chaque sujet avec :
+   - Titre suggéré
+   - Mots-clés cibles
+   - Angle d'approche
+   - Structure recommandée
+
+Retourne un JSON structuré avec les suggestions.`,
+      successRate: 92
+    },
+    {
+      id: 'ghostwriter',
+      name: 'Agent Ghostwriter',
+      description: 'Rédige des articles optimisés SEO basés sur les briefs',
+      status: 'active',
+      provider: 'OpenAI',
+      model: 'gpt-4-turbo',
+      prompt: `Tu es un ghostwriter expert en rédaction de contenu web optimisé SEO.
+
+Mission :
+1. Prendre le brief fourni par l'agent Search
+2. Rédiger un article complet et engageant
+3. Optimiser pour les mots-clés cibles
+4. Structurer avec des H1, H2, H3 appropriés
+5. Inclure un appel à l'action pertinent
+
+Style : Professionnel mais accessible, ton engageant, expertise démontrée.
+Format : Markdown avec métadonnées SEO.`,
+      successRate: 88
+    },
+    {
+      id: 'reviewer',
+      name: 'Agent Reviewer',
+      description: 'Révise et améliore la qualité des articles',
+      status: 'active',
+      provider: 'Anthropic',
+      model: 'claude-3-opus',
+      prompt: `Tu es un relecteur expert spécialisé dans l'amélioration de contenu.
+
+Responsabilités :
+1. Analyser la qualité de l'article
+2. Vérifier la cohérence et la logique
+3. Optimiser le SEO et la lisibilité
+4. Suggérer des améliorations
+5. Corriger orthographe et grammaire
+
+Critères d'évaluation :
+- Clarté et engagement
+- Optimisation SEO
+- Qualité rédactionnelle
+- Pertinence du contenu
+
+Retourne l'article révisé avec un score de qualité.`,
+      successRate: 95
+    }
+  ]);
+
+  const [currentExecution, setCurrentExecution] = useState<WorkflowExecution | null>(null);
+  const [siteUrl, setSiteUrl] = useState('https://magicpath.ai');
+  const [activeTab, setActiveTab] = useState('workflow');
+  const [editingAgent, setEditingAgent] = useState<string | null>(null);
+
+  // Lancer le workflow complet
+  const handleLaunchWorkflow = async () => {
+    const execution: WorkflowExecution = {
+      id: `exec-${Date.now()}`,
+      status: 'running',
+      startTime: new Date(),
+      results: []
+    };
+
+    setCurrentExecution(execution);
+
+    try {
+      // Étape 1: Search Content
+      setAgents(prev => prev.map(a =>
+        a.id === 'search-content' ? {...a, status: 'running'} : a
+      ));
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const searchResult = {
+        agentId: 'search-content',
+        output: `Sujets suggérés pour ${siteUrl}:
+1. "Les 10 tendances IA à surveiller en 2025"
+2. "Comment automatiser votre workflow de contenu"
+3. "ROI des solutions IA pour PME"`,
+        duration: 2000
+      };
+
+      execution.results.push(searchResult);
+      setCurrentExecution({...execution});
+
+      setAgents(prev => prev.map(a =>
+        a.id === 'search-content' ? {...a, status: 'active', lastRun: new Date()} : a
+      ));
+
+      // Étape 2: Ghostwriter
+      setAgents(prev => prev.map(a =>
+        a.id === 'ghostwriter' ? {...a, status: 'running'} : a
+      ));
+
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      const ghostwriterResult = {
+        agentId: 'ghostwriter',
+        output: `Article rédigé: "Les 10 tendances IA à surveiller en 2025"
+
+# Les 10 tendances IA à surveiller en 2025
+
+L'intelligence artificielle continue sa révolution...
+
+## 1. L'IA générative devient mainstream
+## 2. Automatisation des workflows créatifs
+## 3. IA conversationnelle avancée
+
+[Article complet de 2000 mots...]`,
+        duration: 3000
+      };
+
+      execution.results.push(ghostwriterResult);
+      setCurrentExecution({...execution});
+
+      setAgents(prev => prev.map(a =>
+        a.id === 'ghostwriter' ? {...a, status: 'active', lastRun: new Date()} : a
+      ));
+
+      // Étape 3: Reviewer
+      setAgents(prev => prev.map(a =>
+        a.id === 'reviewer' ? {...a, status: 'running'} : a
+      ));
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const reviewResult = {
+        agentId: 'reviewer',
+        output: `Article révisé avec score qualité: 94/100
+
+Améliorations apportées:
+✅ Structure H1/H2/H3 optimisée
+✅ Mots-clés mieux intégrés
+✅ CTA renforcé
+✅ Lisibilité améliorée
+
+Article prêt pour publication!`,
+        duration: 2000
+      };
+
+      execution.results.push(reviewResult);
+
+      // Finalisation
+      execution.status = 'completed';
+      execution.endTime = new Date();
+      setCurrentExecution({...execution});
+
+      setAgents(prev => prev.map(a =>
+        a.id === 'reviewer' ? {...a, status: 'active', lastRun: new Date()} : a
+      ));
+
+    } catch (error) {
+      execution.status = 'failed';
+      execution.endTime = new Date();
+      setCurrentExecution({...execution});
+
+      setAgents(prev => prev.map(a => ({...a, status: 'active'})));
+    }
   };
 
-  const handleSaveWorkflow = () => {
-    if (!workflowName.trim()) return;
-    // Logic to save current workflow
-    console.log('Saving workflow:', workflowName);
+  // Mettre à jour la configuration d'un agent
+  const updateAgent = (agentId: string, updates: Partial<WorkflowAgent>) => {
+    setAgents(prev => prev.map(agent =>
+      agent.id === agentId ? {...agent, ...updates} : agent
+    ));
   };
 
-  const handleExecuteWorkflow = () => {
-    setIsRunning(true);
-    setExecutionLogs(['🚀 Démarrage du workflow...']);
-    
-    // Simulate workflow execution
-    setTimeout(() => {
-      setExecutionLogs(prev => [...prev, '✅ Workflow exécuté avec succès']);
-      setIsRunning(false);
-    }, 3000);
-  };
-
-  const getStatusColor = (status: string) => {
+  const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800';
       case 'running': return 'bg-blue-100 text-blue-800';
-      case 'error': return 'bg-red-100 text-red-800';
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'inactive': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getExecutionStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return 'text-green-600';
+      case 'running': return 'text-blue-600';
+      case 'failed': return 'text-red-600';
+      default: return 'text-gray-600';
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header avec bouton de lancement */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Workflow Automation</h1>
-          <p className="text-gray-600 mt-1">Créez et gérez vos workflows d'automatisation IA</p>
+          <h1 className="text-2xl font-bold text-gray-900">Workflow de Génération d'Articles</h1>
+          <p className="text-gray-600 mt-1">Gérez et exécutez votre pipeline de création de contenu IA</p>
         </div>
         <div className="flex items-center space-x-3">
           <Input
-            placeholder="Nom du workflow"
-            value={workflowName}
-            onChange={(e) => setWorkflowName(e.target.value)}
-            className="w-64"
+            placeholder="URL du site à analyser"
+            value={siteUrl}
+            onChange={(e) => setSiteUrl(e.target.value)}
+            className="w-80"
           />
-          <Button variant="outline" onClick={handleSaveWorkflow}>
-            <Save className="w-4 h-4 mr-2" />
-            Sauvegarder
-          </Button>
-          <Button 
-            onClick={handleExecuteWorkflow}
-            disabled={isRunning}
-            className={isRunning ? 'bg-gray-400' : 'bg-teal-500 hover:bg-teal-600'}
+          <Button
+            onClick={handleLaunchWorkflow}
+            disabled={currentExecution?.status === 'running'}
+            className="bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white px-6"
           >
-            {isRunning ? (
-              <Pause className="w-4 h-4 mr-2" />
+            {currentExecution?.status === 'running' ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                En cours...
+              </>
             ) : (
-              <Play className="w-4 h-4 mr-2" />
+              <>
+                <Zap className="w-4 h-4 mr-2" />
+                Lancer le Workflow
+              </>
             )}
-            {isRunning ? 'En cours...' : 'Exécuter'}
           </Button>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="canvas">Canvas Workflow</TabsTrigger>
-          <TabsTrigger value="templates">Templates</TabsTrigger>
-          <TabsTrigger value="history">Historique</TabsTrigger>
+          <TabsTrigger value="workflow">Workflow</TabsTrigger>
+          <TabsTrigger value="agents">Agents</TabsTrigger>
+          <TabsTrigger value="results">Résultats</TabsTrigger>
         </TabsList>
 
-        {/* Canvas Tab */}
-        <TabsContent value="canvas" className="space-y-6">
+        {/* Onglet Workflow */}
+        <TabsContent value="workflow" className="space-y-6">
+          {/* Pipeline visuel */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center">
-                  <Workflow className="w-5 h-5 mr-2 text-teal-600" />
-                  Éditeur Visuel de Workflow
-                </CardTitle>
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Importer
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Download className="w-4 h-4 mr-2" />
-                    Exporter
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Reset
-                  </Button>
-                </div>
-              </div>
+              <CardTitle className="flex items-center">
+                <Target className="w-5 h-5 mr-2 text-teal-600" />
+                Pipeline de Création de Contenu
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <WorkflowCanvas onAIResult={(result) => {
-                setExecutionLogs(prev => [...prev, `✨ Résultat IA: ${JSON.stringify(result, null, 2)}`]);
-              }} />
+              <div className="flex items-center justify-between p-6 bg-gradient-to-r from-blue-50 to-teal-50 rounded-lg">
+                {agents.map((agent, index) => (
+                  <div key={agent.id} className="flex items-center">
+                    <div className="text-center">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${
+                        agent.status === 'running' ? 'bg-blue-500 text-white animate-pulse' :
+                        agent.status === 'active' ? 'bg-green-500 text-white' :
+                        'bg-gray-300 text-gray-600'
+                      }`}>
+                        {agent.status === 'running' ? (
+                          <Loader2 className="w-6 h-6 animate-spin" />
+                        ) : (
+                          <Brain className="w-6 h-6" />
+                        )}
+                      </div>
+                      <p className="text-xs font-medium text-gray-800">{agent.name.replace('Agent ', '')}</p>
+                      <Badge className={`text-xs mt-1 ${getStatusBadgeColor(agent.status)}`}>
+                        {agent.status === 'running' ? 'En cours' :
+                         agent.status === 'active' ? 'Actif' : 'Inactif'}
+                      </Badge>
+                    </div>
+                    {index < agents.length - 1 && (
+                      <div className="mx-4 h-0.5 w-16 bg-gray-300"></div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
 
-          {/* Execution Status */}
-          {(isRunning || executionLogs.length > 0) && (
+          {/* Status d'exécution en temps réel */}
+          {currentExecution && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Clock className="w-5 h-5 mr-2 text-blue-600" />
-                  Statut d'Exécution
+                  Exécution en Cours
+                  <Badge className={`ml-2 ${getStatusBadgeColor(currentExecution.status)}`}>
+                    {currentExecution.status === 'running' ? 'En cours' :
+                     currentExecution.status === 'completed' ? 'Terminé' : 'Échec'}
+                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {executionLogs.map((log, index) => (
-                    <div key={index} className="flex items-center space-x-2 text-sm">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span>{log}</span>
-                    </div>
-                  ))}
-                  {isRunning && (
-                    <div className="flex items-center space-x-2 text-sm">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                      <span>En cours d'exécution...</span>
-                    </div>
-                  )}
+                <div className="space-y-4">
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Démarré: {currentExecution.startTime.toLocaleTimeString()}</span>
+                    {currentExecution.endTime && (
+                      <span>Terminé: {currentExecution.endTime.toLocaleTimeString()}</span>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    {currentExecution.results.map((result, index) => (
+                      <div key={index} className="border-l-4 border-green-400 pl-4 py-2 bg-green-50 rounded-r">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium text-green-800">
+                            {agents.find(a => a.id === result.agentId)?.name}
+                          </h4>
+                          <span className="text-xs text-green-600">
+                            {result.duration}ms
+                          </span>
+                        </div>
+                        <pre className="text-xs text-green-700 whitespace-pre-wrap">
+                          {result.output}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </CardContent>
             </Card>
           )}
         </TabsContent>
 
-        {/* Templates Tab */}
-        <TabsContent value="templates" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {WORKFLOW_TEMPLATES.map((template) => (
-              <Card 
-                key={template.id} 
-                className="cursor-pointer hover:shadow-lg transition-shadow duration-200"
-                onClick={() => handleTemplateSelect(template)}
-              >
+        {/* Onglet Agents */}
+        <TabsContent value="agents" className="space-y-6">
+          <div className="grid gap-6">
+            {agents.map((agent) => (
+              <Card key={agent.id}>
                 <CardHeader>
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-base">{template.name}</CardTitle>
-                      <Badge variant="outline" className="mt-2 text-xs">
-                        {template.category}
-                      </Badge>
+                      <CardTitle className="flex items-center">
+                        <Brain className="w-5 h-5 mr-2 text-purple-600" />
+                        {agent.name}
+                      </CardTitle>
+                      <p className="text-gray-600 mt-1">{agent.description}</p>
                     </div>
-                    <Workflow className="w-6 h-6 text-teal-500" />
+                    <div className="flex items-center space-x-2">
+                      <Badge className={getStatusBadgeColor(agent.status)}>
+                        {agent.status}
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingAgent(editingAgent === agent.id ? null : agent.id)}
+                      >
+                        {editingAgent === agent.id ? <Eye className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-gray-600 mb-4">{template.description}</p>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>{template.nodes.length} étapes</span>
-                    {template.lastUsed && (
-                      <span>Utilisé le {template.lastUsed}</span>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <Label>Fournisseur IA</Label>
+                      <Select
+                        value={agent.provider}
+                        onValueChange={(value) => updateAgent(agent.id, { provider: value })}
+                        disabled={editingAgent !== agent.id}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AI_MODELS.map(provider => (
+                            <SelectItem key={provider.provider} value={provider.provider}>
+                              {provider.provider}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Modèle</Label>
+                      <Select
+                        value={agent.model}
+                        onValueChange={(value) => updateAgent(agent.id, { model: value })}
+                        disabled={editingAgent !== agent.id}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AI_MODELS.find(p => p.provider === agent.provider)?.models.map(model => (
+                            <SelectItem key={model} value={model}>
+                              {model}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {editingAgent === agent.id && (
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Prompt Système</Label>
+                        <Textarea
+                          value={agent.prompt}
+                          onChange={(e) => updateAgent(agent.id, { prompt: e.target.value })}
+                          rows={8}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => setEditingAgent(null)}
+                        >
+                          Annuler
+                        </Button>
+                        <Button
+                          onClick={() => setEditingAgent(null)}
+                          className="bg-teal-500 hover:bg-teal-600"
+                        >
+                          <Save className="w-4 h-4 mr-2" />
+                          Sauvegarder
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-sm text-gray-500 mt-4">
+                    <span>Taux de succès: {agent.successRate}%</span>
+                    {agent.lastRun && (
+                      <span>Dernière exécution: {agent.lastRun.toLocaleTimeString()}</span>
                     )}
                   </div>
-                  <Button 
-                    size="sm" 
-                    className="w-full mt-4 bg-teal-500 hover:bg-teal-600"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTemplateSelect(template);
-                      setActiveTab('canvas');
-                    }}
-                  >
-                    Utiliser ce template
-                  </Button>
                 </CardContent>
               </Card>
             ))}
           </div>
-
-          {/* Create Custom Template */}
-          <Card className="border-dashed border-2 border-gray-300">
-            <CardContent className="text-center py-12">
-              <Workflow className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Créer un template personnalisé</h3>
-              <p className="text-gray-500 mb-6">Créez vos propres workflows réutilisables</p>
-              <Button onClick={() => setActiveTab('canvas')} className="bg-teal-500 hover:bg-teal-600">
-                Nouveau template
-              </Button>
-            </CardContent>
-          </Card>
         </TabsContent>
 
-        {/* History Tab */}
-        <TabsContent value="history" className="space-y-6">
+        {/* Onglet Résultats */}
+        <TabsContent value="results" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Historique des Exécutions</CardTitle>
+              <CardTitle className="flex items-center">
+                <FileText className="w-5 h-5 mr-2 text-green-600" />
+                Derniers Articles Générés
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {[
-                  { id: 1, workflow: 'Pipeline de Contenu Complet', status: 'completed', date: '2025-01-15 14:30', duration: '2m 45s' },
-                  { id: 2, workflow: 'Optimisation SEO', status: 'completed', date: '2025-01-15 10:15', duration: '1m 20s' },
-                  { id: 3, workflow: 'Publication Réseaux Sociaux', status: 'error', date: '2025-01-14 16:45', duration: '0m 30s' },
-                  { id: 4, workflow: 'Pipeline de Contenu Complet', status: 'completed', date: '2025-01-14 09:20', duration: '3m 10s' },
-                ].map((execution) => (
-                  <div key={execution.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex items-center space-x-2">
-                        {execution.status === 'completed' ? (
-                          <CheckCircle className="w-5 h-5 text-green-500" />
-                        ) : execution.status === 'error' ? (
-                          <AlertCircle className="w-5 h-5 text-red-500" />
-                        ) : (
-                          <Clock className="w-5 h-5 text-blue-500" />
-                        )}
-                        <Badge className={getStatusColor(execution.status)}>
-                          {execution.status === 'completed' ? 'Terminé' : 
-                           execution.status === 'error' ? 'Erreur' : 'En cours'}
-                        </Badge>
+              {currentExecution?.status === 'completed' ? (
+                <div className="space-y-4">
+                  {currentExecution.results.map((result, index) => (
+                    <div key={index} className="p-4 border rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">
+                          {agents.find(a => a.id === result.agentId)?.name}
+                        </h4>
+                        <CheckCircle className="w-5 h-5 text-green-500" />
                       </div>
-                      <div>
-                        <h4 className="font-medium">{execution.workflow}</h4>
-                        <p className="text-sm text-gray-500">{execution.date}</p>
-                      </div>
+                      <ScrollArea className="h-32">
+                        <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+                          {result.output}
+                        </pre>
+                      </ScrollArea>
                     </div>
-                    <div className="flex items-center space-x-4">
-                      <span className="text-sm text-gray-500">{execution.duration}</span>
-                      <Button variant="outline" size="sm">
-                        Voir détails
-                      </Button>
-                    </div>
+                  ))}
+
+                  <div className="flex justify-center pt-4">
+                    <Button className="bg-teal-500 hover:bg-teal-600">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Publier l'Article
+                    </Button>
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p>Aucun article généré récemment</p>
+                  <p className="text-sm">Lancez le workflow pour voir les résultats ici</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Quick Actions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start">
-          <div className="flex-shrink-0">
-            <Workflow className="w-5 h-5 text-blue-500 mt-0.5" />
-          </div>
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-blue-800">Conseils pour les Workflows</h3>
-            <div className="text-sm text-blue-700 mt-1 space-y-1">
-              <p>• Glissez-déposez les nœuds pour les repositionner</p>
-              <p>• Double-cliquez pour connecter deux nœuds</p>
-              <p>• Utilisez les templates pour démarrer rapidement</p>
-              <p>• Sauvegardez vos workflows pour les réutiliser</p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
