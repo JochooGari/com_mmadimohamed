@@ -29,6 +29,7 @@ import {
   Target
 } from 'lucide-react';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { Trash2 } from 'lucide-react';
 
 interface WorkflowAgent {
   id: string;
