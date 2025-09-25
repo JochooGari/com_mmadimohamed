@@ -785,6 +785,8 @@ function CssStyleDesigner() {
   const [cssCode, setCssCode] = useState('');
   const [status, setStatus] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [showCssPanel, setShowCssPanel] = useState(true);
+  const [savedTemplates, setSavedTemplates] = useState<{name: string, css: string, url?: string}[]>([]);
 
   useEffect(() => { (async () => {
     try {
@@ -792,6 +794,14 @@ function CssStyleDesigner() {
       if (r.ok) {
         const text = await r.text();
         setCssCode(text || '');
+      }
+      // Charger les templates sauvegardés
+      const templatesR = await fetch('/api/storage?agent=site&type=css_templates');
+      if (templatesR.ok) {
+        const templatesText = await templatesR.text();
+        try {
+          setSavedTemplates(JSON.parse(templatesText) || []);
+        } catch {}
       }
     } catch {}
   })(); }, []);
@@ -822,6 +832,38 @@ function CssStyleDesigner() {
       setStatus('Erreur sauvegarde: ' + (e?.message || 'inconnue'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveAsTemplate = async () => {
+    const templateName = prompt('Nom du template:');
+    if (!templateName?.trim()) return;
+    const newTemplate = { name: templateName.trim(), css: cssCode, url: cssUrl };
+    const updatedTemplates = [...savedTemplates, newTemplate];
+    setSavedTemplates(updatedTemplates);
+    try {
+      await fetch('/api/storage', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'save_css_templates', data: updatedTemplates }) });
+      setStatus('✅ Template sauvegardé.');
+    } catch (e:any) {
+      setStatus('Erreur sauvegarde template: ' + (e?.message || 'inconnue'));
+    }
+  };
+
+  const applyTemplate = async (template: {name: string, css: string, url?: string}) => {
+    setCssCode(template.css);
+    setCssUrl(template.url || '');
+    setStatus(`✅ Template "${template.name}" appliqué.`);
+  };
+
+  const deleteTemplate = async (index: number) => {
+    if (!confirm('Supprimer ce template?')) return;
+    const updatedTemplates = savedTemplates.filter((_, i) => i !== index);
+    setSavedTemplates(updatedTemplates);
+    try {
+      await fetch('/api/storage', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'save_css_templates', data: updatedTemplates }) });
+      setStatus('✅ Template supprimé.');
+    } catch (e:any) {
+      setStatus('Erreur suppression: ' + (e?.message || 'inconnue'));
     }
   };
 
@@ -862,21 +904,126 @@ function CssStyleDesigner() {
 
   return (
     <div className="space-y-4">
-      {status && (<div className="text-xs text-gray-600">{status}</div>)}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Input placeholder="URL CSS (export Figma / fichier public)" value={cssUrl} onChange={(e)=> setCssUrl(e.target.value)} />
-            <Button variant="outline" onClick={importFromUrl} disabled={loading || !cssUrl.trim()}>Importer</Button>
-            <Button onClick={saveCss} disabled={loading}>Sauvegarder</Button>
-          </div>
-          <Textarea rows={22} className="font-mono text-xs" placeholder={`/* Collez ici votre CSS */`}
-            value={cssCode} onChange={(e)=> setCssCode(e.target.value)} />
+      {/* Barre de navigation modes */}
+      <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={showCssPanel ? "default" : "outline"}
+            onClick={() => setShowCssPanel(true)}
+          >
+            🎨 Style
+          </Button>
+          <Button
+            size="sm"
+            variant={!showCssPanel ? "default" : "outline"}
+            onClick={() => setShowCssPanel(false)}
+          >
+            👁️ Preview
+          </Button>
         </div>
-        <div>
-          <div className="text-sm text-gray-600 mb-2">Aperçu</div>
-          <div className="border rounded overflow-hidden">
-            <iframe title="preview" style={{ width:'100%', height: 560, border:'0' }} srcDoc={iframeHtml} />
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={saveCss} disabled={loading}>
+            💾 Sauvegarder
+          </Button>
+          <Button size="sm" variant="outline" onClick={saveAsTemplate} disabled={loading || !cssCode.trim()}>
+            📋 Sauver Template
+          </Button>
+        </div>
+      </div>
+
+      {status && (<div className="text-xs text-gray-600 p-2 bg-blue-50 rounded">{status}</div>)}
+
+      {/* Templates sauvegardés */}
+      {savedTemplates.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">📋 Templates Sauvegardés</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {savedTemplates.map((template, index) => (
+                <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                  <span className="text-sm font-medium truncate">{template.name}</span>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => applyTemplate(template)}
+                      className="text-xs px-2"
+                    >
+                      Appliquer
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => deleteTemplate(index)}
+                      className="text-xs px-2"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className={`grid gap-4 ${showCssPanel ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'}`}>
+        {/* Panneau CSS - maintenant 33% au lieu de 50% */}
+        {showCssPanel && (
+          <div className="lg:col-span-1 space-y-3">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="URL CSS (export Figma / fichier public)"
+                  value={cssUrl}
+                  onChange={(e)=> setCssUrl(e.target.value)}
+                  className="text-xs"
+                />
+                <Button variant="outline" size="sm" onClick={importFromUrl} disabled={loading || !cssUrl.trim()}>
+                  Import
+                </Button>
+              </div>
+              <Textarea
+                rows={28}
+                className="font-mono text-xs"
+                placeholder={`/* CSS personnalisé */
+.article-header h1 {
+  font-size: 2rem;
+  color: #1f2937;
+  margin-bottom: 1rem;
+}
+
+.neil-patel-style .micro-cta {
+  display: inline-block;
+  background: #3b82f6;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 14px;
+}`}
+                value={cssCode}
+                onChange={(e)=> setCssCode(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Preview - maintenant 67% au lieu de 50%, ou 100% si CSS masqué */}
+        <div className={showCssPanel ? "lg:col-span-2" : "col-span-1"}>
+          <div className="text-sm text-gray-600 mb-2 flex items-center justify-between">
+            <span>Aperçu Article</span>
+            <span className="text-xs text-gray-400">Responsive preview</span>
+          </div>
+          <div className="border rounded overflow-hidden bg-white">
+            <iframe
+              title="preview"
+              style={{ width:'100%', height: showCssPanel ? 560 : 700, border:'0' }}
+              srcDoc={iframeHtml}
+            />
           </div>
         </div>
       </div>
