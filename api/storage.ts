@@ -4,7 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createClient } from '@supabase/supabase-js';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+// En production Vercel, utiliser un dossier temporaire writable
+const DATA_DIR = process.env.VERCEL ? '/tmp/data' : path.join(process.cwd(), 'data');
 
 function getServerSupabase() {
   const url = process.env.SUPABASE_URL as string | undefined;
@@ -92,6 +93,21 @@ async function handleGet(req: any, res: any, agent: string, type: string) {
       return res.status(200).send('');
     }
   }
+
+  // Special case: CSS templates
+  if (agent === 'site' && type === 'css_templates') {
+    try {
+      const text = await getObjectText('agents', 'site/inputs/css_templates.json');
+      if (text) return res.status(200).send(text);
+    } catch {}
+    try {
+      const templatesPath = path.join(DATA_DIR, 'agents', 'site', 'inputs', 'css_templates.json');
+      const text = await fs.promises.readFile(templatesPath, 'utf8');
+      return res.status(200).send(text);
+    } catch {
+      return res.status(200).send('[]');
+    }
+  }
   if (agent === 'monitoring' && type === 'stats') {
     // Récupérer les stats de monitoring
     const indexFile = path.join(DATA_DIR, 'monitoring', 'monitoring_index.json');
@@ -153,7 +169,10 @@ async function handlePost(req: any, res: any, action: string, agentType: string,
     
     case 'save_site_theme':
       return await saveSiteTheme(res, data);
-    
+
+    case 'save_css_templates':
+      return await saveCssTemplates(res, data);
+
     case 'create_structure':
       return await createDirectoryStructure(res);
     
@@ -233,6 +252,15 @@ async function saveSiteTheme(res: any, payload: any) {
   await fs.promises.writeFile(filePath, css, 'utf8');
   try { await putObject('agents', `site/inputs/theme.css`, css, 'text/css'); } catch {}
   return res.json({ success: true, bytes: css.length, savedAt: new Date().toISOString() });
+}
+
+async function saveCssTemplates(res: any, templates: any[]) {
+  const agentPath = path.join(DATA_DIR, 'agents', 'site', 'inputs');
+  const filePath = path.join(agentPath, 'css_templates.json');
+  await ensureDirectoryExists(agentPath);
+  await fs.promises.writeFile(filePath, JSON.stringify(templates, null, 2));
+  try { await putObject('agents', `site/inputs/css_templates.json`, JSON.stringify(templates, null, 2), 'application/json'); } catch {}
+  return res.json({ success: true, count: templates.length, savedAt: new Date().toISOString() });
 }
 
 async function saveMonitoring(res: any, content: any) {
