@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../components/ui/textarea';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
+import { AI_PROVIDERS } from '../lib/aiProviders';
 import {
   Play,
   Pause,
@@ -32,7 +33,9 @@ interface WorkflowAgent {
   name: string;
   description: string;
   status: 'active' | 'inactive' | 'running';
-  prompt: string;
+  systemPrompt: string;
+  userPrompt: string;
+  contextPrompt: string;
   model: string;
   provider: string;
   lastRun?: Date;
@@ -52,26 +55,8 @@ interface WorkflowExecution {
   }[];
 }
 
-interface AIModel {
-  provider: string;
-  models: string[];
-}
-
-// Configuration des modèles IA disponibles
-const AI_MODELS: AIModel[] = [
-  {
-    provider: 'OpenAI',
-    models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo']
-  },
-  {
-    provider: 'Anthropic',
-    models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
-  },
-  {
-    provider: 'Perplexity',
-    models: ['llama-3-sonar-large', 'llama-3-sonar-small', 'llama-3-70b-instruct']
-  }
-];
+// Utilisation des providers et modèles existants du projet
+// Les AI_PROVIDERS sont importés de lib/aiProviders.ts
 
 export default function AdminWorkflow() {
   const [agents, setAgents] = useState<WorkflowAgent[]>([
@@ -80,22 +65,31 @@ export default function AdminWorkflow() {
       name: 'Agent Search Content',
       description: 'Scanne votre site et propose des sujets d\'articles',
       status: 'active',
-      provider: 'Perplexity',
-      model: 'llama-3-sonar-large',
-      prompt: `Tu es un agent spécialisé dans l'analyse de contenu web et la proposition de sujets d'articles.
+      provider: 'perplexity',
+      model: 'sonar-pro',
+      systemPrompt: `Tu es un agent spécialisé dans l'analyse de contenu web et la recherche de sujets d'articles pertinents.
 
-Tâches :
-1. Scanner le site web fourni
-2. Analyser le contenu existant
-3. Identifier les lacunes et opportunités
-4. Proposer 3-5 sujets d'articles pertinents
-5. Fournir un brief pour chaque sujet avec :
-   - Titre suggéré
-   - Mots-clés cibles
-   - Angle d'approche
-   - Structure recommandée
+Ton expertise :
+- Analyse approfondie de sites web
+- Identification des gaps de contenu
+- Recherche de tendances et opportunités
+- Compréhension des besoins audience
 
-Retourne un JSON structuré avec les suggestions.`,
+Objectif : Proposer des sujets d'articles hautement pertinents et engageants.`,
+      userPrompt: `Analyse le site web {siteUrl} et propose 5 sujets d'articles pertinents.
+
+Pour chaque sujet, fournis :
+1. Titre accrocheur
+2. Mots-clés SEO principaux
+3. Angle d'approche unique
+4. Structure H1/H2/H3 suggérée
+5. Points clés à aborder
+
+Format : JSON structuré avec tous les détails.`,
+      contextPrompt: `Site web à analyser : {siteUrl}
+Secteur d'activité : {industry}
+Audience cible : {audience}
+Objectifs marketing : {goals}`,
       successRate: 92
     },
     {
@@ -103,19 +97,34 @@ Retourne un JSON structuré avec les suggestions.`,
       name: 'Agent Ghostwriter',
       description: 'Rédige des articles optimisés SEO basés sur les briefs',
       status: 'active',
-      provider: 'OpenAI',
-      model: 'gpt-4-turbo',
-      prompt: `Tu es un ghostwriter expert en rédaction de contenu web optimisé SEO.
+      provider: 'openai',
+      model: 'gpt-5',
+      systemPrompt: `Tu es un ghostwriter expert en création de contenu web de haute qualité.
 
-Mission :
-1. Prendre le brief fourni par l'agent Search
-2. Rédiger un article complet et engageant
-3. Optimiser pour les mots-clés cibles
-4. Structurer avec des H1, H2, H3 appropriés
-5. Inclure un appel à l'action pertinent
+Tes spécialités :
+- Rédaction SEO optimisée
+- Storytelling engageant
+- Adaptation du ton et style
+- Structure claire et logique
+- Appels à l'action efficaces
 
-Style : Professionnel mais accessible, ton engageant, expertise démontrée.
-Format : Markdown avec métadonnées SEO.`,
+Objectif : Créer des articles qui captent l'attention et convertissent.`,
+      userPrompt: `Rédige un article complet basé sur ce brief :
+{contentBrief}
+
+Exigences :
+- 1500-2000 mots minimum
+- Structure H1/H2/H3 optimisée
+- Intégration naturelle des mots-clés
+- Ton professionnel mais accessible
+- CTA pertinent en fin d'article
+- Format Markdown
+
+Livre un article prêt à publier.`,
+      contextPrompt: `Brief de l'article : {contentBrief}
+Audience cible : {audience}
+Mots-clés principaux : {keywords}
+Objectif de conversion : {conversionGoal}`,
       successRate: 88
     },
     {
@@ -123,24 +132,34 @@ Format : Markdown avec métadonnées SEO.`,
       name: 'Agent Reviewer',
       description: 'Révise et améliore la qualité des articles',
       status: 'active',
-      provider: 'Anthropic',
+      provider: 'anthropic',
       model: 'claude-3-opus',
-      prompt: `Tu es un relecteur expert spécialisé dans l'amélioration de contenu.
+      systemPrompt: `Tu es un éditeur expert spécialisé dans l'amélioration et la révision de contenu.
 
-Responsabilités :
-1. Analyser la qualité de l'article
-2. Vérifier la cohérence et la logique
-3. Optimiser le SEO et la lisibilité
-4. Suggérer des améliorations
-5. Corriger orthographe et grammaire
+Tes compétences :
+- Analyse qualitative approfondie
+- Optimisation SEO avancée
+- Correction linguistique
+- Amélioration de la lisibilité
+- Évaluation de l'engagement
 
-Critères d'évaluation :
-- Clarté et engagement
-- Optimisation SEO
-- Qualité rédactionnelle
-- Pertinence du contenu
+Objectif : Transformer chaque article en contenu d'excellence.`,
+      userPrompt: `Révise et améliore cet article :
+{article}
 
-Retourne l'article révisé avec un score de qualité.`,
+Tâches de révision :
+1. Corriger orthographe/grammaire
+2. Optimiser la structure H1/H2/H3
+3. Améliorer la lisibilité
+4. Renforcer les mots-clés SEO
+5. Polir le style et le ton
+6. Évaluer la qualité globale (/100)
+
+Retourne l'article révisé avec ton analyse détaillée.`,
+      contextPrompt: `Article à réviser : {article}
+Critères qualité : clarté, SEO, engagement, structure
+Score cible : minimum 90/100
+Mots-clés à optimiser : {keywords}`,
       successRate: 95
     }
   ]);
@@ -443,16 +462,21 @@ Article prêt pour publication!`,
                       <Label>Fournisseur IA</Label>
                       <Select
                         value={agent.provider}
-                        onValueChange={(value) => updateAgent(agent.id, { provider: value })}
+                        onValueChange={(value) => {
+                          // Quand on change de provider, on met le premier modèle disponible
+                          const newProvider = AI_PROVIDERS.find(p => p.id === value);
+                          const firstModel = newProvider?.models[0] || '';
+                          updateAgent(agent.id, { provider: value, model: firstModel });
+                        }}
                         disabled={editingAgent !== agent.id}
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {AI_MODELS.map(provider => (
-                            <SelectItem key={provider.provider} value={provider.provider}>
-                              {provider.provider}
+                          {AI_PROVIDERS.map(provider => (
+                            <SelectItem key={provider.id} value={provider.id}>
+                              {provider.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -469,7 +493,7 @@ Article prêt pour publication!`,
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {AI_MODELS.find(p => p.provider === agent.provider)?.models.map(model => (
+                          {AI_PROVIDERS.find(p => p.id === agent.provider)?.models.map(model => (
                             <SelectItem key={model} value={model}>
                               {model}
                             </SelectItem>
@@ -480,17 +504,72 @@ Article prêt pour publication!`,
                   </div>
 
                   {editingAgent === agent.id && (
-                    <div className="space-y-4">
-                      <div>
-                        <Label>Prompt Système</Label>
-                        <Textarea
-                          value={agent.prompt}
-                          onChange={(e) => updateAgent(agent.id, { prompt: e.target.value })}
-                          rows={8}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="flex justify-end space-x-2">
+                    <div className="space-y-6">
+                      <Tabs defaultValue="system" className="w-full">
+                        <TabsList className="grid w-full grid-cols-3">
+                          <TabsTrigger value="system">Prompt Système</TabsTrigger>
+                          <TabsTrigger value="user">Prompt Utilisateur</TabsTrigger>
+                          <TabsTrigger value="context">Prompt Contexte</TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="system" className="space-y-4">
+                          <div>
+                            <Label className="text-sm font-medium">
+                              Prompt Système - Personnalité et Expertise de l'Agent
+                            </Label>
+                            <p className="text-xs text-gray-500 mb-2">
+                              Définit qui est l'agent, son expertise et ses objectifs généraux
+                            </p>
+                            <Textarea
+                              value={agent.systemPrompt}
+                              onChange={(e) => updateAgent(agent.id, { systemPrompt: e.target.value })}
+                              rows={6}
+                              className="mt-1"
+                              placeholder="Tu es un expert en..."
+                            />
+                          </div>
+                        </TabsContent>
+
+                        <TabsContent value="user" className="space-y-4">
+                          <div>
+                            <Label className="text-sm font-medium">
+                              Prompt Utilisateur - Instructions et Tâches Spécifiques
+                            </Label>
+                            <p className="text-xs text-gray-500 mb-2">
+                              Instructions précises sur ce que l'agent doit faire, format de sortie attendu
+                            </p>
+                            <Textarea
+                              value={agent.userPrompt}
+                              onChange={(e) => updateAgent(agent.id, { userPrompt: e.target.value })}
+                              rows={6}
+                              className="mt-1"
+                              placeholder="Analyse {input} et produis..."
+                            />
+                          </div>
+                        </TabsContent>
+
+                        <TabsContent value="context" className="space-y-4">
+                          <div>
+                            <Label className="text-sm font-medium">
+                              Prompt Contexte - Variables et Contexte Dynamique
+                            </Label>
+                            <p className="text-xs text-gray-500 mb-2">
+                              Variables qui seront injectées dynamiquement dans les prompts
+                            </p>
+                            <Textarea
+                              value={agent.contextPrompt}
+                              onChange={(e) => updateAgent(agent.id, { contextPrompt: e.target.value })}
+                              rows={4}
+                              className="mt-1"
+                              placeholder="Variable 1: {value1}
+Variable 2: {value2}
+Paramètre: {param}"
+                            />
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+
+                      <div className="flex justify-end space-x-2 pt-4">
                         <Button
                           variant="outline"
                           onClick={() => setEditingAgent(null)}
