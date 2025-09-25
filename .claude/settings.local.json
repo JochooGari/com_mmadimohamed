@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/C:\\Users\\power\\OneDrive\\Documents\\Website_2025_06_30\\magicpath-project/**)",
+      "Read(/C:\\Users\\power\\OneDrive\\Documents\\Website_2025_06_30\\magicpath-project/**)",
+      "Read(/C:\\Users\\power\\OneDrive\\Documents\\Website_2025_06_30\\magicpath-project\\docs/**)",
+      "Read(/C:\\Users\\power\\OneDrive\\Documents\\Website_2025_06_30\\magicpath-project\\docs/**)",
+      "WebSearch",
+      "Bash(npm install:*)",
+      "Bash(npx vercel ls:*)",
+      "Bash(curl:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
