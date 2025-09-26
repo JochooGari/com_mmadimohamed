@@ -575,6 +575,7 @@ function CssStyleDesigner() {
   const [status, setStatus] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'style' | 'preview' | 'editor'>('style');
+  const [componentTab, setComponentTab] = useState<'typography' | 'finance' | 'code' | 'ui'>('typography');
   const [savedTemplates, setSavedTemplates] = useState<{name: string, css: string, url?: string}[]>([]);
   const [editorContent, setEditorContent] = useState({
     title: 'Titre d\'exemple – Style IA',
@@ -724,6 +725,80 @@ function CssStyleDesigner() {
 </body>
 </html>`;
 
+  const ComponentsGallery = () => (
+    <div className="space-y-6">
+      <style dangerouslySetInnerHTML={{ __html: cssCode }} />
+      <div className="component-tabs flex gap-2 border-b pb-2">
+        {['typography','finance','code','ui'].map((t) => (
+          <button
+            key={t}
+            className={`px-3 py-1 text-sm font-semibold ${componentTab===t ? 'text-[#044943] border-b-2 border-[#044943]' : 'text-gray-500'}`}
+            onClick={()=> setComponentTab(t as any)}
+          >{t.toUpperCase()}</button>
+        ))}
+      </div>
+      {componentTab==='typography' && (
+        <div className="preview-area">
+          <h1 className="h1">H1 - Titre Principal Article</h1>
+          <h2 className="h2">H2 - Section Majeure</h2>
+          <h3 className="h3">H3 - Sous-section</h3>
+          <h4 className="h4">H4 - Paragraphe Important</h4>
+          <h5 className="h5">H5 - Label / Catégorie</h5>
+          <p>Paragraphe standard avec <code>code inline</code> et <a href="#">lien</a>.</p>
+          <div className="sommaire-box">
+            <div className="sommaire-title">Sommaire</div>
+            <ul className="sommaire-list">
+              <li><a href="#">Introduction</a></li>
+              <li><a href="#">Analyse</a></li>
+              <li><a href="#">Conclusion</a></li>
+            </ul>
+          </div>
+        </div>
+      )}
+      {componentTab==='finance' && (
+        <div className="space-y-4">
+          <div className="kpi-grid">
+            <div className="kpi-card"><div className="kpi-label">CA</div><div className="kpi-value">€2.4M</div><div className="kpi-change positive">+12.5%</div></div>
+            <div className="kpi-card"><div className="kpi-label">EBITDA</div><div className="kpi-value">18.3%</div><div className="kpi-change negative">-2.1%</div></div>
+            <div className="kpi-card"><div className="kpi-label">Cash</div><div className="kpi-value">€850K</div><div className="kpi-change positive">+8.7%</div></div>
+          </div>
+          <table className="financial-table">
+            <thead><tr><th>Indicateur</th><th>Avant</th><th>Après</th></tr></thead>
+            <tbody>
+              <tr><td>Temps</td><td>30 h</td><td className="cell-positive">4 h</td></tr>
+              <tr><td>Coûts</td><td>€12k</td><td className="cell-positive">€5k</td></tr>
+              <tr><td>Qualité</td><td>85%</td><td className="cell-positive">96%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      {componentTab==='code' && (
+        <div className="space-y-4">
+          <div className="code-block">python dashboard.py --config production.yml --port 8080</div>
+          <div className="sql-code"><span className="sql-keyword">SELECT</span> customer, <span className="sql-keyword">SUM</span>(amount) <span className="sql-keyword">AS</span> total FROM sales;</div>
+          <div className="dax-code"><span className="dax-measure">Total Sales</span> = <span className="dax-function">SUM</span>(Sales[Amount])</div>
+        </div>
+      )}
+      {componentTab==='ui' && (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <button className="btn btn-primary">Bouton primaire</button>
+            <button className="btn btn-secondary">Bouton secondaire</button>
+            <button className="btn btn-outline">Bouton outline</button>
+          </div>
+          <div className="flex gap-2">
+            <span className="tag primary">Primary</span>
+            <span className="tag secondary">Secondary</span>
+            <span className="tag success">Success</span>
+            <span className="tag danger">Danger</span>
+          </div>
+          <div className="progress-bar"><div className="progress-fill" style={{width:'65%'}}>65%</div></div>
+          <blockquote className="quote-block">Le style est un accélérateur de crédibilité.<span className="quote-author">MagicPath</span></blockquote>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       {/* Barre de navigation modes */}
@@ -833,7 +908,12 @@ function CssStyleDesigner() {
           </div>
         )}
 
-        {/* Preview / Éditeur */}
+        {/* Preview / Éditeur ou Live Components en mode Style */}
+        {mode==='style' && (
+          <div className="lg:col-span-2">
+            <ComponentsGallery />
+          </div>
+        )}
         {mode!=='style' && (
           <div className="col-span-1">
             <div className="text-sm text-gray-600 mb-2 flex items-center justify-between">
