@@ -108,6 +108,25 @@ async function handleGet(req: any, res: any, agent: string, type: string) {
       return res.status(200).send('[]');
     }
   }
+
+  // Special case: style preview HTML (unlisted)
+  if (agent === 'site' && type === 'preview') {
+    try {
+      const id = (req.query.id as string) || '';
+      if (!id) return res.status(400).send('Missing id');
+      const key = `site/previews/preview_${id}.html`;
+      const sup = await getObjectText('agents', key);
+      if (sup) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(200).send(sup);
+      }
+      const filePath = path.join(DATA_DIR, 'agents', 'site', 'previews', `preview_${id}.html`);
+      const text = await fs.promises.readFile(filePath, 'utf8');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(200).send(text);
+    } catch {}
+    return res.status(404).send('Not found');
+  }
   if (agent === 'monitoring' && type === 'stats') {
     // Récupérer les stats de monitoring
     const indexFile = path.join(DATA_DIR, 'monitoring', 'monitoring_index.json');
@@ -175,6 +194,9 @@ async function handlePost(req: any, res: any, action: string, agentType: string,
 
     case 'save_css_templates':
       return await saveCssTemplates(res, data);
+
+    case 'publish_style_preview':
+      return await publishStylePreview(req, res, data);
 
     case 'create_structure':
       return await createDirectoryStructure(res);
@@ -275,6 +297,22 @@ async function saveCssTemplates(res: any, templates: any[]) {
   await fs.promises.writeFile(filePath, JSON.stringify(templates, null, 2));
   try { await putObject('agents', `site/inputs/css_templates.json`, JSON.stringify(templates, null, 2), 'application/json'); } catch {}
   return res.json({ success: true, count: templates.length, savedAt: new Date().toISOString() });
+}
+
+async function publishStylePreview(req: any, res: any, payload: any) {
+  const html: string = String(payload?.html || '');
+  if (!html.trim()) return res.status(400).json({ error: 'Missing html' });
+  const id = Date.now().toString(36);
+  const dir = path.join(DATA_DIR, 'agents', 'site', 'previews');
+  await ensureDirectoryExists(dir);
+  const filePath = path.join(dir, `preview_${id}.html`);
+  await fs.promises.writeFile(filePath, html, 'utf8');
+  try { await putObject('agents', `site/previews/preview_${id}.html`, html, 'text/html'); } catch {}
+  const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
+  const host = (req.headers['x-forwarded-host'] as string) || (req.headers['host'] as string) || process.env.VERCEL_URL || '';
+  const base = host ? (host.startsWith('http') ? host : `${proto}://${host}`) : '';
+  const url = base ? `${base}/api/storage?agent=site&type=preview&id=${id}` : `/api/storage?agent=site&type=preview&id=${id}`;
+  return res.json({ success: true, id, url });
 }
 
 async function saveMonitoring(res: any, content: any) {

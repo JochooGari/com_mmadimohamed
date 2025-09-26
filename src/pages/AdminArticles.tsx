@@ -687,6 +687,8 @@ function CssStyleDesigner() {
     }
   };
 
+  const contentHtml = editorContent.content_html || `<h1>Étude de cas — Automatisation du reporting CFO</h1><p>Démo de style live.</p>`;
+
   const iframeHtml = `<!doctype html>
 <html lang="fr">
 <head>
@@ -704,7 +706,7 @@ function CssStyleDesigner() {
 <body>
   <div class="container neil-patel-style">
     <header class="article-header mb-6">
-      <h1>Étude de cas — Automatisation du reporting CFO</h1>
+      <h1>${editorContent.title}</h1>
       <p class="meta">Score SEO 96/100 · Score GEO 95/100</p>
     </header>
     <nav class="toc">
@@ -716,14 +718,7 @@ function CssStyleDesigner() {
       </ol>
     </nav>
     <article class="article-body">
-      <h2>Problématique & Contexte</h2>
-      <p>Découvrez comment Power BI a permis à une direction financière d'économiser 30 h/mois.</p>
-      <blockquote>Une mise en place en 6 semaines avec des KPIs audités.</blockquote>
-      <a class="micro-cta" href="#">📘 Guide DAX Finance</a>
-      <table class="modern-table">
-        <thead><tr><th>Indicateur</th><th>Avant</th><th>Après</th></tr></thead>
-        <tbody><tr><td>Temps</td><td>30 h</td><td>4 h</td></tr></tbody>
-      </table>
+      ${contentHtml}
     </article>
   </div>
 </body>
@@ -744,6 +739,16 @@ function CssStyleDesigner() {
           </Button>
           <Button size="sm" variant="outline" onClick={saveAsTemplate} disabled={loading || !cssCode.trim()}>
             📋 Sauver Template
+          </Button>
+          <Button size="sm" onClick={async () => {
+            const r = await fetch('/api/storage', {
+              method: 'POST', headers: { 'Content-Type':'application/json' },
+              body: JSON.stringify({ action: 'publish_style_preview', data: { html: iframeHtml } })
+            });
+            const j = await r.json().catch(()=>null);
+            if (j?.url) window.open(j.url, '_blank');
+          }}>
+            🚀 Publier aperçu (non listé)
           </Button>
         </div>
       </div>
@@ -841,7 +846,7 @@ function CssStyleDesigner() {
               ) : (
                 <div className="p-2">
                   <TinymceEditor
-                    apiKey="your-tinymce-api-key"
+                    apiKey={(import.meta as any).env?.VITE_TINYMCE_API_KEY || (window as any).TINYMCE_API_KEY || 'no-api-key'}
                     value={editorContent.content_html || editorContent.content_md}
                     onEditorChange={(content) => setEditorContent(prev => ({ ...prev, content_html: content }))}
                     init={{
