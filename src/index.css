@@ -304,3 +304,18 @@ body {
 .neil-patel-style .article-body .author img { width: 44px; height: 44px; border-radius: 50%; }
 .neil-patel-style .article-body .tags { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
 .neil-patel-style .article-body .tag { font-size: .85rem; padding: 6px 10px; border: 1px solid var(--np-border); border-radius: 999px; color: var(--np-muted); }
+
+/* Workflow layout additions */
+:root { --sidebar-width: 300px; --sidebar-collapsed: 50px; --transition-speed: 300ms; }
+.metrics-panel { width: var(--sidebar-width); transition: width var(--transition-speed) ease; background: var(--np-bg); border-right: 1px solid var(--np-border); }
+.metrics-panel.collapsed { width: var(--sidebar-collapsed); }
+.workflow-timeline { display:flex; gap:20px; padding:16px; overflow-x:auto; background: var(--np-bg); border:1px solid var(--np-border); border-radius:8px; }
+.timeline-step { position:relative; min-width:150px; }
+.timeline-connector { position:absolute; top:50%; left:100%; width:20px; height:2px; background: var(--np-border); }
+.step-card { border:1px solid var(--np-border); border-radius:8px; padding:8px 12px; background:#fff; }
+.step-card.running { box-shadow: 0 0 0 2px rgba(59,130,246,.2) inset; }
+.step-card.success { box-shadow: 0 0 0 2px rgba(34,197,94,.2) inset; }
+.step-card.error { box-shadow: 0 0 0 2px rgba(239,68,68,.2) inset; }
+.step-icon { margin-bottom:4px; }
+.step-name { font-weight:600; font-size:12px; }
+.step-time { font-size:11px; color:#666; }

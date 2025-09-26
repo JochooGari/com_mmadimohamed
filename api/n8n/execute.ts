@@ -44,7 +44,7 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
 
   try {
     // Load prompts saved from the admin UI
-    const prompts = await loadWorkflowPrompts().catch(() => ({} as any));
+    const prompts = await loadWorkflowPrompts(req).catch(() => ({} as any));
 
     // Step 1: Agent Search Content (can be skipped if custom topics provided)
     let topics: any[] = [];
@@ -73,15 +73,26 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
         Number(cfg?.searchAgent?.temperature ?? 0.7),
         Number(cfg?.searchAgent?.maxTokens ?? 2000)
       );
-      const json = extractJson(text);
-      topics = json?.topics || [];
+      try {
+        const json = extractJson(text);
+        topics = json?.topics || [];
     execution.steps.push({
       nodeId: 'search-content',
       status: 'completed',
-      output: { topics },
-      debug: { provider, model, raw: String(text).slice(0, 2000) },
+          output: { topics },
+          debug: { provider, model, raw: String(text).slice(0, 2000) },
+          completedAt: new Date().toISOString()
+        });
+      } catch (e: any) {
+        execution.steps.push({
+          nodeId: 'search-content',
+          status: 'failed',
+          error: 'Search Content a renvoyé un format non-JSON. Corrigez le prompt (voir Debug).',
+          debug: { provider, model, raw: String(text).slice(0, 2000) },
       completedAt: new Date().toISOString()
     });
+        throw new Error('Search Content: No JSON block found');
+      }
     }
 
     // Step 2: Agent Ghostwriting
@@ -102,7 +113,12 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
         apiKey,
         ghostMessages,
         Number(cfg?.ghostwriterAgent?.temperature ?? 0.8),
-        Number(cfg?.ghostwriterAgent?.maxTokens ?? 8000)
+        Number(cfg?.ghostwriterAgent?.maxTokens ?? 8000),
+        {
+          topP: cfg?.ghostwriterAgent?.topP,
+          frequencyPenalty: cfg?.ghostwriterAgent?.frequencyPenalty,
+          presencePenalty: cfg?.ghostwriterAgent?.presencePenalty
+        }
       );
       ghostDebug.push(String(text).slice(0, 2000));
       // Accept either strict JSON or free-form content
@@ -131,7 +147,7 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
       const provider = (cfg?.reviewerAgent?.provider || 'anthropic') as string;
       const model = cfg?.reviewerAgent?.model || normalizedDefaultModel(provider);
       const apiKey = cfg?.reviewerAgent?.apiKey || getEnvKey(provider);
-      const isClaude4 = /^claude[-_]?sonnet[-_]?4/i.test(String(model));
+    const isClaudeLarge = /claude-3(\.5|\.7)?-sonnet|claude-3-opus/i.test(String(model));
       const reviewPrompt = String(prompts?.['review-content']?.prompt || '').trim();
       if (!reviewPrompt) {
         throw new Error("Prompt manquant pour l'agent Reviewer. Veuillez le renseigner dans l'interface (Onglet Agents > Prompt).");
@@ -142,13 +158,25 @@ async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiRes
         model,
         apiKey,
         reviewMessages,
-        Number(cfg?.reviewerAgent?.temperature ?? (isClaude4 ? 0.7 : 0.3)),
-        Number(cfg?.reviewerAgent?.maxTokens ?? (isClaude4 ? 8000 : 2000))
+        Number(cfg?.reviewerAgent?.temperature ?? (isClaudeLarge ? 0.7 : 0.3)),
+        Number(cfg?.reviewerAgent?.maxTokens ?? (isClaudeLarge ? 8000 : 2000))
       );
       reviewDebug.push(String(text).slice(0, 2000));
-      const json = extractJson(text);
-      if (!json?.review) throw new Error('Réponse Reviewer invalide');
-      const review = json.review;
+      let review: any;
+      try {
+        const json = extractJson(text);
+        if (!json?.review) throw new Error('Réponse Reviewer invalide');
+        review = json.review;
+      } catch (e: any) {
+        execution.steps.push({
+          nodeId: 'review-content',
+          status: 'failed',
+          error: 'Reviewer a renvoyé un format non-JSON. Corrigez le prompt (voir Debug).',
+          debug: { provider, model, raw: String(text).slice(0, 2000) },
+          completedAt: new Date().toISOString()
+        });
+        throw new Error('Reviewer: No JSON block found');
+      }
       reviews.push(review);
     }
 
@@ -197,7 +225,7 @@ function getEnvKey(provider: string | undefined): string | undefined {
   }
 }
 
-async function callProvider(provider: string, model: string, apiKey: string | undefined, messages: any[], temperature = 0.3, maxTokens = 1000): Promise<string> {
+async function callProvider(provider: string, model: string, apiKey: string | undefined, messages: any[], temperature = 0.3, maxTokens = 1000, extra: { topP?: number; frequencyPenalty?: number; presencePenalty?: number } = {}): Promise<string> {
   if (!apiKey) throw new Error(`${provider} API key not configured`);
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   let url = '';
@@ -211,9 +239,15 @@ async function callProvider(provider: string, model: string, apiKey: string | un
       url = 'https://api.openai.com/v1/responses';
       const input = messages.map((m:any)=> `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
       body = { model: normalizedModel, input, temperature, max_output_tokens: maxTokens };
+      if (typeof extra.topP === 'number') body.top_p = extra.topP;
+      if (typeof extra.frequencyPenalty === 'number') body.frequency_penalty = extra.frequencyPenalty;
+      if (typeof extra.presencePenalty === 'number') body.presence_penalty = extra.presencePenalty;
     } else {
       url = 'https://api.openai.com/v1/chat/completions';
       body = { model: normalizedModel, messages, temperature, max_tokens: maxTokens };
+      if (typeof extra.topP === 'number') body.top_p = extra.topP;
+      if (typeof extra.frequencyPenalty === 'number') body.frequency_penalty = extra.frequencyPenalty;
+      if (typeof extra.presencePenalty === 'number') body.presence_penalty = extra.presencePenalty;
     }
   } else if (provider === 'anthropic') {
     url = 'https://api.anthropic.com/v1/messages';
@@ -236,9 +270,24 @@ async function callProvider(provider: string, model: string, apiKey: string | un
 
   // Normalize
   if (provider === 'anthropic') {
-    return d?.content?.[0]?.text || '';
+    return String(d?.content?.[0]?.text || '');
   }
-  return d?.choices?.[0]?.message?.content || '';
+  // OpenAI: support both Chat Completions and Responses API
+  if (typeof d?.output_text === 'string' && d.output_text.length > 0) {
+    return d.output_text as string;
+  }
+  const chatContent = d?.choices?.[0]?.message?.content;
+  if (typeof chatContent === 'string') return chatContent as string;
+  if (Array.isArray(chatContent)) {
+    const parts = chatContent.map((p: any) => (typeof p === 'string' ? p : (p?.text ?? '')));
+    return parts.join('');
+  }
+  // Responses API structured output
+  if (Array.isArray(d?.output?.[0]?.content)) {
+    const parts = d.output[0].content.map((c: any) => (c?.text ?? ''));
+    return parts.join('');
+  }
+  return '';
 }
 
 function extractJson(text: string): any {
@@ -304,12 +353,14 @@ function normalizedDefaultModel(provider: string): string {
   const p = (provider || '').toLowerCase();
   if (p === 'perplexity') return 'sonar';
   if (p === 'openai') return 'gpt-4o';
-  if (p === 'anthropic') return 'claude-3-sonnet-20240229';
+  if (p === 'anthropic') return 'claude-3-5-sonnet-latest';
   return 'gpt-4o';
 }
 
-async function loadWorkflowPrompts(): Promise<Record<string, { prompt: string }>> {
-  const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
+async function loadWorkflowPrompts(req: NextApiRequest): Promise<Record<string, { prompt: string }>> {
+  const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
+  const host = (req.headers['x-forwarded-host'] as string) || (req.headers['host'] as string) || process.env.VERCEL_URL || '';
+  const base = process.env.SITE_URL || (host ? (host.startsWith('http') ? host : `${proto}://${host}`) : '');
   const url = `${base}/api/storage?agent=workflow&type=prompts`;
   const r = await fetch(url);
   if (!r.ok) throw new Error('Impossible de charger les prompts');

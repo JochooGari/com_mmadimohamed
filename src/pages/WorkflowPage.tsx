@@ -11,6 +11,10 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Play, Pause, Settings, Eye, Edit, Save, AlertCircle, CheckCircle, Plus, Trash2 } from 'lucide-react';
+import { WorkflowTimeline } from '@/components/WorkflowTimeline';
+import { DebugConsole } from '@/components/DebugConsole';
+import { MetricsPanel } from '@/components/MetricsPanel';
+import { ToastProvider, useToast } from '@/components/ErrorToast';
 
 interface WorkflowAgent {
   id: string;
@@ -20,6 +24,9 @@ interface WorkflowAgent {
   model: string;
   temperature?: number;
   maxTokens?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
   status: 'active' | 'inactive';
   prompt: string;
   lastRun?: Date;
@@ -59,7 +66,7 @@ interface CustomTopic {
   sources: string[];
 }
 
-export default function WorkflowPage() {
+function WorkflowInner() {
   const [config, setConfig] = useState<WorkflowConfig>({
     siteUrl: '',
     targetScores: {
@@ -107,8 +114,11 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
       description: 'Rédige des articles complets et optimisés SEO',
       provider: 'openai',
       model: 'gpt-4o',
-      temperature: 0.8,
-      maxTokens: 4000,
+      temperature: 0.68,
+      maxTokens: 14000,
+      topP: 0.9,
+      frequencyPenalty: 0.3,
+      presencePenalty: 0.1,
       status: 'inactive',
       prompt: `Tu es un rédacteur expert. Rédige un article complet et optimisé SEO.
 
@@ -240,6 +250,9 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
         model: agents.find(a => a.id === 'ghostwriter')?.model || 'gpt-4o',
         temperature: agents.find(a => a.id === 'ghostwriter')?.temperature,
         maxTokens: agents.find(a => a.id === 'ghostwriter')?.maxTokens,
+        topP: agents.find(a => a.id === 'ghostwriter')?.topP,
+        frequencyPenalty: agents.find(a => a.id === 'ghostwriter')?.frequencyPenalty,
+        presencePenalty: agents.find(a => a.id === 'ghostwriter')?.presencePenalty,
         apiKey: config.apiKeys.openai
       },
       reviewerAgent: {
@@ -372,6 +385,33 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
     setCustomTopics(prev => prev.filter((_, i) => i !== index));
   };
 
+  const latest = executions[0];
+  const mapToTimeline = (nodeId: string, name: string) => {
+    const st = latest?.steps?.find((s:any)=> s.nodeId===nodeId)?.status;
+    return st === 'completed' ? 'completed' : st === 'failed' ? 'failed' : latest?.status === 'running' ? 'running' : 'pending';
+  };
+  const steps = [
+    { id: 'search-content', name: 'Search Content', status: mapToTimeline('search-content','Search Content') },
+    { id: 'ghostwriter', name: 'Ghostwriter', status: mapToTimeline('ghostwriter','Ghostwriter') },
+    { id: 'review-content', name: 'Reviewer', status: mapToTimeline('review-content','Reviewer') },
+  ] as any[];
+  const currentStepIndex = Math.max(0, steps.findIndex((s:any)=> s.status==='running') !== -1 ? steps.findIndex((s:any)=> s.status==='running') : steps.findIndex((s:any)=> s.status==='completed'));
+
+  const [metricsCollapsed, setMetricsCollapsed] = useState(false);
+  const performance = {
+    executionTime: latest?.endTime && latest?.startTime ? (latest.endTime.getTime() - latest.startTime.getTime()) : 0,
+    tokensUsed: 0,
+    requestsCount: latest?.steps?.length || 0,
+    successRate: latest?.steps ? Math.round((latest.steps.filter((s:any)=> s.status==='completed').length / latest.steps.length) * 100) : 0,
+    errorRate: latest?.steps ? Math.round((latest.steps.filter((s:any)=> s.status==='failed').length / latest.steps.length) * 100) : 0,
+    averageLatency: 0,
+  } as any;
+  const agentsMetrics = [
+    { agentId:'search-content', agentName:'Search Content', requestsCount:1, successRate: steps[0].status==='completed'?100:0, averageResponseTime:0, tokensUsed:0, status: steps[0].status==='failed'?'error':(steps[0].status==='completed'?'active':'idle') },
+    { agentId:'ghostwriter', agentName:'Ghostwriter', requestsCount:1, successRate: steps[1].status==='completed'?100:0, averageResponseTime:0, tokensUsed:0, status: steps[1].status==='failed'?'error':(steps[1].status==='completed'?'active':'idle') },
+    { agentId:'review-content', agentName:'Reviewer', requestsCount:1, successRate: steps[2].status==='completed'?100:0, averageResponseTime:0, tokensUsed:0, status: steps[2].status==='failed'?'error':(steps[2].status==='completed'?'active':'idle') },
+  ] as any[];
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -413,6 +453,12 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
         </Alert>
       )}
 
+      {/* Top horizontal timeline */}
+      <WorkflowTimeline steps={steps as any[]} currentStepIndex={currentStepIndex} />
+
+      <div className="flex gap-4">
+        <MetricsPanel isCollapsed={metricsCollapsed} onToggleCollapse={()=> setMetricsCollapsed(v=>!v)} performance={performance as any} agents={agentsMetrics as any} />
+        <div className="flex-1">
       <Tabs defaultValue="config" className="space-y-6">
         <TabsList>
           <TabsTrigger value="config">Configuration</TabsTrigger>
@@ -724,6 +770,44 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
                         />
                       </div>
                     </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label>Top-P</Label>
+                        <Input
+                          type="number"
+                          step="0.05"
+                          min="0"
+                          max="1"
+                          value={agent.topP ?? ''}
+                          onChange={(e)=> handleUpdateAgent(agent.id, { topP: Number(e.target.value) })}
+                          placeholder="0.9"
+                        />
+                      </div>
+                      <div>
+                        <Label>Frequency penalty</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="2"
+                          value={agent.frequencyPenalty ?? ''}
+                          onChange={(e)=> handleUpdateAgent(agent.id, { frequencyPenalty: Number(e.target.value) })}
+                          placeholder="0.3"
+                        />
+                      </div>
+                      <div>
+                        <Label>Presence penalty</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="2"
+                          value={agent.presencePenalty ?? ''}
+                          onChange={(e)=> handleUpdateAgent(agent.id, { presencePenalty: Number(e.target.value) })}
+                          placeholder="0.1"
+                        />
+                      </div>
+                    </div>
                     <div className="flex gap-2 mt-4">
                       <Button
                         variant="outline"
@@ -807,11 +891,16 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
                         )}
 
                         {execution.output && (
-                          <div className="mt-2 p-2 bg-muted rounded text-sm">
-                            <strong>Résultat:</strong> {execution.output.summary ?
-                              `${execution.output.summary.totalArticles} articles générés avec ${execution.output.summary.averageIterations.toFixed(1)} itérations en moyenne` :
-                              'Workflow terminé avec succès'
-                            }
+                          <div className="mt-2 p-2 bg-muted rounded text-sm space-y-1">
+                            <div>
+                              <strong>Résultat:</strong> {execution.output.summary ?
+                                `${execution.output.summary.totalArticles} articles générés avec ${execution.output.summary.averageIterations.toFixed(1)} itérations en moyenne` :
+                                'Workflow terminé avec succès'
+                              }
+                            </div>
+                            <pre className="text-[11px] whitespace-pre-wrap bg-white p-2 rounded border max-h-40 overflow-auto">
+                              {typeof execution.output === 'string' ? execution.output : JSON.stringify(execution.output, null, 2)}
+                            </pre>
                           </div>
                         )}
 
@@ -829,6 +918,8 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
           </Card>
         </TabsContent>
       </Tabs>
+        </div>
+      </div>
 
       {/* Modal d'édition de prompt */}
       {editingPrompt && selectedAgent && (
@@ -870,5 +961,13 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
         </div>
       )}
     </div>
+  );
+}
+
+export default function WorkflowPage() {
+  return (
+    <ToastProvider>
+      <WorkflowInner />
+    </ToastProvider>
   );
 }

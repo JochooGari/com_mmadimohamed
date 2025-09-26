@@ -1,4 +1,6 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+// Minimal request/response types to avoid depending on Next.js typings
+type NextApiRequest = any;
+type NextApiResponse = any;
 
 // Simulate n8n workflow management via Vercel API
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

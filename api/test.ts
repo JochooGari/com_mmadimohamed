@@ -1,4 +1,6 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+// Minimal request/response types to avoid depending on Next.js typings
+type NextApiRequest = any;
+type NextApiResponse = any;
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');

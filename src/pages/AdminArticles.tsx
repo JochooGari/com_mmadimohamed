@@ -24,6 +24,7 @@ import {
 import { useAdminData } from '../context/AdminDataContext';
 import { tryGetSupabaseClient } from '../lib/supabase';
 import EnhancedEditorLayout from '../components/admin/enhanced-editor/EnhancedEditorLayout';
+import { Editor as TinymceEditor } from '@tinymce/tinymce-react';
 import AuthGuard from '../components/admin/AuthGuard';
 
 type Article = {
@@ -573,8 +574,15 @@ function CssStyleDesigner() {
   const [cssCode, setCssCode] = useState('');
   const [status, setStatus] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [showCssPanel, setShowCssPanel] = useState(true);
+  const [mode, setMode] = useState<'style' | 'preview' | 'editor'>('style');
   const [savedTemplates, setSavedTemplates] = useState<{name: string, css: string, url?: string}[]>([]);
+  const [editorContent, setEditorContent] = useState({
+    title: 'Titre d\'exemple – Style IA',
+    slug: 'style-preview',
+    excerpt: 'Prévisualisation des styles dans l\'éditeur IA avancé',
+    content_md: `# H1 Exemple\n\n## Sous-titre\n\nParagraphe introductif avec un lien [CTA](/#).\n\n### Liste\n- Élément 1\n- Élément 2\n\n> Citation marquante.\n\n| Colonne | Valeur |\n|---|---|\n| KPI | 98% |`,
+    content_html: ''
+  });
 
   useEffect(() => { (async () => {
     try {
@@ -726,20 +734,9 @@ function CssStyleDesigner() {
       {/* Barre de navigation modes */}
       <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant={showCssPanel ? "default" : "outline"}
-            onClick={() => setShowCssPanel(true)}
-          >
-            🎨 Style
-          </Button>
-          <Button
-            size="sm"
-            variant={!showCssPanel ? "default" : "outline"}
-            onClick={() => setShowCssPanel(false)}
-          >
-            👁️ Preview
-          </Button>
+          <Button size="sm" variant={mode==='style'? 'default':'outline'} onClick={() => setMode('style')}>🎨 Style</Button>
+          <Button size="sm" variant={mode==='preview'? 'default':'outline'} onClick={() => setMode('preview')}>👁️ Preview</Button>
+          <Button size="sm" variant={mode==='editor'? 'default':'outline'} onClick={() => setMode('editor')}>🧠 Éditeur IA</Button>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={saveCss} disabled={loading}>
@@ -789,9 +786,9 @@ function CssStyleDesigner() {
         </Card>
       )}
 
-      <div className={`grid gap-4 ${showCssPanel ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'}`}>
+      <div className={`grid gap-4 ${mode==='style' ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'}`}>
         {/* Panneau CSS */}
-        {showCssPanel && (
+        {mode==='style' && (
           <div className="lg:col-span-1 space-y-3">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -831,20 +828,40 @@ function CssStyleDesigner() {
           </div>
         )}
 
-        {/* Preview */}
-        <div className={showCssPanel ? "lg:col-span-2" : "col-span-1"}>
-          <div className="text-sm text-gray-600 mb-2 flex items-center justify-between">
-            <span>Aperçu Article</span>
-            <span className="text-xs text-gray-400">Les styles s'appliquent automatiquement aux articles publiés</span>
+        {/* Preview / Éditeur */}
+        {mode!=='style' && (
+          <div className="col-span-1">
+            <div className="text-sm text-gray-600 mb-2 flex items-center justify-between">
+              <span>{mode==='preview' ? 'Aperçu Article' : 'Éditeur IA avancé (aperçu en temps réel)'}</span>
+              <span className="text-xs text-gray-400">Les styles s'appliquent automatiquement aux articles publiés</span>
+            </div>
+            <div className="border rounded overflow-hidden bg-white">
+              {mode==='preview' ? (
+                <iframe title="preview" style={{ width:'100%', height: 700, border:'0' }} srcDoc={iframeHtml} />
+              ) : (
+                <div className="p-2">
+                  <TinymceEditor
+                    apiKey="your-tinymce-api-key"
+                    value={editorContent.content_html || editorContent.content_md}
+                    onEditorChange={(content) => setEditorContent(prev => ({ ...prev, content_html: content }))}
+                    init={{
+                      height: 640,
+                      menubar: true,
+                      plugins: [
+                        'advlist', 'autolink', 'lists', 'link', 'image', 'charmap',
+                        'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                        'insertdatetime', 'media', 'table', 'preview', 'help', 'wordcount'
+                      ],
+                      toolbar:
+                        'undo redo | blocks | bold italic underline forecolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | link image | removeformat | help',
+                      content_style: `body { font-family:Inter,Arial,sans-serif; font-size:14px; } ${cssCode}`,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
-          <div className="border rounded overflow-hidden bg-white">
-            <iframe
-              title="preview"
-              style={{ width:'100%', height: showCssPanel ? 560 : 700, border:'0' }}
-              srcDoc={iframeHtml}
-            />
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
