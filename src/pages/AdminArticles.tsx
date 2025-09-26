@@ -725,9 +725,56 @@ function CssStyleDesigner() {
 </body>
 </html>`;
 
+  const buildComponentsGalleryHtml = (tab: string, css: string) => {
+    const baseHead = `
+      <meta charset=\"utf-8\" />
+      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+      <style>body{margin:0;padding:16px;font-family:Inter,system-ui,Arial,sans-serif;background:#fff;color:#111;} .wrap{max-width:980px;margin:0 auto;} ${css}</style>
+    `;
+    const typography = `
+      <div class=\"preview-area\">
+        <h1 class=\"h1\">H1 - Titre Principal Article</h1>
+        <h2 class=\"h2\">H2 - Section Majeure</h2>
+        <h3 class=\"h3\">H3 - Sous-section</h3>
+        <h4 class=\"h4\">H4 - Paragraphe Important</h4>
+        <h5 class=\"h5\">H5 - Label / Catégorie</h5>
+        <p>Paragraphe standard avec <code>code inline</code> et <a href=\"#\">lien</a>.</p>
+        <div class=\"sommaire-box\">
+          <div class=\"sommaire-title\">Sommaire</div>
+          <ul class=\"sommaire-list\"><li><a href=\"#\">Introduction</a></li><li><a href=\"#\">Analyse</a></li><li><a href=\"#\">Conclusion</a></li></ul>
+        </div>
+      </div>`;
+    const finance = `
+      <div class=\"kpi-grid\">
+        <div class=\"kpi-card\"><div class=\"kpi-label\">CA</div><div class=\"kpi-value\">€2.4M</div><div class=\"kpi-change positive\">+12.5%</div></div>
+        <div class=\"kpi-card\"><div class=\"kpi-label\">EBITDA</div><div class=\"kpi-value\">18.3%</div><div class=\"kpi-change negative\">-2.1%</div></div>
+        <div class=\"kpi-card\"><div class=\"kpi-label\">Cash</div><div class=\"kpi-value\">€850K</div><div class=\"kpi-change positive\">+8.7%</div></div>
+      </div>
+      <table class=\"financial-table\"><thead><tr><th>Indicateur</th><th>Avant</th><th>Après</th></tr></thead><tbody><tr><td>Temps</td><td>30 h</td><td class=\"cell-positive\">4 h</td></tr><tr><td>Coûts</td><td>€12k</td><td class=\"cell-positive\">€5k</td></tr><tr><td>Qualité</td><td>85%</td><td class=\"cell-positive\">96%</td></tr></tbody></table>`;
+    const code = `
+      <div class=\"code-block\">python dashboard.py --config production.yml --port 8080</div>
+      <div class=\"sql-code\"><span class=\"sql-keyword\">SELECT</span> customer, <span class=\"sql-keyword\">SUM</span>(amount) <span class=\"sql-keyword\">AS</span> total FROM sales;</div>
+      <div class=\"dax-code\"><span class=\"dax-measure\">Total Sales</span> = <span class=\"dax-function\">SUM</span>(Sales[Amount])</div>`;
+    const ui = `
+      <div style=\"display:flex;gap:8px;flex-wrap:wrap\"> 
+        <button class=\"btn btn-primary\">Bouton primaire</button>
+        <button class=\"btn btn-secondary\">Bouton secondaire</button>
+        <button class=\"btn btn-outline\">Bouton outline</button>
+      </div>
+      <div style=\"display:flex;gap:6px;margin:12px 0\"> 
+        <span class=\"tag primary\">Primary</span>
+        <span class=\"tag secondary\">Secondary</span>
+        <span class=\"tag success\">Success</span>
+        <span class=\"tag danger\">Danger</span>
+      </div>
+      <div class=\"progress-bar\"><div class=\"progress-fill\" style=\"width:65%\">65%</div></div>
+      <blockquote class=\"quote-block\">Le style est un accélérateur de crédibilité.<span class=\"quote-author\">MagicPath</span></blockquote>`;
+    const body = `<div class=\"wrap neil-patel-style\">${tab==='typography'?typography:tab==='finance'?finance:tab==='code'?code:ui}</div>`;
+    return `<!doctype html><html><head>${baseHead}</head><body>${body}</body></html>`;
+  };
+
   const ComponentsGallery = () => (
     <div className="space-y-6">
-      <style dangerouslySetInnerHTML={{ __html: cssCode }} />
       <div className="component-tabs flex gap-2 border-b pb-2">
         {['typography','finance','code','ui'].map((t) => (
           <button
@@ -737,65 +784,11 @@ function CssStyleDesigner() {
           >{t.toUpperCase()}</button>
         ))}
       </div>
-      {componentTab==='typography' && (
-        <div className="preview-area">
-          <h1 className="h1">H1 - Titre Principal Article</h1>
-          <h2 className="h2">H2 - Section Majeure</h2>
-          <h3 className="h3">H3 - Sous-section</h3>
-          <h4 className="h4">H4 - Paragraphe Important</h4>
-          <h5 className="h5">H5 - Label / Catégorie</h5>
-          <p>Paragraphe standard avec <code>code inline</code> et <a href="#">lien</a>.</p>
-          <div className="sommaire-box">
-            <div className="sommaire-title">Sommaire</div>
-            <ul className="sommaire-list">
-              <li><a href="#">Introduction</a></li>
-              <li><a href="#">Analyse</a></li>
-              <li><a href="#">Conclusion</a></li>
-            </ul>
-          </div>
-        </div>
-      )}
-      {componentTab==='finance' && (
-        <div className="space-y-4">
-          <div className="kpi-grid">
-            <div className="kpi-card"><div className="kpi-label">CA</div><div className="kpi-value">€2.4M</div><div className="kpi-change positive">+12.5%</div></div>
-            <div className="kpi-card"><div className="kpi-label">EBITDA</div><div className="kpi-value">18.3%</div><div className="kpi-change negative">-2.1%</div></div>
-            <div className="kpi-card"><div className="kpi-label">Cash</div><div className="kpi-value">€850K</div><div className="kpi-change positive">+8.7%</div></div>
-          </div>
-          <table className="financial-table">
-            <thead><tr><th>Indicateur</th><th>Avant</th><th>Après</th></tr></thead>
-            <tbody>
-              <tr><td>Temps</td><td>30 h</td><td className="cell-positive">4 h</td></tr>
-              <tr><td>Coûts</td><td>€12k</td><td className="cell-positive">€5k</td></tr>
-              <tr><td>Qualité</td><td>85%</td><td className="cell-positive">96%</td></tr>
-            </tbody>
-          </table>
-        </div>
-      )}
-      {componentTab==='code' && (
-        <div className="space-y-4">
-          <div className="code-block">python dashboard.py --config production.yml --port 8080</div>
-          <div className="sql-code"><span className="sql-keyword">SELECT</span> customer, <span className="sql-keyword">SUM</span>(amount) <span className="sql-keyword">AS</span> total FROM sales;</div>
-          <div className="dax-code"><span className="dax-measure">Total Sales</span> = <span className="dax-function">SUM</span>(Sales[Amount])</div>
-        </div>
-      )}
-      {componentTab==='ui' && (
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <button className="btn btn-primary">Bouton primaire</button>
-            <button className="btn btn-secondary">Bouton secondaire</button>
-            <button className="btn btn-outline">Bouton outline</button>
-          </div>
-          <div className="flex gap-2">
-            <span className="tag primary">Primary</span>
-            <span className="tag secondary">Secondary</span>
-            <span className="tag success">Success</span>
-            <span className="tag danger">Danger</span>
-          </div>
-          <div className="progress-bar"><div className="progress-fill" style={{width:'65%'}}>65%</div></div>
-          <blockquote className="quote-block">Le style est un accélérateur de crédibilité.<span className="quote-author">MagicPath</span></blockquote>
-        </div>
-      )}
+      <iframe
+        title="components-preview"
+        style={{ width: '100%', height: 620, border: '0', background: '#fff' }}
+        srcDoc={buildComponentsGalleryHtml(componentTab, cssCode)}
+      />
     </div>
   );
 
