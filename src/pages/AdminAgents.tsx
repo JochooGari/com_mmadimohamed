@@ -5,7 +5,7 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Bot, Plus, Settings, Edit3, Trash2, Play, Pause, Zap, TestTube, Copy, Eye } from 'lucide-react';
+import { Bot, Plus, Settings, Edit3, Trash2, Play, Pause, Zap, TestTube, Copy, Eye, Download, Upload } from 'lucide-react';
 
 type AIModel = {
   id: string;
@@ -241,12 +241,53 @@ export default function AdminAgents() {
   const [testMode, setTestMode] = useState(false);
   const [testInput, setTestInput] = useState('');
   const [testOutput, setTestOutput] = useState('');
+  const WORKFLOW_AGENT_IDS = ['search-content','ghostwriter','review-content'];
 
   useEffect(() => {
     try { 
       window.localStorage.setItem('admin:agents', JSON.stringify(agents)); 
     } catch {}
   }, [agents]);
+
+  // Ensure the 3 workflow agents exist; load prompts from backend storage for sync
+  useEffect(() => { (async () => {
+    setAgents(prev => {
+      let next = [...prev];
+      const upsert = (id: string, name: string, role: string) => {
+        if (!next.some(a => a.id === id)) {
+          next = [
+            {
+              id,
+              name,
+              role,
+              prompt: '',
+              systemPrompt: '',
+              status: 'active',
+              description: '',
+              category: 'Content Creation',
+              model: id==='review-content' ? 'claude-3-sonnet' : (id==='ghostwriter' ? 'gpt-4-turbo' : 'gpt-3.5-turbo'),
+              temperature: id==='review-content' ? 0.3 : 0.7,
+              maxTokens: id==='ghostwriter' ? 4000 : 2000,
+              responseFormat: 'text',
+              variables: []
+            },
+            ...next
+          ];
+        }
+      };
+      upsert('search-content','Agent Search Content','Content Discovery');
+      upsert('ghostwriter','Agent Ghostwriter','Content Writing');
+      upsert('review-content','Agent Reviewer','Content Review');
+      return next;
+    });
+    try {
+      const r = await fetch('/api/storage?agent=workflow&type=prompts');
+      if (r.ok) {
+        const mapping = await r.json();
+        setAgents(prev => prev.map(a => WORKFLOW_AGENT_IDS.includes(a.id) ? ({ ...a, prompt: mapping?.[a.id]?.prompt ?? a.prompt }) : a));
+      }
+    } catch {}
+  })(); }, []);
 
   function handleSaveAgent() {
     if (!draft.name.trim()) return;
@@ -256,6 +297,14 @@ export default function AdminAgents() {
       const exists = prev.some(a => a.id === id);
       return exists ? prev.map(a => a.id === id ? item : a) : [item, ...prev];
     });
+    // Persist prompt to workflow storage if it's one of the workflow agents
+    if (WORKFLOW_AGENT_IDS.includes(id)) {
+      try {
+        const mapping: Record<string, { prompt: string }> = {};
+        mapping[id] = { prompt: item.prompt || '' };
+        fetch('/api/storage', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'save_workflow_prompts', data: mapping }) }).catch(()=>{});
+      } catch {}
+    }
     setDraft({
       id: '', 
       name: '', 
@@ -387,6 +436,23 @@ export default function AdminAgents() {
     }, 2000);
   };
 
+  // Bulk sync prompts with Workflow storage
+  const loadWorkflowPrompts = async () => {
+    try {
+      const r = await fetch('/api/storage?agent=workflow&type=prompts');
+      if (!r.ok) return;
+      const mapping = await r.json();
+      setAgents(prev => prev.map(a => WORKFLOW_AGENT_IDS.includes(a.id) ? ({ ...a, prompt: mapping?.[a.id]?.prompt ?? a.prompt }) : a));
+    } catch {}
+  };
+  const saveWorkflowPrompts = async () => {
+    try {
+      const mapping: Record<string, { prompt: string }> = {};
+      agents.filter(a => WORKFLOW_AGENT_IDS.includes(a.id)).forEach(a => { mapping[a.id] = { prompt: a.prompt || '' }; });
+      await fetch('/api/storage', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'save_workflow_prompts', data: mapping }) });
+    } catch {}
+  };
+
   const duplicateAgent = (agent: Agent) => {
     const duplicate = {
       ...agent,
@@ -413,6 +479,12 @@ export default function AdminAgents() {
           <p className="text-gray-600 mt-1">Configurez vos agents d'intelligence artificielle avec des modèles et paramètres personnalisés</p>
         </div>
         <div className="flex items-center space-x-3">
+          <Button variant="outline" onClick={loadWorkflowPrompts}>
+            <Download className="w-4 h-4 mr-2" /> Charger prompts Workflow
+          </Button>
+          <Button variant="outline" onClick={saveWorkflowPrompts}>
+            <Upload className="w-4 h-4 mr-2" /> Sauvegarder prompts Workflow
+          </Button>
           <Button variant="outline" onClick={() => setTestMode(!testMode)}>
             <TestTube className="w-4 h-4 mr-2" />
             {testMode ? 'Fermer test' : 'Mode test'}
