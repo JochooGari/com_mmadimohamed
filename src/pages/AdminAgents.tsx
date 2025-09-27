@@ -10,7 +10,7 @@ import { Bot, Plus, Settings, Edit3, Trash2, Play, Pause, Zap, TestTube, Copy, E
 type AIModel = {
   id: string;
   name: string;
-  provider: 'openai' | 'anthropic' | 'google' | 'mistral' | 'local';
+  provider: 'openai' | 'anthropic' | 'perplexity' | 'google' | 'mistral' | 'local';
   maxTokens: number;
   costPer1kTokens: number;
   capabilities: string[];
@@ -25,6 +25,7 @@ type Agent = {
   status?: 'active' | 'inactive';
   description?: string;
   category?: string;
+  provider?: 'openai' | 'anthropic' | 'perplexity' | 'google' | 'mistral' | 'local';
   model: string;
   temperature?: number;
   maxTokens?: number;
@@ -57,6 +58,22 @@ const AI_MODELS: AIModel[] = [
     maxTokens: 16385,
     costPer1kTokens: 0.002,
     capabilities: ['text-generation', 'conversations', 'summarization']
+  },
+  {
+    id: 'sonar',
+    name: 'Perplexity Sonar',
+    provider: 'perplexity',
+    maxTokens: 32768,
+    costPer1kTokens: 0,
+    capabilities: ['web-search', 'retrieval', 'text-generation']
+  },
+  {
+    id: 'sonar-pro',
+    name: 'Perplexity Sonar Pro',
+    provider: 'perplexity',
+    maxTokens: 131072,
+    costPer1kTokens: 0,
+    capabilities: ['web-search', 'retrieval', 'text-generation']
   },
   {
     id: 'claude-3-opus',
@@ -203,6 +220,9 @@ const DEFAULT: Agent[] = [
 ];
 
 export default function AdminAgents() {
+  const [customModels, setCustomModels] = useState<AIModel[]>(() => {
+    try { const raw = localStorage.getItem('admin:custom_models'); return raw ? JSON.parse(raw) as AIModel[] : []; } catch { return []; }
+  });
   const [agents, setAgents] = useState<Agent[]>(() => {
     try { 
       const raw = window.localStorage.getItem('admin:agents'); 
@@ -239,8 +259,8 @@ export default function AdminAgents() {
   
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [testMode, setTestMode] = useState(false);
-  const [testInput, setTestInput] = useState('');
-  const [testOutput, setTestOutput] = useState('');
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<Array<{role:'user'|'assistant'|'system'; content:string}>>([]);
   const WORKFLOW_AGENT_IDS = ['search-content','ghostwriter','review-content'];
 
   useEffect(() => {
@@ -248,6 +268,9 @@ export default function AdminAgents() {
       window.localStorage.setItem('admin:agents', JSON.stringify(agents)); 
     } catch {}
   }, [agents]);
+  useEffect(() => {
+    try { localStorage.setItem('admin:custom_models', JSON.stringify(customModels)); } catch {}
+  }, [customModels]);
 
   // Ensure the 3 workflow agents exist; load prompts from backend storage for sync
   useEffect(() => { (async () => {
@@ -265,11 +288,14 @@ export default function AdminAgents() {
               status: 'active',
               description: '',
               category: 'Content Creation',
-              model: id==='review-content' ? 'claude-3-sonnet' : (id==='ghostwriter' ? 'gpt-4-turbo' : 'gpt-3.5-turbo'),
+              provider: id==='search-content' ? 'perplexity' : (id==='ghostwriter' ? 'openai' : 'anthropic'),
+              model: id==='search-content' ? 'sonar' : (id==='ghostwriter' ? 'gpt-4-turbo' : 'claude-3-sonnet'),
               temperature: id==='review-content' ? 0.3 : 0.7,
               maxTokens: id==='ghostwriter' ? 4000 : 2000,
               responseFormat: 'text',
-              variables: []
+              variables: [],
+              tools: ['web_search','data_analysis','file_reader'],
+              memoryEnabled: true
             },
             ...next
           ];
@@ -292,7 +318,8 @@ export default function AdminAgents() {
   function handleSaveAgent() {
     if (!draft.name.trim()) return;
     const id = draft.id || draft.name.toLowerCase().replace(/\s+/g, '-');
-    const item = { ...draft, id, status: draft.status || 'active' };
+    const mustTools = Array.from(new Set([...(draft.tools||[]), 'web_search','file_reader']))
+    const item = { ...draft, id, status: draft.status || 'active', tools: mustTools };
     setAgents(prev => {
       const exists = prev.some(a => a.id === id);
       return exists ? prev.map(a => a.id === id ? item : a) : [item, ...prev];
@@ -375,9 +402,11 @@ export default function AdminAgents() {
     setShowCreateForm(false);
   }
   
+  const allModels = () => [...AI_MODELS, ...customModels];
   const getModelInfo = (modelId: string) => {
-    return AI_MODELS.find(m => m.id === modelId) || AI_MODELS[0];
+    return allModels().find(m => m.id === modelId) || allModels()[0];
   };
+  const getModelsByProvider = (prov: AIModel['provider']) => allModels().filter(m => m.provider === prov);
   
   const addVariable = () => {
     setDraft(d => ({
@@ -425,16 +454,7 @@ export default function AdminAgents() {
     }));
   };
 
-  const testAgent = async () => {
-    if (!testInput.trim()) return;
-    
-    setTestOutput('🤖 Test en cours...');
-    
-    // Simulation d'un appel API
-    setTimeout(() => {
-      setTestOutput(`**Agent:** ${draft.name}\n**Modèle:** ${getModelInfo(draft.model).name}\n**Température:** ${draft.temperature}\n\n**Réponse simulée:**\n\nCeci est une réponse simulée basée sur votre prompt. En production, l'agent utiliserait le modèle ${getModelInfo(draft.model).name} pour générer une vraie réponse.\n\n**Variables détectées:**\n${(draft.variables || []).map(v => `- ${v.name}: ${v.type}`).join('\n')}\n\n**Outils disponibles:**\n${(draft.tools || []).map(t => `- ${AVAILABLE_TOOLS.find(tool => tool.id === t)?.name}`).join('\n')}`);
-    }, 2000);
-  };
+  // Chat test handled in tab
 
   // Bulk sync prompts with Workflow storage
   const loadWorkflowPrompts = async () => {
@@ -479,6 +499,11 @@ export default function AdminAgents() {
           <p className="text-gray-600 mt-1">Configurez vos agents d'intelligence artificielle avec des modèles et paramètres personnalisés</p>
         </div>
         <div className="flex items-center space-x-3">
+          {showCreateForm && (
+            <Button variant="outline" onClick={() => setShowCreateForm(false)}>
+              ← Retour AI Agents
+            </Button>
+          )}
           <Button variant="outline" onClick={loadWorkflowPrompts}>
             <Download className="w-4 h-4 mr-2" /> Charger prompts Workflow
           </Button>
@@ -506,30 +531,36 @@ export default function AdminAgents() {
             <CardTitle className="text-lg">Test d'Agent IA</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">
-                  Message de test
-                </label>
-                <Textarea
-                  rows={4}
-                  placeholder="Entrez votre message de test..."
-                  value={testInput}
-                  onChange={(e) => setTestInput(e.target.value)}
-                />
-                <Button onClick={testAgent} className="mt-2 bg-blue-500 hover:bg-blue-600">
-                  <Zap className="w-4 h-4 mr-2" />
-                  Tester l'agent
-                </Button>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">
-                  Réponse de l'agent
-                </label>
-                <div className="bg-white border rounded-lg p-3 min-h-[120px] whitespace-pre-wrap text-sm">
-                  {testOutput || 'La réponse apparaîtra ici...'}
+            <div className="border rounded-lg p-3 bg-white min-h-[160px] max-h-[320px] overflow-auto">
+              {chatMessages.length === 0 && (
+                <div className="text-sm text-gray-500">Envoyez un message pour tester cet agent.</div>
+              )}
+              {chatMessages.map((m, i) => (
+                <div key={i} className={`text-sm mb-2 ${m.role==='assistant'?'text-gray-900':'text-gray-700'}`}>
+                  <strong>{m.role==='assistant'?'Agent':'Vous'}:</strong> <span className="whitespace-pre-wrap">{m.content}</span>
                 </div>
-              </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Textarea rows={2} className="flex-1" placeholder="Écrire un message..." value={chatInput} onChange={(e)=> setChatInput(e.target.value)} />
+              <Button onClick={async ()=>{
+                const content = chatInput.trim();
+                if (!content) return; setChatInput('');
+                const withSystem = draft.systemPrompt ? [{ role:'system' as const, content: draft.systemPrompt }] : [];
+                const history = draft.memoryEnabled ? [...withSystem, ...chatMessages] : [...withSystem];
+                const messages = [...history, { role:'user' as const, content }];
+                setChatMessages(messages);
+                try {
+                  const r = await fetch('/api/n8n/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ workflowId:'test-agent', data:{ messages }, config:{ provider: draft.provider || getModelInfo(draft.model).provider, model: draft.model, temperature: draft.temperature || 0.7, maxTokens: draft.maxTokens || 2000 } }) });
+                  const body = await r.json();
+                  const text = body?.output?.text || body?.error || 'Erreur';
+                  setChatMessages(prev => [...prev, { role:'assistant', content: String(text) }]);
+                } catch (e:any) {
+                  setChatMessages(prev => [...prev, { role:'assistant', content: `Erreur: ${e.message}` }]);
+                }
+              }} className="h-auto bg-blue-500 hover:bg-blue-600">
+                <Zap className="w-4 h-4 mr-2" /> Envoyer
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -549,7 +580,7 @@ export default function AdminAgents() {
                 <TabsTrigger value="basic">Configuration de base</TabsTrigger>
                 <TabsTrigger value="advanced">Paramètres avancés</TabsTrigger>
                 <TabsTrigger value="tools">Outils & Variables</TabsTrigger>
-                <TabsTrigger value="examples">Exemples</TabsTrigger>
+                <TabsTrigger value="examples">Test Agent IA</TabsTrigger>
               </TabsList>
 
               {/* Basic Configuration */}
@@ -601,12 +632,32 @@ export default function AdminAgents() {
                       onChange={(e) => setDraft(d => ({ ...d, model: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                     >
-                      {AI_MODELS.map(model => (
-                        <option key={model.id} value={model.id}>
-                          {model.name} ({model.provider})
-                        </option>
+                      {getModelsByProvider(draft.provider || getModelInfo(draft.model).provider).map(model => (
+                        <option key={model.id} value={model.id}>{model.name}</option>
                       ))}
                     </select>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="Ajouter un modèle (id)"
+                        onKeyDown={(e:any)=>{
+                          if (e.key==='Enter' && e.currentTarget.value.trim()) {
+                            const id = e.currentTarget.value.trim();
+                            const prov = draft.provider || getModelInfo(draft.model).provider;
+                            setCustomModels(prev => [...prev, { id, name: id, provider: prov, maxTokens: 32768, costPer1kTokens: 0, capabilities: [] }]);
+                            setDraft(d=>({ ...d, model: id }));
+                            e.currentTarget.value='';
+                          }
+                        }}
+                      />
+                      <Button type="button" variant="outline" onClick={()=>{
+                        const id = prompt('ID du modèle ?')?.trim();
+                        if (!id) return;
+                        const prov = draft.provider || getModelInfo(draft.model).provider;
+                        setCustomModels(prev => [...prev, { id, name: id, provider: prov, maxTokens: 32768, costPer1kTokens: 0, capabilities: [] }]);
+                        setDraft(d=>({ ...d, model: id }));
+                      }}>Ajouter</Button>
+                    </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-700 block mb-1">
@@ -628,7 +679,7 @@ export default function AdminAgents() {
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                     <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center space-x-4">
-                        <span><strong>Fournisseur:</strong> {getModelInfo(draft.model).provider}</span>
+                        <span><strong>Fournisseur:</strong> {draft.provider || getModelInfo(draft.model).provider}</span>
                         <span><strong>Tokens max:</strong> {getModelInfo(draft.model).maxTokens.toLocaleString()}</span>
                         <span><strong>Coût:</strong> ${getModelInfo(draft.model).costPer1kTokens}/1k tokens</span>
                       </div>
@@ -800,15 +851,17 @@ export default function AdminAgents() {
                         <input
                           type="checkbox"
                           id={tool.id}
-                          checked={(draft.tools || []).includes(tool.id)}
+                          checked={(['web_search','file_reader',...(draft.tools||[])]).includes(tool.id)}
                           onChange={(e) => {
                             const tools = draft.tools || [];
                             if (e.target.checked) {
                               setDraft(d => ({ ...d, tools: [...tools, tool.id] }));
                             } else {
+                              if (tool.id==='web_search' || tool.id==='file_reader') return;
                               setDraft(d => ({ ...d, tools: tools.filter(t => t !== tool.id) }));
                             }
                           }}
+                          disabled={tool.id==='web_search' || tool.id==='file_reader'}
                           className="mt-1 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                         />
                         <div>
@@ -876,47 +929,38 @@ export default function AdminAgents() {
                 </div>
               </TabsContent>
 
-              {/* Examples */}
+              {/* Test Agent IA */}
               <TabsContent value="examples" className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-gray-900">Exemples (few-shot learning)</h4>
-                  <Button type="button" variant="outline" size="sm" onClick={addExample}>
-                    <Plus className="w-4 h-4 mr-1" /> Ajouter exemple
-                  </Button>
+                <h4 className="text-sm font-semibold text-gray-900">Test Agent IA</h4>
+                <div className="border rounded-lg p-3 bg-white min-h-[200px] max-h-[340px] overflow-auto">
+                  {chatMessages.length === 0 && (
+                    <div className="text-sm text-gray-500">Commencez un échange pour tester cet agent.</div>
+                  )}
+                  {chatMessages.map((m, i) => (
+                    <div key={i} className={`text-sm mb-2 ${m.role==='assistant'?'text-gray-900':'text-gray-700'}`}>
+                      <strong>{m.role==='assistant'?'Agent':'Vous'}:</strong> <span className="whitespace-pre-wrap">{m.content}</span>
+                    </div>
+                  ))}
                 </div>
-                
-                {(draft.examples || []).map((example, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 border rounded-lg">
-                    <div>
-                      <label className="text-xs font-medium text-gray-700 block mb-1">Entrée</label>
-                      <Textarea
-                        rows={2}
-                        placeholder="Exemple d'entrée..."
-                        value={example.input}
-                        onChange={(e) => updateExample(index, 'input', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-medium text-gray-700">Sortie attendue</label>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => removeExample(index)}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <Textarea
-                        rows={2}
-                        placeholder="Réponse attendue..."
-                        value={example.output}
-                        onChange={(e) => updateExample(index, 'output', e.target.value)}
-                      />
-                    </div>
-                  </div>
-                ))}
+                <div className="flex gap-2">
+                  <Textarea rows={2} className="flex-1" placeholder="Écrire un message..." value={chatInput} onChange={(e)=> setChatInput(e.target.value)} />
+                  <Button onClick={async ()=>{
+                    const content = chatInput.trim();
+                    if (!content) return; setChatInput('');
+                    const withSystem = draft.systemPrompt ? [{ role:'system' as const, content: draft.systemPrompt }] : [];
+                    const history = draft.memoryEnabled ? [...withSystem, ...chatMessages] : [...withSystem];
+                    const messages = [...history, { role:'user' as const, content }];
+                    setChatMessages(messages);
+                    try {
+                      const r = await fetch('/api/n8n/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ workflowId:'test-agent', data:{ messages }, config:{ provider: draft.provider || getModelInfo(draft.model).provider, model: draft.model, temperature: draft.temperature || 0.7, maxTokens: draft.maxTokens || 2000 } }) });
+                      const body = await r.json();
+                      const text = body?.output?.text || body?.error || 'Erreur';
+                      setChatMessages(prev => [...prev, { role:'assistant', content: String(text) }]);
+                    } catch (e:any) {
+                      setChatMessages(prev => [...prev, { role:'assistant', content: `Erreur: ${e.message}` }]);
+                    }
+                  }}>Envoyer</Button>
+                </div>
               </TabsContent>
             </Tabs>
             

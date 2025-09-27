@@ -25,10 +25,29 @@ export default async function handler(req: any, res: any) {
       return await executeContentAgentsWorkflow(req, res, data, config);
     }
 
+    if (workflowId === 'test-agent') {
+      return await executeTestAgent(req, res, data, config);
+    }
+
     return res.status(404).json({ error: 'Workflow not found' });
   } catch (error: any) {
     console.error('Workflow execution error:', error);
     return res.status(500).json({ error: error.message || 'Execution failed' });
+  }
+}
+
+async function executeTestAgent(req: any, res: any, data: any, cfg: any) {
+  const provider = String(cfg?.provider || 'openai');
+  const model = String(cfg?.model || normalizedDefaultModel(provider));
+  const apiKey = cfg?.apiKey || getEnvKey(provider);
+  const temperature = Number(cfg?.temperature ?? 0.7);
+  const maxTokens = Number(cfg?.maxTokens ?? 1000);
+  const messages = Array.isArray(data?.messages) ? data.messages : [];
+  try {
+    const text = await callProvider(provider, model, apiKey, messages, temperature, maxTokens);
+    return res.status(200).json({ status:'completed', output: { text }, debug: { provider, model } });
+  } catch (e: any) {
+    return res.status(200).json({ status:'failed', error: e.message || 'Test agent failed', debug: { provider, model } });
   }
 }
 
