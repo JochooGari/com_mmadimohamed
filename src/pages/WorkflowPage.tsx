@@ -177,8 +177,9 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
     sources: []
   });
   const [isAddingTopic, setIsAddingTopic] = useState(false);
+  const [recentSites, setRecentSites] = useState<string[]>([]);
 
-  // Load persisted prompts
+  // Load persisted prompts and recent sites
   useEffect(() => { (async () => {
     try {
       const r = await fetch('/api/storage?agent=workflow&type=prompts');
@@ -187,6 +188,13 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
         if (data && typeof data === 'object') {
           setAgents(prev => prev.map(a => ({ ...a, prompt: data[a.id]?.prompt ?? a.prompt })));
         }
+      }
+    } catch {}
+    try {
+      const raw = localStorage.getItem('workflow_recent_sites');
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setRecentSites(arr);
       }
     } catch {}
   })(); }, []);
@@ -267,6 +275,16 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
 
     setExecutions(prev => [newExecution, ...prev]);
 
+    // persist recent site URLs (max 5)
+    try {
+      const url = (config.siteUrl || '').trim();
+      if (url) {
+        const next = [url, ...recentSites.filter(u => u !== url)].slice(0, 5);
+        setRecentSites(next);
+        localStorage.setItem('workflow_recent_sites', JSON.stringify(next));
+      }
+    } catch {}
+
     try {
       const response = await fetch('/api/n8n/execute', {
         method: 'POST',
@@ -282,7 +300,8 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
 
       const body = await response.json().catch(() => ({}));
 
-      if (!response.ok) {
+      const failed = body?.status === 'failed' || !!body?.error;
+      if (!response.ok || failed) {
         setExecutions(prev => prev.map(exec =>
           exec.id === newExecution.id
             ? {
@@ -290,24 +309,23 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
                 status: 'failed',
                 endTime: new Date(),
                 steps: Array.isArray(body?.steps) ? body.steps : exec.steps,
-                error: body?.error || 'Erreur API (500)'
+                error: body?.error || (!response.ok ? 'Erreur API (500)' : 'Exécution échouée')
               }
             : exec
         ));
-        return;
+      } else {
+        setExecutions(prev => prev.map(exec =>
+          exec.id === newExecution.id
+            ? {
+                ...exec,
+                status: 'completed',
+                endTime: new Date(),
+                steps: Array.isArray(body?.steps) ? body.steps : [],
+                output: body?.output
+              }
+            : exec
+        ));
       }
-
-      setExecutions(prev => prev.map(exec =>
-        exec.id === newExecution.id
-          ? {
-              ...exec,
-              status: 'completed',
-              endTime: new Date(),
-              steps: Array.isArray(body?.steps) ? body.steps : [],
-              output: body?.output
-            }
-          : exec
-      ));
 
     } catch (error: any) {
       setExecutions(prev => prev.map(exec =>
@@ -478,12 +496,27 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
               <CardContent className="space-y-4">
                 <div>
                   <Label htmlFor="site-url">URL du Site à Analyser</Label>
-                  <Input
-                    id="site-url"
-                    placeholder="https://votre-site.com"
-                    value={config.siteUrl}
-                    onChange={(e) => setConfig(prev => ({ ...prev, siteUrl: e.target.value }))}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="site-url"
+                      placeholder="https://votre-site.com"
+                      value={config.siteUrl}
+                      onChange={(e) => setConfig(prev => ({ ...prev, siteUrl: e.target.value }))}
+                    />
+                    {recentSites.length > 0 && (
+                      <Select onValueChange={(v:any)=> setConfig(prev=>({ ...prev, siteUrl: v }))}>
+                        <SelectTrigger className="w-[280px]">
+                          <SelectValue placeholder="Récents" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {recentSites.map((u)=> (
+                            <SelectItem key={u} value={u}>{u}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Historique local: dernières URL utilisées</p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>

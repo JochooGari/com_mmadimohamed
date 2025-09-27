@@ -210,7 +210,8 @@ async function executeContentAgentsWorkflow(req: any, res: any, data: any, cfg: 
     execution.error = error.message;
     execution.finishedAt = new Date().toISOString();
 
-    return res.status(500).json(execution);
+    // Return 200 with structured failure so the frontend can display detailed steps/debug
+    return res.status(200).json(execution);
   }
 }
 
