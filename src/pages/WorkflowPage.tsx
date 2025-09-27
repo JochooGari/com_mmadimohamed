@@ -24,9 +24,6 @@ interface WorkflowAgent {
   model: string;
   temperature?: number;
   maxTokens?: number;
-  topP?: number;
-  frequencyPenalty?: number;
-  presencePenalty?: number;
   status: 'active' | 'inactive';
   prompt: string;
   lastRun?: Date;
@@ -114,11 +111,8 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
       description: 'Rédige des articles complets et optimisés SEO',
       provider: 'openai',
       model: 'gpt-4o',
-      temperature: 0.68,
-      maxTokens: 14000,
-      topP: 0.9,
-      frequencyPenalty: 0.3,
-      presencePenalty: 0.1,
+      temperature: 0.8,
+      maxTokens: 4000,
       status: 'inactive',
       prompt: `Tu es un rédacteur expert. Rédige un article complet et optimisé SEO.
 
@@ -250,9 +244,6 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
         model: agents.find(a => a.id === 'ghostwriter')?.model || 'gpt-4o',
         temperature: agents.find(a => a.id === 'ghostwriter')?.temperature,
         maxTokens: agents.find(a => a.id === 'ghostwriter')?.maxTokens,
-        topP: agents.find(a => a.id === 'ghostwriter')?.topP,
-        frequencyPenalty: agents.find(a => a.id === 'ghostwriter')?.frequencyPenalty,
-        presencePenalty: agents.find(a => a.id === 'ghostwriter')?.presencePenalty,
         apiKey: config.apiKeys.openai
       },
       reviewerAgent: {
@@ -289,12 +280,22 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
         })
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.details ? error.details.join(', ') : error.error);
-      }
+      const body = await response.json().catch(() => ({}));
 
-      const result = await response.json();
+      if (!response.ok) {
+        setExecutions(prev => prev.map(exec =>
+          exec.id === newExecution.id
+            ? {
+                ...exec,
+                status: 'failed',
+                endTime: new Date(),
+                steps: Array.isArray(body?.steps) ? body.steps : exec.steps,
+                error: body?.error || 'Erreur API (500)'
+              }
+            : exec
+        ));
+        return;
+      }
 
       setExecutions(prev => prev.map(exec =>
         exec.id === newExecution.id
@@ -302,8 +303,8 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
               ...exec,
               status: 'completed',
               endTime: new Date(),
-              steps: result.steps || [],
-              output: result.output
+              steps: Array.isArray(body?.steps) ? body.steps : [],
+              output: body?.output
             }
           : exec
       ));
@@ -767,44 +768,6 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
                           value={agent.maxTokens ?? ''}
                           onChange={(e)=> handleUpdateAgent(agent.id, { maxTokens: Number(e.target.value) })}
                           placeholder="2000"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <Label>Top-P</Label>
-                        <Input
-                          type="number"
-                          step="0.05"
-                          min="0"
-                          max="1"
-                          value={agent.topP ?? ''}
-                          onChange={(e)=> handleUpdateAgent(agent.id, { topP: Number(e.target.value) })}
-                          placeholder="0.9"
-                        />
-                      </div>
-                      <div>
-                        <Label>Frequency penalty</Label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="2"
-                          value={agent.frequencyPenalty ?? ''}
-                          onChange={(e)=> handleUpdateAgent(agent.id, { frequencyPenalty: Number(e.target.value) })}
-                          placeholder="0.3"
-                        />
-                      </div>
-                      <div>
-                        <Label>Presence penalty</Label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="2"
-                          value={agent.presencePenalty ?? ''}
-                          onChange={(e)=> handleUpdateAgent(agent.id, { presencePenalty: Number(e.target.value) })}
-                          placeholder="0.1"
                         />
                       </div>
                     </div>

@@ -1,8 +1,7 @@
 // @ts-nocheck
-import { NextApiRequest, NextApiResponse } from 'next';
 
 // Execute workflow via direct AI API calls
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: any, res: any) {
   const { method } = req;
 
   // CORS headers
@@ -33,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-async function executeContentAgentsWorkflow(req: NextApiRequest, res: NextApiResponse, data: any, cfg: any) {
+async function executeContentAgentsWorkflow(req: any, res: any, data: any, cfg: any) {
   const execution: any = {
     id: `exec-${Date.now()}`,
     workflowId: 'content-agents-workflow',
@@ -357,7 +356,7 @@ function normalizedDefaultModel(provider: string): string {
   return 'gpt-4o';
 }
 
-async function loadWorkflowPrompts(req: NextApiRequest): Promise<Record<string, { prompt: string }>> {
+async function loadWorkflowPrompts(req: any): Promise<Record<string, { prompt: string }>> {
   const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
   const host = (req.headers['x-forwarded-host'] as string) || (req.headers['host'] as string) || process.env.VERCEL_URL || '';
   const base = process.env.SITE_URL || (host ? (host.startsWith('http') ? host : `${proto}://${host}`) : '');

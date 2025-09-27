@@ -21,7 +21,6 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminAnalytics from './pages/AdminAnalytics';
 import AdminAgents from './pages/AdminAgents';
 import AdminApprovals from './pages/AdminApprovals';
-import AdminWorkflow from './pages/AdminWorkflow';
 import AdminArticles from './pages/AdminArticles';
 import AdminResources from './pages/AdminResources';
 import AdminSettings from './pages/AdminSettings';
@@ -58,7 +57,7 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/admin" element={<AdminDataProvider><AdminLayout /></AdminDataProvider>} >
           <Route index element={<AdminDashboard />} />
-          <Route path="workflow" element={<AdminWorkflow />} />
+          <Route path="workflow" element={<WorkflowPage />} />
           <Route path="articles" element={<AdminArticles />} />
           <Route path="resources" element={<AdminResources />} />
           <Route path="agents" element={<AdminAgents />} />
