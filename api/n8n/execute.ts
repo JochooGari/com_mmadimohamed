@@ -48,8 +48,12 @@ async function executeTestAgent(req: any, res: any, data: any, cfg: any) {
   const maxTokens = Number(cfg?.maxTokens ?? 1000);
   const messages = Array.isArray(data?.messages) ? data.messages : [];
   try {
+    const useResponses = provider === 'openai' && /(gpt-5|gpt-4o|^o\b|-omni|^omni)/i.test(String(model));
+    const tokensParam = provider === 'openai' ? (useResponses ? 'max_output_tokens' : 'max_tokens') : 'max_tokens';
+    const temperatureSent = provider === 'openai' && /gpt-5/i.test(String(model)) ? false : true;
+
     const text = await callProvider(provider, model, apiKey, messages, temperature, maxTokens);
-    return res.status(200).json({ status:'completed', output: { text }, debug: { provider, model } });
+    return res.status(200).json({ status:'completed', output: { text }, debug: { provider, model, tokensParam, temperatureSent, maxTokensUsed: maxTokens } });
   } catch (e: any) {
     return res.status(200).json({ status:'failed', error: e.message || 'Test agent failed', debug: { provider, model } });
   }
@@ -513,7 +517,7 @@ function normalizedDefaultModel(provider: string): string {
   const p = (provider || '').toLowerCase();
   if (p === 'perplexity') return 'sonar';
   if (p === 'openai') return 'gpt-4o';
-  if (p === 'anthropic') return 'claude-3-5-sonnet-latest';
+  if (p === 'anthropic') return 'claude-sonnet-4-5';
   return 'gpt-4o';
 }
 
