@@ -49,7 +49,8 @@ async function executeTestAgent(req: any, res: any, data: any, cfg: any) {
   const messages = Array.isArray(data?.messages) ? data.messages : [];
   try {
     const useResponses = provider === 'openai' && /(gpt-4o|^o\b|-omni|^omni)/i.test(String(model));
-    const tokensParam = provider === 'openai' ? (useResponses ? 'max_output_tokens' : 'max_tokens') : 'max_tokens';
+    const isGpt5 = provider === 'openai' && /gpt-5/i.test(String(model));
+    const tokensParam = provider === 'openai' ? (useResponses ? 'max_output_tokens' : (isGpt5 ? 'max_completion_tokens' : 'max_tokens')) : 'max_tokens';
     const temperatureSent = true;
 
     const text = await callProvider(provider, model, apiKey, messages, temperature, maxTokens);
@@ -370,6 +371,7 @@ async function callProvider(provider: string, model: string, apiKey: string | un
   if (provider === 'openai') {
     // Use Responses API for 4o/omni; GPT-5 via Chat Completions per docs
     const useResponses = /(gpt-4o|^o\b|-omni|^omni)/i.test(String(normalizedModel));
+    const isGpt5 = /gpt-5/i.test(String(normalizedModel));
     headers.Authorization = `Bearer ${apiKey}`;
     if (useResponses) {
       url = 'https://api.openai.com/v1/responses';
@@ -385,7 +387,13 @@ async function callProvider(provider: string, model: string, apiKey: string | un
       if (typeof extra.presencePenalty === 'number') body.presence_penalty = extra.presencePenalty;
     } else {
       url = 'https://api.openai.com/v1/chat/completions';
-      body = { model: normalizedModel, messages, temperature, max_tokens: maxTokens };
+      body = { model: normalizedModel, messages, temperature };
+      if (isGpt5) {
+        // Per latest docs, GPT-5 with Chat Completions expects max_completion_tokens
+        body.max_completion_tokens = maxTokens;
+      } else {
+        body.max_tokens = maxTokens;
+      }
       if (typeof extra.topP === 'number') body.top_p = extra.topP;
       if (typeof extra.frequencyPenalty === 'number') body.frequency_penalty = extra.frequencyPenalty;
       if (typeof extra.presencePenalty === 'number') body.presence_penalty = extra.presencePenalty;
