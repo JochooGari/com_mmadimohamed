@@ -370,8 +370,12 @@ async function callProvider(provider: string, model: string, apiKey: string | un
     if (useResponses) {
       url = 'https://api.openai.com/v1/responses';
       const input = messages.map((m:any)=> `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-      // Responses API expects max_output_tokens
-      body = { model: normalizedModel, input, temperature, max_output_tokens: maxTokens };
+      // Responses API expects max_output_tokens; some models (ex: gpt-5) may reject temperature
+      const base: any = { model: normalizedModel, input, max_output_tokens: maxTokens };
+      if (!/gpt-5/i.test(String(normalizedModel)) && typeof temperature === 'number') {
+        base.temperature = temperature;
+      }
+      body = base;
       if (typeof extra.topP === 'number') body.top_p = extra.topP;
       if (typeof extra.frequencyPenalty === 'number') body.frequency_penalty = extra.frequencyPenalty;
       if (typeof extra.presencePenalty === 'number') body.presence_penalty = extra.presencePenalty;

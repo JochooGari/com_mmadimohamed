@@ -60,6 +60,8 @@ export default function AdminSettings() {
   const [chatProvider, setChatProvider] = useState<string>('openai');
   const [chatModel, setChatModel] = useState<string>('gpt-4o');
   const [chatMemory, setChatMemory] = useState<boolean>(true);
+  const [chatTemp, setChatTemp] = useState<number>(0.7);
+  const [chatMaxTokens, setChatMaxTokens] = useState<number>(2000);
   const [chatInput, setChatInput] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<Array<{role:'user'|'assistant'|'system'; content:string}>>([]);
   const providerModels = AI_PROVIDERS.find(p=>p.id===chatProvider)?.models || [];
@@ -72,7 +74,7 @@ export default function AdminSettings() {
     const history = chatMemory ? [...sys, ...chatMessages] : [...sys];
     const messages = [...history, { role:'user' as const, content }];
     setChatMessages(messages);
-    const r = await fetch('/api/n8n/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ workflowId:'test-agent', data:{ messages }, config:{ provider: chatProvider, model: chatModel, temperature: 0.7, maxTokens: 2000 } }) });
+    const r = await fetch('/api/n8n/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ workflowId:'test-agent', data:{ messages }, config:{ provider: chatProvider, model: chatModel, temperature: chatTemp, maxTokens: chatMaxTokens } }) });
     const body = await r.json().catch(()=>({}));
     const text = body?.output?.text || body?.error || 'Erreur';
     setChatMessages(prev => [...prev, { role:'assistant', content: String(text) }]);
@@ -257,7 +259,7 @@ export default function AdminSettings() {
               <CardDescription>Sélectionnez le fournisseur et le modèle, puis discutez pour valider la connectivité et la qualité.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                 <div>
                   <Label>Fournisseur</Label>
                   <select className="w-full p-2 border rounded-md" value={chatProvider} onChange={(e)=>{ setChatProvider(e.target.value); const first = (AI_PROVIDERS.find(p=>p.id===e.target.value)?.models||[])[0] || ''; setChatModel(first); }}>
@@ -269,6 +271,14 @@ export default function AdminSettings() {
                   <select className="w-full p-2 border rounded-md" value={chatModel} onChange={(e)=> setChatModel(e.target.value)}>
                     {providerModels.map(m=> (<option key={m} value={m}>{m}</option>))}
                   </select>
+                </div>
+                <div>
+                  <Label>Température ({chatTemp.toFixed(2)})</Label>
+                  <input type="range" min={0} max={2} step={0.1} value={chatTemp} onChange={(e)=> setChatTemp(parseFloat(e.target.value))} className="w-full" />
+                </div>
+                <div>
+                  <Label>Max tokens</Label>
+                  <Input type="number" min={1} value={chatMaxTokens} onChange={(e)=> setChatMaxTokens(parseInt(e.target.value||'0'))} />
                 </div>
                 <div className="flex items-end gap-2">
                   <div className="flex items-center gap-2">
