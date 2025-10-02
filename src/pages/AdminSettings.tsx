@@ -81,9 +81,7 @@ export default function AdminSettings() {
     const r = await fetch('/api/n8n/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ workflowId:'test-agent', data:{ messages }, config:{ provider: chatProvider, model: chatModel, temperature: chatTemp, maxTokens: chatMaxTokens } }) });
     const body = await r.json().catch(()=>({}));
     const text = body?.output?.text || body?.error || 'Erreur';
-    const dbg = body?.debug || {};
-    const meta = dbg?.provider ? `\n\n[debug] provider=${dbg.provider}, model=${dbg.model}${typeof dbg.temperatureSent==='boolean' ? `, temp=${dbg.temperatureSent ? chatTemp : 'omitted'}` : ''}${dbg.tokensParam ? `, ${dbg.tokensParam}=${dbg.maxTokensUsed ?? chatMaxTokens}` : ''}` : '';
-    setChatMessages(prev => [...prev, { role:'assistant', content: String(text)+meta }]);
+    setChatMessages(prev => [...prev, { role:'assistant', content: String(text) }]);
   };
 
   const handleApiKeyChange = (provider: string, value: string) => {
