@@ -48,9 +48,9 @@ async function executeTestAgent(req: any, res: any, data: any, cfg: any) {
   const maxTokens = Number(cfg?.maxTokens ?? 1000);
   const messages = Array.isArray(data?.messages) ? data.messages : [];
   try {
-    const useResponses = provider === 'openai' && /(gpt-5|gpt-4o|^o\b|-omni|^omni)/i.test(String(model));
+    const useResponses = provider === 'openai' && /(gpt-4o|^o\b|-omni|^omni)/i.test(String(model));
     const tokensParam = provider === 'openai' ? (useResponses ? 'max_output_tokens' : 'max_tokens') : 'max_tokens';
-    const temperatureSent = provider === 'openai' && /gpt-5/i.test(String(model)) ? false : true;
+    const temperatureSent = true;
 
     const text = await callProvider(provider, model, apiKey, messages, temperature, maxTokens);
     return res.status(200).json({ status:'completed', output: { text }, debug: { provider, model, tokensParam, temperatureSent, maxTokensUsed: maxTokens } });
@@ -368,8 +368,8 @@ async function callProvider(provider: string, model: string, apiKey: string | un
   const normalizedModel = normalizeModel(provider, model);
 
   if (provider === 'openai') {
-    // Use Responses API for new models (gpt-5, gpt-4o family, omni-like)
-    const useResponses = /(gpt-5|gpt-4o|^o\b|-omni|^omni)/i.test(String(normalizedModel));
+    // Use Responses API for 4o/omni; GPT-5 via Chat Completions per docs
+    const useResponses = /(gpt-4o|^o\b|-omni|^omni)/i.test(String(normalizedModel));
     headers.Authorization = `Bearer ${apiKey}`;
     if (useResponses) {
       url = 'https://api.openai.com/v1/responses';
