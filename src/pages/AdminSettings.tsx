@@ -65,6 +65,10 @@ export default function AdminSettings() {
   const [chatInput, setChatInput] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<Array<{role:'user'|'assistant'|'system'; content:string}>>([]);
   const providerModels = AI_PROVIDERS.find(p=>p.id===chatProvider)?.models || [];
+  // Reset transcript when provider/model changes and mémoire désactivée
+  React.useEffect(() => {
+    if (!chatMemory) setChatMessages([]);
+  }, [chatProvider, chatModel, chatMemory]);
   
   const sendChat = async () => {
     const content = chatInput.trim();
@@ -301,6 +305,7 @@ export default function AdminSettings() {
               <div className="flex gap-2">
                 <Input placeholder="Écrire un message..." value={chatInput} onChange={(e)=> setChatInput(e.target.value)} />
                 <Button onClick={sendChat}>Envoyer</Button>
+                <Button variant="outline" onClick={()=> setChatMessages([])}>Vider l'historique</Button>
               </div>
             </CardContent>
           </Card>
