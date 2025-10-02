@@ -23,6 +23,7 @@ import {
 import { aiService, AI_PROVIDERS } from '@/lib/aiProviders';
 import ApiKeyDiagnostic from '@/components/ApiKeyDiagnostic';
 import EnvDebugger from '@/components/EnvDebugger';
+import { getDefaultProvider, getDefaultModel, setDefaultProviderModel, setDefaultParams } from '@/lib/appSettings';
 
 export default function AdminSettings() {
   const [apiKeys, setApiKeys] = useState({
@@ -57,8 +58,8 @@ export default function AdminSettings() {
   });
 
   // Chat test (unifié)
-  const [chatProvider, setChatProvider] = useState<string>('openai');
-  const [chatModel, setChatModel] = useState<string>('gpt-4o');
+  const [chatProvider, setChatProvider] = useState<string>(getDefaultProvider() || 'openai');
+  const [chatModel, setChatModel] = useState<string>(getDefaultModel() || 'gpt-4o');
   const [chatMemory, setChatMemory] = useState<boolean>(true);
   const [chatTemp, setChatTemp] = useState<number>(0.7);
   const [chatMaxTokens, setChatMaxTokens] = useState<number>(2000);
@@ -71,6 +72,14 @@ export default function AdminSettings() {
     if (!chatMemory) setChatMessages([]);
     setLastDebug(null);
   }, [chatProvider, chatModel, chatMemory]);
+
+  // Persist defaults for other pages (Workflow, Agents)
+  React.useEffect(()=>{
+    try { setDefaultProviderModel(chatProvider as any, chatModel); } catch {}
+  }, [chatProvider, chatModel]);
+  React.useEffect(()=>{
+    try { setDefaultParams(chatTemp, chatMaxTokens); } catch {}
+  }, [chatTemp, chatMaxTokens]);
   
   const sendChat = async () => {
     const content = chatInput.trim();

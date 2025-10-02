@@ -15,6 +15,7 @@ import { WorkflowTimeline } from '@/components/WorkflowTimeline';
 import { DebugConsole } from '@/components/DebugConsole';
 import { MetricsPanel } from '@/components/MetricsPanel';
 import { ToastProvider, useToast } from '@/components/ErrorToast';
+import { getDefaultProvider, getDefaultModel, getDefaultParams } from '@/lib/appSettings';
 
 interface WorkflowAgent {
   id: string;
@@ -78,15 +79,18 @@ function WorkflowInner() {
     }
   });
 
+  const defaultProv = getDefaultProvider() as any || 'openai';
+  const defaultModel = getDefaultModel() || 'gpt-4o';
+  const defaults = getDefaultParams();
   const [agents, setAgents] = useState<WorkflowAgent[]>([
     {
       id: 'search-content',
       name: 'Agent Search Content',
       description: 'Analyse votre site et propose des sujets d\'articles ou utilise vos sujets personnalisés',
-      provider: 'perplexity',
-      model: 'sonar',
-      temperature: 0.7,
-      maxTokens: 2000,
+      provider: (getDefaultProvider() as any) || 'perplexity',
+      model: getDefaultModel() || 'sonar',
+      temperature: defaults.temperature ?? 0.7,
+      maxTokens: defaults.maxTokens ?? 2000,
       status: 'inactive',
       prompt: `Tu es un agent spécialisé dans l'analyse de contenu web et la proposition de sujets d'articles.
 
@@ -109,10 +113,10 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
       id: 'ghostwriter',
       name: 'Agent Ghostwriter',
       description: 'Rédige des articles complets et optimisés SEO',
-      provider: 'openai',
-      model: 'gpt-4o',
-      temperature: 0.8,
-      maxTokens: 4000,
+      provider: defaultProv,
+      model: defaultModel,
+      temperature: defaults.temperature ?? 0.8,
+      maxTokens: defaults.maxTokens ?? 4000,
       status: 'inactive',
       prompt: `Tu es un rédacteur expert. Rédige un article complet et optimisé SEO.
 
@@ -133,10 +137,10 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
       id: 'review-content',
       name: 'Agent Reviewer',
       description: 'Analyse les articles et donne des scores SEO/GEO avec recommandations',
-      provider: 'anthropic',
-      model: 'claude-3-sonnet-20240229',
-      temperature: 0.3,
-      maxTokens: 2000,
+      provider: defaultProv,
+      model: defaultModel,
+      temperature: defaults.temperature ?? 0.3,
+      maxTokens: defaults.maxTokens ?? 2000,
       status: 'inactive',
       prompt: `Analyse cet article et donne un score détaillé.
 
