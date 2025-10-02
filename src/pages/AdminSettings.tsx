@@ -64,10 +64,12 @@ export default function AdminSettings() {
   const [chatMaxTokens, setChatMaxTokens] = useState<number>(2000);
   const [chatInput, setChatInput] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<Array<{role:'user'|'assistant'|'system'; content:string}>>([]);
+  const [lastDebug, setLastDebug] = useState<{ provider?: string; model?: string; tokensParam?: string; temperatureSent?: boolean; maxTokensUsed?: number } | null>(null);
   const providerModels = AI_PROVIDERS.find(p=>p.id===chatProvider)?.models || [];
   // Reset transcript when provider/model changes and mémoire désactivée
   React.useEffect(() => {
     if (!chatMemory) setChatMessages([]);
+    setLastDebug(null);
   }, [chatProvider, chatModel, chatMemory]);
   
   const sendChat = async () => {
@@ -81,6 +83,7 @@ export default function AdminSettings() {
     const r = await fetch('/api/n8n/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ workflowId:'test-agent', data:{ messages }, config:{ provider: chatProvider, model: chatModel, temperature: chatTemp, maxTokens: chatMaxTokens } }) });
     const body = await r.json().catch(()=>({}));
     const text = body?.output?.text || body?.error || 'Erreur';
+    setLastDebug(body?.debug || null);
     setChatMessages(prev => [...prev, { role:'assistant', content: String(text) }]);
   };
 
@@ -291,6 +294,16 @@ export default function AdminSettings() {
                   </div>
                 </div>
               </div>
+
+              {lastDebug && (
+                <div className="text-xs text-gray-600 flex flex-wrap gap-2 items-center">
+                  <span>Paramètres envoyés:</span>
+                  <Badge variant="outline">provider: {lastDebug.provider}</Badge>
+                  <Badge variant="outline">model: {lastDebug.model}</Badge>
+                  <Badge variant="outline">temp: {lastDebug.temperatureSent ? chatTemp : 'omise'}</Badge>
+                  <Badge variant="outline">{lastDebug.tokensParam || 'max_tokens'}: {lastDebug.maxTokensUsed ?? chatMaxTokens}</Badge>
+                </div>
+              )}
 
               <div className="border rounded-lg p-3 bg-white min-h-[200px] max-h-[340px] overflow-auto">
                 {chatMessages.length===0 && (
