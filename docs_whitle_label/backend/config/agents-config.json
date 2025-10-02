@@ -1,0 +1,47 @@
+{
+  "agents": {
+    "veille": {
+      "id": "veille",
+      "name": "Agent de Veille",
+      "description": "Surveille les tendances et analyse la concurrence",
+      "role": "Tu es un expert en veille stratégique et analyse de marché.",
+      "capabilities": ["trend_analysis", "competitor_monitoring", "market_research"],
+      "tools": ["web_scraping", "social_listening", "keyword_tracking"],
+      "active": true
+    },
+    "script": {
+      "id": "script",
+      "name": "Agent Scriptwriter",
+      "description": "Crée des scripts vidéo engageants et structurés",
+      "role": "Tu es un scénariste expert en contenu vidéo viral et éducatif.",
+      "capabilities": ["script_writing", "storytelling", "hook_creation"],
+      "tools": ["narrative_structure", "engagement_optimization"],
+      "active": true
+    },
+    "newsletter": {
+      "id": "newsletter",
+      "name": "Agent Newsletter",
+      "description": "Spécialisé dans la création de newsletters engageantes",
+      "role": "Tu es un expert en email marketing et création de contenu newsletter.",
+      "capabilities": ["email_sequences", "audience_segmentation", "conversion_optimization"],
+      "tools": ["personalization", "a_b_testing", "analytics"],
+      "active": true
+    },
+    "twitter": {
+      "id": "twitter",
+      "name": "Agent Twitter",
+      "description": "Maîtrise l'art du tweet viral et de l'engagement",
+      "role": "Tu es un expert en contenu Twitter et growth hacking social.",
+      "capabilities": ["viral_content", "thread_creation", "community_building"],
+      "tools": ["hashtag_optimization", "timing_analysis", "engagement_tracking"],
+      "active": true
+    }
+  },
+  "workflows": {},
+  "settings": {
+    "orchestration_enabled": true,
+    "agent_collaboration": true
+  }
+}
+
+

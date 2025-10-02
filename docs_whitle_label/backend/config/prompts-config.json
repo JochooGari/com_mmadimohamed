@@ -1,0 +1,51 @@
+{
+  "version": "1.0.0",
+  "prompts": {
+    "article": {
+      "id": "article",
+      "name": "Article de Blog GEO",
+      "description": "Article de blog optimisé pour les moteurs de recherche génératifs",
+      "category": "content",
+      "aiOptions": {
+        "defaultProvider": "perplexity",
+        "defaultModel": "sonar-pro",
+        "supportedProviders": ["openai", "perplexity", "claude", "gemini"],
+        "temperature": 0.7,
+        "maxTokens": 2500
+      }
+    },
+    "newsletters": {
+      "id": "newsletters",
+      "name": "Séquence Newsletter",
+      "description": "Série d'emails marketing engageants",
+      "category": "marketing",
+      "aiOptions": {
+        "defaultProvider": "perplexity",
+        "defaultModel": "sonar-pro",
+        "supportedProviders": ["openai", "perplexity", "claude"],
+        "temperature": 0.8,
+        "maxTokens": 2000
+      }
+    },
+    "tweets": {
+      "id": "tweets",
+      "name": "Contenu Twitter",
+      "description": "Tweets et threads optimisés pour l'engagement",
+      "category": "social",
+      "aiOptions": {
+        "defaultProvider": "perplexity",
+        "defaultModel": "sonar-pro",
+        "supportedProviders": ["openai", "perplexity", "claude"],
+        "temperature": 0.9,
+        "maxTokens": 1500
+      }
+    }
+  },
+  "categories": {
+    "content": { "name": "Contenu de Blog", "description": "Articles et contenus éducatifs" },
+    "marketing": { "name": "Email Marketing", "description": "Newsletters et séquences email" },
+    "social": { "name": "Réseaux Sociaux", "description": "Contenu pour plateformes sociales" }
+  }
+}
+
+

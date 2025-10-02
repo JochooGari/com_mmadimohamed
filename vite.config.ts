@@ -15,7 +15,8 @@ export default defineConfig({
     proxy: {
       // Proxy des fonctions serverless locales (vercel dev) pour l'UI Vite
       '/api': {
-        target: 'http://localhost:3000',
+        // Utilise VITE_API_BASE si défini, sinon localhost:3000 (vercel dev)
+        target: process.env.VITE_API_BASE || 'http://localhost:3000',
         changeOrigin: true,
       },
     },

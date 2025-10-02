@@ -1,0 +1,17 @@
+{
+  "storage": {
+    "type": "local",
+    "config": {
+      "local": {
+        "basePath": "./uploads",
+        "documentsPath": "./uploads/documents",
+        "tempPath": "./uploads/temp",
+        "publicUrl": "http://localhost:3003/uploads",
+        "maxFileSize": "100MB",
+        "allowedTypes": [".txt", ".md", ".pdf", ".docx", ".json"]
+      }
+    }
+  }
+}
+
+

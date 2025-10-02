@@ -56,6 +56,28 @@ export default function AdminSettings() {
     timezone: 'Europe/Paris'
   });
 
+  // Chat test (unifié)
+  const [chatProvider, setChatProvider] = useState<string>('openai');
+  const [chatModel, setChatModel] = useState<string>('gpt-4o');
+  const [chatMemory, setChatMemory] = useState<boolean>(true);
+  const [chatInput, setChatInput] = useState<string>('');
+  const [chatMessages, setChatMessages] = useState<Array<{role:'user'|'assistant'|'system'; content:string}>>([]);
+  const providerModels = AI_PROVIDERS.find(p=>p.id===chatProvider)?.models || [];
+  
+  const sendChat = async () => {
+    const content = chatInput.trim();
+    if (!content) return;
+    setChatInput('');
+    const sys = [] as Array<{role:'system'; content:string}>; // placeholder if we add a global system prompt later
+    const history = chatMemory ? [...sys, ...chatMessages] : [...sys];
+    const messages = [...history, { role:'user' as const, content }];
+    setChatMessages(messages);
+    const r = await fetch('/api/n8n/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ workflowId:'test-agent', data:{ messages }, config:{ provider: chatProvider, model: chatModel, temperature: 0.7, maxTokens: 2000 } }) });
+    const body = await r.json().catch(()=>({}));
+    const text = body?.output?.text || body?.error || 'Erreur';
+    setChatMessages(prev => [...prev, { role:'assistant', content: String(text) }]);
+  };
+
   const handleApiKeyChange = (provider: string, value: string) => {
     setApiKeys(prev => ({ ...prev, [provider]: value }));
     setTestResults(prev => ({ ...prev, [provider]: null }));
@@ -106,10 +128,14 @@ export default function AdminSettings() {
       </div>
 
       <Tabs defaultValue="api-keys" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="api-keys" className="flex items-center gap-2">
             <Key className="h-4 w-4" />
             Clés API
+          </TabsTrigger>
+          <TabsTrigger value="ai-chat" className="flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            Test IA (Chat)
           </TabsTrigger>
           <TabsTrigger value="notifications" className="flex items-center gap-2">
             <Bell className="h-4 w-4" />
@@ -222,6 +248,52 @@ export default function AdminSettings() {
             </CardContent>
           </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="ai-chat">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">Chat de test (mémoire optionnelle)</CardTitle>
+              <CardDescription>Sélectionnez le fournisseur et le modèle, puis discutez pour valider la connectivité et la qualité.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <Label>Fournisseur</Label>
+                  <select className="w-full p-2 border rounded-md" value={chatProvider} onChange={(e)=>{ setChatProvider(e.target.value); const first = (AI_PROVIDERS.find(p=>p.id===e.target.value)?.models||[])[0] || ''; setChatModel(first); }}>
+                    {AI_PROVIDERS.map(p=> (<option key={p.id} value={p.id}>{p.name}</option>))}
+                  </select>
+                </div>
+                <div>
+                  <Label>Modèle</Label>
+                  <select className="w-full p-2 border rounded-md" value={chatModel} onChange={(e)=> setChatModel(e.target.value)}>
+                    {providerModels.map(m=> (<option key={m} value={m}>{m}</option>))}
+                  </select>
+                </div>
+                <div className="flex items-end gap-2">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={chatMemory} onCheckedChange={setChatMemory} />
+                    <span className="text-sm">Mémoire conversationnelle</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border rounded-lg p-3 bg-white min-h-[200px] max-h-[340px] overflow-auto">
+                {chatMessages.length===0 && (
+                  <div className="text-sm text-gray-500">Commencez une conversation pour tester le modèle.</div>
+                )}
+                {chatMessages.map((m,i)=>(
+                  <div key={i} className={`text-sm mb-2 ${m.role==='assistant'?'text-gray-900':'text-gray-700'}`}>
+                    <strong>{m.role==='assistant'?'IA':'Vous'}:</strong> <span className="whitespace-pre-wrap">{m.content}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input placeholder="Écrire un message..." value={chatInput} onChange={(e)=> setChatInput(e.target.value)} />
+                <Button onClick={sendChat}>Envoyer</Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="notifications">

@@ -29,6 +29,10 @@ export default async function handler(req: any, res: any) {
       return await executeTestAgent(req, res, data, config);
     }
 
+    if (workflowId === 'content-iterate') {
+      return await executeIterativeContent(req, res, data, config);
+    }
+
     return res.status(404).json({ error: 'Workflow not found' });
   } catch (error: any) {
     console.error('Workflow execution error:', error);
@@ -234,6 +238,114 @@ async function executeContentAgentsWorkflow(req: any, res: any, data: any, cfg: 
   }
 }
 
+async function executeIterativeContent(req: any, res: any, data: any, cfg: any) {
+  const execution: any = {
+    id: `exec-${Date.now()}`,
+    workflowId: 'content-iterate',
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    steps: [] as any[]
+  };
+
+  const targetScore = Number(cfg?.targetScore ?? 98);
+  const maxIterations = Number(cfg?.maxIterations ?? 5);
+
+  try {
+    const prompts = await loadWorkflowPrompts(req).catch(() => ({} as any));
+
+    // Topics input
+    const topics = Array.isArray(data?.topics) && data.topics.length > 0 ? data.topics : (Array.isArray(data?.customTopics) ? data.customTopics : []);
+    if (topics.length === 0) {
+      throw new Error('Aucun topic fourni. Passez data.topics ou utilisez le workflow search en amont.');
+    }
+
+    // One article iteration pipeline (first topic only for simplicity)
+    const topic = topics[0];
+    const ghostProv = (cfg?.ghostwriterAgent?.provider || 'openai') as string;
+    const ghostModel = cfg?.ghostwriterAgent?.model || normalizedDefaultModel(ghostProv);
+    const ghostKey = cfg?.ghostwriterAgent?.apiKey || getEnvKey(ghostProv);
+    const reviewProv = (cfg?.reviewerAgent?.provider || 'anthropic') as string;
+    const reviewModel = cfg?.reviewerAgent?.model || normalizedDefaultModel(reviewProv);
+    const reviewKey = cfg?.reviewerAgent?.apiKey || getEnvKey(reviewProv);
+
+    const ghostBasePrompt = String(prompts?.['ghostwriter']?.prompt || '').trim();
+    const reviewBasePrompt = String(prompts?.['review-content']?.prompt || '').trim();
+    if (!ghostBasePrompt || !reviewBasePrompt) throw new Error('Prompts manquants (ghostwriter/review-content).');
+
+    let article: any | null = null;
+    let bestScore = 0;
+    let historyMessages: any[] = [];
+
+    for (let i=0; i<maxIterations; i++) {
+      // Ghostwrite (first or refine)
+      const ghostInput = article
+        ? `Améliore cet article pour maximiser le score de qualité selon les retours ci-dessous. Conserve la structure et renforce SEO/clarifications.
+Feedback:
+${JSON.stringify(article.__feedback || {}, null, 2)}
+\n\nArticle actuel:
+${typeof article === 'string' ? article : JSON.stringify(article)}`
+        : replaceVars(ghostBasePrompt, { topic: JSON.stringify(topic) });
+      const ghostMessages = [ ...historyMessages, { role:'user', content: ghostInput } ];
+      const ghostText = await callProvider(
+        ghostProv,
+        ghostModel,
+        ghostKey,
+        ghostMessages,
+        Number(cfg?.ghostwriterAgent?.temperature ?? 0.7),
+        Number(cfg?.ghostwriterAgent?.maxTokens ?? 8000),
+        { topP: cfg?.ghostwriterAgent?.topP, frequencyPenalty: cfg?.ghostwriterAgent?.frequencyPenalty, presencePenalty: cfg?.ghostwriterAgent?.presencePenalty }
+      );
+
+      const ghostJson = tryExtractJson(ghostText);
+      if (ghostJson?.article) {
+        article = ghostJson.article;
+      } else {
+        article = buildArticleFromText(ghostText);
+      }
+
+      execution.steps.push({ nodeId:`ghostwriter#${i+1}`, status:'completed', output:{ articlePreview: (article?.title || '').slice(0,120) }, debug:{ provider: ghostProv, model: ghostModel, raw: String(ghostText).slice(0,1500) }, completedAt:new Date().toISOString() });
+
+      // Review
+      const reviewMsg = [ { role:'user', content: replaceVars(reviewBasePrompt, { article: JSON.stringify(article) }) } ];
+      const reviewText = await callProvider(
+        reviewProv,
+        reviewModel,
+        reviewKey,
+        reviewMsg,
+        Number(cfg?.reviewerAgent?.temperature ?? 0.3),
+        Number(cfg?.reviewerAgent?.maxTokens ?? 4000)
+      );
+
+      let review: any = null;
+      try { review = extractJson(reviewText)?.review; } catch {}
+      const score = inferScore(reviewText, review);
+      bestScore = Math.max(bestScore, score || 0);
+      if (review) { (article as any).__feedback = review; }
+      execution.steps.push({ nodeId:`review-content#${i+1}`, status:'completed', output:{ score }, debug:{ provider: reviewProv, model: reviewModel, raw: String(reviewText).slice(0,1500) }, completedAt:new Date().toISOString() });
+
+      if ((score || 0) >= targetScore) {
+        execution.status = 'completed';
+        execution.finishedAt = new Date().toISOString();
+        execution.output = { article, score, iterations: i+1 };
+        return res.status(200).json(execution);
+      }
+
+      // Update memory for next loop
+      historyMessages = [...historyMessages, { role:'assistant', content: ghostText }, { role:'user', content: `Feedback d'amélioration (score actuel ${score}).` } ];
+    }
+
+    execution.status = 'completed';
+    execution.finishedAt = new Date().toISOString();
+    execution.output = { article, score: bestScore, iterations: maxIterations, note: 'Score cible non atteint' };
+    return res.status(200).json(execution);
+
+  } catch (e:any) {
+    execution.status = 'failed';
+    execution.error = e.message;
+    execution.finishedAt = new Date().toISOString();
+    return res.status(200).json(execution);
+  }
+}
 // Helpers
 function getEnvKey(provider: string | undefined): string | undefined {
   switch ((provider || '').toLowerCase()) {
@@ -366,6 +478,29 @@ function normalizeModel(provider: string, rawModel: string): string {
     return 'sonar';
   }
   return m;
+}
+
+function inferScore(raw: string, reviewObj?: any): number | null {
+  // Try JSON review object first
+  const candidates: Array<any> = [];
+  if (reviewObj && typeof reviewObj === 'object') candidates.push(reviewObj);
+  // Some providers may output at top-level
+  try { const j = extractJson(String(raw)); if (j) candidates.push(j); } catch {}
+  for (const c of candidates) {
+    const keys = ['score','final_score','quality_score','seo_score','overall','note'];
+    for (const k of keys) {
+      const v = c?.[k] ?? c?.metrics?.[k];
+      const n = Number(v);
+      if (!isNaN(n) && isFinite(n)) return n;
+    }
+  }
+  // Fallback: regex like "score: 96" or "98%"
+  const m = String(raw).match(/(\d{2,3})\s*%|score\s*[:=]\s*(\d{2,3})/i);
+  if (m) {
+    const n = Number(m[1] || m[2]);
+    if (!isNaN(n)) return n > 100 ? 100 : n;
+  }
+  return null;
 }
 
 function normalizedDefaultModel(provider: string): string {
