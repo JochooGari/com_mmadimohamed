@@ -66,6 +66,10 @@ export default function AdminSettings() {
   const [chatInput, setChatInput] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<Array<{role:'user'|'assistant'|'system'; content:string}>>([]);
   const [lastDebug, setLastDebug] = useState<{ provider?: string; model?: string; tokensParam?: string; temperatureSent?: boolean; maxTokensUsed?: number } | null>(null);
+  const [chatAdvanced, setChatAdvanced] = useState<boolean>(false);
+  const [chatTopP, setChatTopP] = useState<number>(0.9);
+  const [chatFreqPenalty, setChatFreqPenalty] = useState<number>(0.3);
+  const [chatPresencePenalty, setChatPresencePenalty] = useState<number>(0.1);
   const providerModels = AI_PROVIDERS.find(p=>p.id===chatProvider)?.models || [];
   // Reset transcript when provider/model changes and mémoire désactivée
   React.useEffect(() => {
@@ -85,11 +89,21 @@ export default function AdminSettings() {
     const content = chatInput.trim();
     if (!content) return;
     setChatInput('');
-    const sys = [] as Array<{role:'system'; content:string}>; // placeholder if we add a global system prompt later
+    const sys = [] as Array<{role:'system'; content:string}>;
+    if (chatAdvanced) {
+      sys.push({ role:'system', content: `Tu es un expert en stratégie contenu, SEO et growth. Objectif: produire des réponses actionnables et structurées comme sur l'interface web officielle.
+Format attendu:
+1) Accroche claire (1-2 phrases)
+2) Plan numéroté avec titres forts, sous-points précis et exemples
+3) Bonnes pratiques et erreurs à éviter
+4) Mini plan d'action 30/60/90 jours si pertinent
+5) Question de suivi pour contextualiser
+Style: français naturel, ton pro, concis mais riche, éventuellement emojis contextuels, listes et tableaux lorsque utile.` });
+    }
     const history = chatMemory ? [...sys, ...chatMessages] : [...sys];
     const messages = [...history, { role:'user' as const, content }];
     setChatMessages(messages);
-    const r = await fetch('/api/n8n/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ workflowId:'test-agent', data:{ messages }, config:{ provider: chatProvider, model: chatModel, temperature: chatTemp, maxTokens: chatMaxTokens } }) });
+    const r = await fetch('/api/n8n/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ workflowId:'test-agent', data:{ messages }, config:{ provider: chatProvider, model: chatModel, temperature: chatTemp, maxTokens: chatMaxTokens, topP: chatTopP, frequencyPenalty: chatFreqPenalty, presencePenalty: chatPresencePenalty } }) });
     const body = await r.json().catch(()=>({}));
     const text = body?.output?.text || body?.error || 'Erreur';
     setLastDebug(body?.debug || null);
@@ -301,6 +315,27 @@ export default function AdminSettings() {
                     <Switch checked={chatMemory} onCheckedChange={setChatMemory} />
                     <span className="text-sm">Mémoire conversationnelle</span>
                   </div>
+                </div>
+                <div className="flex items-end gap-2">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={chatAdvanced} onCheckedChange={setChatAdvanced} />
+                    <span className="text-sm">Qualité avancée (style web)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                <div>
+                  <Label>Top‑P</Label>
+                  <Input type="number" step="0.05" min={0} max={1} value={chatTopP} onChange={(e)=> setChatTopP(parseFloat(e.target.value||'0'))} />
+                </div>
+                <div>
+                  <Label>Frequency penalty</Label>
+                  <Input type="number" step="0.1" min={0} max={2} value={chatFreqPenalty} onChange={(e)=> setChatFreqPenalty(parseFloat(e.target.value||'0'))} />
+                </div>
+                <div>
+                  <Label>Presence penalty</Label>
+                  <Input type="number" step="0.1" min={0} max={2} value={chatPresencePenalty} onChange={(e)=> setChatPresencePenalty(parseFloat(e.target.value||'0'))} />
                 </div>
               </div>
 

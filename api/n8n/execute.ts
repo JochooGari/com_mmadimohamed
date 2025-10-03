@@ -53,7 +53,11 @@ async function executeTestAgent(req: any, res: any, data: any, cfg: any) {
     const tokensParam = provider === 'openai' ? (useResponses ? 'max_output_tokens' : (isGpt5 ? 'max_completion_tokens' : 'max_tokens')) : 'max_tokens';
     const temperatureSent = true;
 
-    const text = await callProvider(provider, model, apiKey, messages, temperature, maxTokens);
+    const text = await callProvider(provider, model, apiKey, messages, temperature, maxTokens, {
+      topP: Number(cfg?.topP),
+      frequencyPenalty: Number(cfg?.frequencyPenalty),
+      presencePenalty: Number(cfg?.presencePenalty)
+    });
     return res.status(200).json({ status:'completed', output: { text }, debug: { provider, model, tokensParam, temperatureSent, maxTokensUsed: maxTokens } });
   } catch (e: any) {
     return res.status(200).json({ status:'failed', error: e.message || 'Test agent failed', debug: { provider, model } });
