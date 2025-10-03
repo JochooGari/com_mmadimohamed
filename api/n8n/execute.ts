@@ -387,7 +387,13 @@ async function callProvider(provider: string, model: string, apiKey: string | un
       if (typeof extra.presencePenalty === 'number') body.presence_penalty = extra.presencePenalty;
     } else {
       url = 'https://api.openai.com/v1/chat/completions';
-      body = { model: normalizedModel, messages, temperature };
+      body = { model: normalizedModel, messages };
+      if (isGpt5) {
+        // Docs: GPT-5 accepts only temperature=1
+        body.temperature = 1;
+      } else if (typeof temperature === 'number') {
+        body.temperature = temperature;
+      }
       if (isGpt5) {
         // Per latest docs, GPT-5 with Chat Completions expects max_completion_tokens
         body.max_completion_tokens = maxTokens;

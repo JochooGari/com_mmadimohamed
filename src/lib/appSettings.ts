@@ -44,3 +44,4 @@ export function getDefaultParams(): { temperature?: number; maxTokens?: number }
   } catch { return {}; }
 }
 
+
