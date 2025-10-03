@@ -1,0 +1,58 @@
+{
+  "providers": {
+    "openai": {
+      "name": "OpenAI",
+      "description": "Modèles avancés pour la génération de contenu",
+      "models": {
+        "gpt-4o": { "name": "GPT-4o", "description": "Modèle avancé", "maxTokens": 128000, "costPer1kTokens": 0.005, "capabilities": ["text-generation", "analysis", "creative-writing"] },
+        "gpt-4o-mini": { "name": "GPT-4o Mini", "description": "Optimisé tâches courantes", "maxTokens": 128000, "costPer1kTokens": 0.00015, "capabilities": ["text-generation", "analysis", "creative-writing"] },
+        "gpt-4-turbo": { "name": "GPT-4 Turbo", "description": "Rapide et efficace", "maxTokens": 128000, "costPer1kTokens": 0.01, "capabilities": ["text-generation", "analysis"] },
+        "gpt-3.5-turbo": { "name": "GPT-3.5 Turbo", "description": "Économique", "maxTokens": 16385, "costPer1kTokens": 0.0005, "capabilities": ["text-generation", "basic-analysis"] }
+      },
+      "apiKey": "OPENAI_API_KEY",
+      "baseUrl": "https://api.openai.com/v1"
+    },
+    "claude": {
+      "name": "Claude (Anthropic)",
+      "description": "Analyse et compréhension",
+      "models": {
+        "claude-3-opus": { "name": "Claude 3 Opus", "description": "Puissant", "maxTokens": 200000, "costPer1kTokens": 0.015, "capabilities": ["text-generation", "analysis", "reasoning", "creative-writing"] },
+        "claude-3-sonnet": { "name": "Claude 3 Sonnet", "description": "Équilibré", "maxTokens": 200000, "costPer1kTokens": 0.003, "capabilities": ["text-generation", "analysis", "reasoning"] },
+        "claude-3-haiku": { "name": "Claude 3 Haiku", "description": "Rapide et économique", "maxTokens": 200000, "costPer1kTokens": 0.00025, "capabilities": ["text-generation", "basic-analysis"] }
+      },
+      "apiKey": "CLAUDE_API_KEY",
+      "baseUrl": "https://api.anthropic.com"
+    },
+    "perplexity": {
+      "name": "Perplexity",
+      "description": "Recherche et analyse",
+      "models": {
+        "sonar": { "name": "Sonar", "description": "Recherche rapide", "maxTokens": 4096, "costPer1kTokens": 0.0001, "capabilities": ["search", "analysis", "text-generation"] },
+        "sonar-pro": { "name": "Sonar Pro", "description": "Recherche avancée", "maxTokens": 4096, "costPer1kTokens": 0.0002, "capabilities": ["search", "analysis", "text-generation", "reasoning"] }
+      },
+      "apiKey": "PERPLEXITY_API_KEY",
+      "baseUrl": "https://api.perplexity.ai"
+    },
+    "gemini": {
+      "name": "Google Gemini",
+      "description": "Génération Google",
+      "models": {
+        "gemini-1.5-pro": { "name": "Gemini 1.5 Pro", "description": "Avancé", "maxTokens": 1000000, "costPer1kTokens": 0.00375, "capabilities": ["text-generation", "analysis", "multimodal"] },
+        "gemini-1.5-flash": { "name": "Gemini 1.5 Flash", "description": "Rapide", "maxTokens": 1000000, "costPer1kTokens": 0.000075, "capabilities": ["text-generation", "analysis"] },
+        "gemini-1.0-pro": { "name": "Gemini 1.0 Pro", "description": "Stable", "maxTokens": 32768, "costPer1kTokens": 0.0005, "capabilities": ["text-generation", "analysis"] }
+      },
+      "apiKey": "GEMINI_API_KEY",
+      "baseUrl": "https://generativelanguage.googleapis.com"
+    }
+  },
+  "defaultConfig": {
+    "defaultProvider": "openai",
+    "defaultModel": "gpt-4o-mini",
+    "maxRetries": 3,
+    "timeout": 30000,
+    "fallbackProvider": "openai",
+    "fallbackModel": "gpt-3.5-turbo"
+  }
+}
+
+
