@@ -66,11 +66,13 @@ export default function AdminSettings() {
   const [chatInput, setChatInput] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<Array<{role:'user'|'assistant'|'system'; content:string}>>([]);
   const [lastDebug, setLastDebug] = useState<{ provider?: string; model?: string; tokensParam?: string; temperatureSent?: boolean; maxTokensUsed?: number } | null>(null);
-  const [chatAdvanced, setChatAdvanced] = useState<boolean>(false);
+  const [systemPrompt, setSystemPrompt] = useState<string>('');
   const [chatTopP, setChatTopP] = useState<number>(0.9);
   const [chatFreqPenalty, setChatFreqPenalty] = useState<number>(0.3);
   const [chatPresencePenalty, setChatPresencePenalty] = useState<number>(0.1);
-  const providerModels = AI_PROVIDERS.find(p=>p.id===chatProvider)?.models || [];
+  const allowedProviders = AI_PROVIDERS.filter(p=> ['openai','anthropic'].includes(p.id));
+  const isGpt5 = chatProvider === 'openai' && chatModel === 'gpt-5';
+  const providerModels = chatProvider === 'openai' ? ['gpt-5'] : (chatProvider === 'anthropic' ? ['claude-sonnet-4-5'] : (AI_PROVIDERS.find(p=>p.id===chatProvider)?.models || []));
   // Reset transcript when provider/model changes and mémoire désactivée
   React.useEffect(() => {
     if (!chatMemory) setChatMessages([]);
@@ -90,16 +92,7 @@ export default function AdminSettings() {
     if (!content) return;
     setChatInput('');
     const sys = [] as Array<{role:'system'; content:string}>;
-    if (chatAdvanced) {
-      sys.push({ role:'system', content: `Tu es un expert en stratégie contenu, SEO et growth. Objectif: produire des réponses actionnables et structurées comme sur l'interface web officielle.
-Format attendu:
-1) Accroche claire (1-2 phrases)
-2) Plan numéroté avec titres forts, sous-points précis et exemples
-3) Bonnes pratiques et erreurs à éviter
-4) Mini plan d'action 30/60/90 jours si pertinent
-5) Question de suivi pour contextualiser
-Style: français naturel, ton pro, concis mais riche, éventuellement emojis contextuels, listes et tableaux lorsque utile.` });
-    }
+    if (systemPrompt.trim().length > 0) sys.push({ role:'system', content: systemPrompt.trim() });
     const history = chatMemory ? [...sys, ...chatMessages] : [...sys];
     const messages = [...history, { role:'user' as const, content }];
     setChatMessages(messages);
@@ -292,8 +285,8 @@ Style: français naturel, ton pro, concis mais riche, éventuellement emojis con
               <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                 <div>
                   <Label>Fournisseur</Label>
-                  <select className="w-full p-2 border rounded-md" value={chatProvider} onChange={(e)=>{ setChatProvider(e.target.value); const first = (AI_PROVIDERS.find(p=>p.id===e.target.value)?.models||[])[0] || ''; setChatModel(first); }}>
-                    {AI_PROVIDERS.map(p=> (<option key={p.id} value={p.id}>{p.name}</option>))}
+                  <select className="w-full p-2 border rounded-md" value={chatProvider} onChange={(e)=>{ setChatProvider(e.target.value); const first = (e.target.value==='openai' ? 'gpt-5' : 'claude-sonnet-4-5'); setChatModel(first); }}>
+                    {allowedProviders.map(p=> (<option key={p.id} value={p.id}>{p.name}</option>))}
                   </select>
                 </div>
                 <div>
@@ -303,8 +296,8 @@ Style: français naturel, ton pro, concis mais riche, éventuellement emojis con
                   </select>
                 </div>
                 <div>
-                  <Label>Température ({chatTemp.toFixed(2)})</Label>
-                  <input type="range" min={0} max={2} step={0.1} value={chatTemp} onChange={(e)=> setChatTemp(parseFloat(e.target.value))} className="w-full" />
+                  <Label>Température ({isGpt5 ? '1.00 (fixée)' : chatTemp.toFixed(2)})</Label>
+                  <input disabled={isGpt5} type="range" min={0} max={2} step={0.1} value={isGpt5 ? 1 : chatTemp} onChange={(e)=> setChatTemp(parseFloat(e.target.value))} className="w-full" />
                 </div>
                 <div>
                   <Label>Max tokens</Label>
@@ -314,12 +307,6 @@ Style: français naturel, ton pro, concis mais riche, éventuellement emojis con
                   <div className="flex items-center gap-2">
                     <Switch checked={chatMemory} onCheckedChange={setChatMemory} />
                     <span className="text-sm">Mémoire conversationnelle</span>
-                  </div>
-                </div>
-                <div className="flex items-end gap-2">
-                  <div className="flex items-center gap-2">
-                    <Switch checked={chatAdvanced} onCheckedChange={setChatAdvanced} />
-                    <span className="text-sm">Qualité avancée (style web)</span>
                   </div>
                 </div>
               </div>
@@ -339,6 +326,11 @@ Style: français naturel, ton pro, concis mais riche, éventuellement emojis con
                 </div>
               </div>
 
+              <div>
+                <Label>System prompt (optionnel)</Label>
+                <textarea className="w-full p-2 border rounded-md min-h-[80px]" placeholder="Laisser vide pour un chat neutre (comme l’interface web)." value={systemPrompt} onChange={(e)=> setSystemPrompt(e.target.value)} />
+              </div>
+
               {lastDebug && (
                 <div className="text-xs text-gray-600 flex flex-wrap gap-2 items-center">
                   <span>Paramètres envoyés:</span>
@@ -349,7 +341,7 @@ Style: français naturel, ton pro, concis mais riche, éventuellement emojis con
                 </div>
               )}
 
-              <div className="border rounded-lg p-3 bg-white min-h-[200px] max-h-[340px] overflow-auto">
+              <div className="border rounded-lg p-3 bg-white min-h-[300px] overflow-auto">
                 {chatMessages.length===0 && (
                   <div className="text-sm text-gray-500">Commencez une conversation pour tester le modèle.</div>
                 )}
@@ -359,10 +351,12 @@ Style: français naturel, ton pro, concis mais riche, éventuellement emojis con
                   </div>
                 ))}
               </div>
-              <div className="flex gap-2">
-                <Input placeholder="Écrire un message..." value={chatInput} onChange={(e)=> setChatInput(e.target.value)} />
-                <Button onClick={sendChat}>Envoyer</Button>
-                <Button variant="outline" onClick={()=> setChatMessages([])}>Vider l'historique</Button>
+              <div className="flex gap-2 items-start">
+                <textarea className="flex-1 p-2 border rounded-md min-h-[70px]" placeholder="Écrire un message... (Ctrl+Entrée pour envoyer)" value={chatInput} onChange={(e)=> setChatInput(e.target.value)} onKeyDown={(e)=>{ if (e.key==='Enter' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); sendChat(); } }} />
+                <div className="flex flex-col gap-2">
+                  <Button onClick={sendChat}>Envoyer</Button>
+                  <Button variant="outline" onClick={()=> setChatMessages([])}>Vider l'historique</Button>
+                </div>
               </div>
             </CardContent>
           </Card>

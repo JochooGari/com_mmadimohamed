@@ -387,8 +387,7 @@ async function callProvider(provider: string, model: string, apiKey: string | un
       }
       body = base;
       if (typeof extra.topP === 'number') body.top_p = extra.topP;
-      if (typeof extra.frequencyPenalty === 'number') body.frequency_penalty = extra.frequencyPenalty;
-      if (typeof extra.presencePenalty === 'number') body.presence_penalty = extra.presencePenalty;
+      // frequency_penalty and presence_penalty are not supported on Responses API
     } else {
       url = 'https://api.openai.com/v1/chat/completions';
       body = { model: normalizedModel, messages };
