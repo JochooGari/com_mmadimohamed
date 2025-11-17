@@ -16,6 +16,7 @@ import { DebugConsole } from '@/components/DebugConsole';
 import { MetricsPanel } from '@/components/MetricsPanel';
 import { ToastProvider, useToast } from '@/components/ErrorToast';
 import { useAgents, Agent } from '@/hooks/useAgents';
+import { getApiKey } from '@/lib/aiProviders';
 
 interface WorkflowAgent {
   id: string;
@@ -38,11 +39,6 @@ interface WorkflowConfig {
     geoMinimum: number;
   };
   maxIterations: number;
-  apiKeys: {
-    perplexity: string;
-    openai: string;
-    anthropic: string;
-  };
 }
 
 interface WorkflowExecution {
@@ -80,13 +76,15 @@ function WorkflowInner() {
       seoMinimum: 98,
       geoMinimum: 95
     },
-    maxIterations: 3,
-    apiKeys: {
-      perplexity: '',
-      openai: '',
-      anthropic: ''
-    }
+    maxIterations: 3
   });
+
+  // Get API keys from environment variables (configured in /admin/settings)
+  const apiKeys = {
+    perplexity: getApiKey('perplexity') || '',
+    openai: getApiKey('openai') || '',
+    anthropic: getApiKey('anthropic') || ''
+  };
 
   // Convert central agents to WorkflowAgent format for local use
   const workflowAgentIds = ['search-content', 'ghostwriter', 'review-content'];
@@ -179,16 +177,14 @@ function WorkflowInner() {
   const validateConfig = (): boolean => {
     const errors: string[] = [];
 
-    if (!config.siteUrl.trim()) {
-      errors.push('URL du site requis pour Agent Search Content');
+    if (!config.siteUrl.trim() && customTopics.length === 0) {
+      errors.push('URL du site requis (ou ajoutez des sujets personnalisés)');
     }
 
     agents.forEach(agent => {
-      if (agent.status === 'active') {
-        const apiKey = config.apiKeys[agent.provider];
-        if (!apiKey.trim()) {
-          errors.push(`Clé API ${agent.provider} manquante pour ${agent.name}`);
-        }
+      const apiKey = apiKeys[agent.provider as keyof typeof apiKeys];
+      if (!apiKey?.trim()) {
+        errors.push(`Clé API ${agent.provider} manquante pour ${agent.name} (configurer dans /admin/settings)`);
       }
     });
 
@@ -200,10 +196,10 @@ function WorkflowInner() {
   useEffect(() => {
     const updatedAgents: WorkflowAgent[] = agents.map(agent => ({
       ...agent,
-      status: (config.apiKeys[agent.provider]?.trim() ? 'active' : 'inactive') as 'active' | 'inactive'
+      status: (apiKeys[agent.provider as keyof typeof apiKeys]?.trim() ? 'active' : 'inactive') as 'active' | 'inactive'
     }));
     setAgents(updatedAgents);
-  }, [config.apiKeys]);
+  }, [apiKeys.perplexity, apiKeys.openai, apiKeys.anthropic]);
 
   const handleRunWorkflow = async () => {
     if (!validateConfig()) {
@@ -221,21 +217,21 @@ function WorkflowInner() {
         model: agents.find(a => a.id === 'search-content')?.model || 'llama-3.1-sonar-large-128k-online',
         temperature: agents.find(a => a.id === 'search-content')?.temperature,
         maxTokens: agents.find(a => a.id === 'search-content')?.maxTokens,
-        apiKey: config.apiKeys.perplexity
+        apiKey: apiKeys.perplexity
       },
       ghostwriterAgent: {
         provider: agents.find(a => a.id === 'ghostwriter')?.provider || 'openai',
         model: agents.find(a => a.id === 'ghostwriter')?.model || 'gpt-4o',
         temperature: agents.find(a => a.id === 'ghostwriter')?.temperature,
         maxTokens: agents.find(a => a.id === 'ghostwriter')?.maxTokens,
-        apiKey: config.apiKeys.openai
+        apiKey: apiKeys.openai
       },
       reviewerAgent: {
         provider: agents.find(a => a.id === 'review-content')?.provider || 'anthropic',
         model: agents.find(a => a.id === 'review-content')?.model || 'claude-sonnet-4-5-20250514',
         temperature: agents.find(a => a.id === 'review-content')?.temperature,
         maxTokens: agents.find(a => a.id === 'review-content')?.maxTokens,
-        apiKey: config.apiKeys.anthropic
+        apiKey: apiKeys.anthropic
       },
       targetScores: config.targetScores,
       maxIterations: config.maxIterations
@@ -546,59 +542,47 @@ function WorkflowInner() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Clés API</CardTitle>
+                <CardTitle>Statut des Clés API</CardTitle>
                 <CardDescription>
-                  Configurez vos clés API pour les différents fournisseurs IA
+                  Les clés API sont configurées dans <a href="/admin/settings" className="text-blue-600 hover:underline">/admin/settings</a>
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="perplexity-key">
-                    Clé API Perplexity
-                    {config.apiKeys.perplexity && <CheckCircle className="inline w-4 h-4 ml-2 text-green-500" />}
-                  </Label>
-                  <Input
-                    id="perplexity-key"
-                    type="password"
-                    placeholder="pplx-..."
-                    value={config.apiKeys.perplexity}
-                    onChange={(e) => setConfig(prev => ({
-                      ...prev,
-                      apiKeys: { ...prev.apiKeys, perplexity: e.target.value }
-                    }))}
-                  />
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between p-2 border rounded">
+                  <span>Perplexity</span>
+                  {apiKeys.perplexity ? (
+                    <Badge variant="default" className="bg-green-100 text-green-700">
+                      <CheckCircle className="w-3 h-3 mr-1" /> Configurée
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive">
+                      <AlertCircle className="w-3 h-3 mr-1" /> Manquante
+                    </Badge>
+                  )}
                 </div>
-                <div>
-                  <Label htmlFor="openai-key">
-                    Clé API OpenAI
-                    {config.apiKeys.openai && <CheckCircle className="inline w-4 h-4 ml-2 text-green-500" />}
-                  </Label>
-                  <Input
-                    id="openai-key"
-                    type="password"
-                    placeholder="sk-..."
-                    value={config.apiKeys.openai}
-                    onChange={(e) => setConfig(prev => ({
-                      ...prev,
-                      apiKeys: { ...prev.apiKeys, openai: e.target.value }
-                    }))}
-                  />
+                <div className="flex items-center justify-between p-2 border rounded">
+                  <span>OpenAI</span>
+                  {apiKeys.openai ? (
+                    <Badge variant="default" className="bg-green-100 text-green-700">
+                      <CheckCircle className="w-3 h-3 mr-1" /> Configurée
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive">
+                      <AlertCircle className="w-3 h-3 mr-1" /> Manquante
+                    </Badge>
+                  )}
                 </div>
-                <div>
-                  <Label htmlFor="anthropic-key">
-                    Clé API Anthropic
-                    {config.apiKeys.anthropic && <CheckCircle className="inline w-4 h-4 ml-2 text-green-500" />}
-                  </Label>
-                  <Input
-                    id="anthropic-key"
-                    type="password"
-                    placeholder="sk-ant-..."
-                    value={config.apiKeys.anthropic}
-                    onChange={(e) => setConfig(prev => ({
-                      ...prev,
-                      apiKeys: { ...prev.apiKeys, anthropic: e.target.value }
-                    }))}
-                  />
+                <div className="flex items-center justify-between p-2 border rounded">
+                  <span>Anthropic</span>
+                  {apiKeys.anthropic ? (
+                    <Badge variant="default" className="bg-green-100 text-green-700">
+                      <CheckCircle className="w-3 h-3 mr-1" /> Configurée
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive">
+                      <AlertCircle className="w-3 h-3 mr-1" /> Manquante
+                    </Badge>
+                  )}
                 </div>
               </CardContent>
             </Card>
