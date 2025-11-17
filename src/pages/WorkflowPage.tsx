@@ -16,7 +16,6 @@ import { DebugConsole } from '@/components/DebugConsole';
 import { MetricsPanel } from '@/components/MetricsPanel';
 import { ToastProvider, useToast } from '@/components/ErrorToast';
 import { useAgents, Agent } from '@/hooks/useAgents';
-import { getApiKey } from '@/lib/aiProviders';
 
 interface WorkflowAgent {
   id: string;
@@ -79,12 +78,42 @@ function WorkflowInner() {
     maxIterations: 3
   });
 
-  // Get API keys from environment variables (configured in /admin/settings)
-  const apiKeys = {
-    perplexity: getApiKey('perplexity') || '',
-    openai: getApiKey('openai') || '',
-    anthropic: getApiKey('anthropic') || ''
-  };
+  // API key status (checked via server-side API)
+  const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, boolean>>({
+    perplexity: false,
+    openai: false,
+    anthropic: false
+  });
+
+  // Check API key status on mount
+  useEffect(() => {
+    const checkKeys = async () => {
+      const providers = ['perplexity', 'openai', 'anthropic'];
+      const status: Record<string, boolean> = {};
+
+      await Promise.all(providers.map(async (provider) => {
+        try {
+          const response = await fetch('/api/check-api-key', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            status[provider] = data.configured;
+          } else {
+            status[provider] = false;
+          }
+        } catch {
+          status[provider] = false;
+        }
+      }));
+
+      setApiKeyStatus(status);
+    };
+
+    checkKeys();
+  }, []);
 
   // Convert central agents to WorkflowAgent format for local use
   const workflowAgentIds = ['search-content', 'ghostwriter', 'review-content'];
@@ -182,8 +211,8 @@ function WorkflowInner() {
     }
 
     agents.forEach(agent => {
-      const apiKey = apiKeys[agent.provider as keyof typeof apiKeys];
-      if (!apiKey?.trim()) {
+      const hasKey = apiKeyStatus[agent.provider as keyof typeof apiKeyStatus];
+      if (!hasKey) {
         errors.push(`Clé API ${agent.provider} manquante pour ${agent.name} (configurer dans /admin/settings)`);
       }
     });
@@ -196,10 +225,10 @@ function WorkflowInner() {
   useEffect(() => {
     const updatedAgents: WorkflowAgent[] = agents.map(agent => ({
       ...agent,
-      status: (apiKeys[agent.provider as keyof typeof apiKeys]?.trim() ? 'active' : 'inactive') as 'active' | 'inactive'
+      status: (apiKeyStatus[agent.provider as keyof typeof apiKeyStatus] ? 'active' : 'inactive') as 'active' | 'inactive'
     }));
     setAgents(updatedAgents);
-  }, [apiKeys.perplexity, apiKeys.openai, apiKeys.anthropic]);
+  }, [apiKeyStatus.perplexity, apiKeyStatus.openai, apiKeyStatus.anthropic]);
 
   const handleRunWorkflow = async () => {
     if (!validateConfig()) {
@@ -211,27 +240,25 @@ function WorkflowInner() {
       customTopics: customTopics.length > 0 ? customTopics : undefined
     };
 
+    // API keys are used server-side only (not sent from frontend)
     const workflowConfig = {
       searchAgent: {
         provider: agents.find(a => a.id === 'search-content')?.provider || 'perplexity',
         model: agents.find(a => a.id === 'search-content')?.model || 'llama-3.1-sonar-large-128k-online',
         temperature: agents.find(a => a.id === 'search-content')?.temperature,
-        maxTokens: agents.find(a => a.id === 'search-content')?.maxTokens,
-        apiKey: apiKeys.perplexity
+        maxTokens: agents.find(a => a.id === 'search-content')?.maxTokens
       },
       ghostwriterAgent: {
         provider: agents.find(a => a.id === 'ghostwriter')?.provider || 'openai',
         model: agents.find(a => a.id === 'ghostwriter')?.model || 'gpt-4o',
         temperature: agents.find(a => a.id === 'ghostwriter')?.temperature,
-        maxTokens: agents.find(a => a.id === 'ghostwriter')?.maxTokens,
-        apiKey: apiKeys.openai
+        maxTokens: agents.find(a => a.id === 'ghostwriter')?.maxTokens
       },
       reviewerAgent: {
         provider: agents.find(a => a.id === 'review-content')?.provider || 'anthropic',
         model: agents.find(a => a.id === 'review-content')?.model || 'claude-sonnet-4-5-20250514',
         temperature: agents.find(a => a.id === 'review-content')?.temperature,
-        maxTokens: agents.find(a => a.id === 'review-content')?.maxTokens,
-        apiKey: apiKeys.anthropic
+        maxTokens: agents.find(a => a.id === 'review-content')?.maxTokens
       },
       targetScores: config.targetScores,
       maxIterations: config.maxIterations
@@ -550,7 +577,7 @@ function WorkflowInner() {
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between p-2 border rounded">
                   <span>Perplexity</span>
-                  {apiKeys.perplexity ? (
+                  {apiKeyStatus.perplexity ? (
                     <Badge variant="default" className="bg-green-100 text-green-700">
                       <CheckCircle className="w-3 h-3 mr-1" /> Configurée
                     </Badge>
@@ -562,7 +589,7 @@ function WorkflowInner() {
                 </div>
                 <div className="flex items-center justify-between p-2 border rounded">
                   <span>OpenAI</span>
-                  {apiKeys.openai ? (
+                  {apiKeyStatus.openai ? (
                     <Badge variant="default" className="bg-green-100 text-green-700">
                       <CheckCircle className="w-3 h-3 mr-1" /> Configurée
                     </Badge>
@@ -574,7 +601,7 @@ function WorkflowInner() {
                 </div>
                 <div className="flex items-center justify-between p-2 border rounded">
                   <span>Anthropic</span>
-                  {apiKeys.anthropic ? (
+                  {apiKeyStatus.anthropic ? (
                     <Badge variant="default" className="bg-green-100 text-green-700">
                       <CheckCircle className="w-3 h-3 mr-1" /> Configurée
                     </Badge>

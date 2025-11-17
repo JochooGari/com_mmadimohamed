@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { aiService, AI_PROVIDERS } from '@/lib/aiProviders';
 import ApiKeyDiagnostic from '@/components/ApiKeyDiagnostic';
-import EnvDebugger from '@/components/EnvDebugger';
 import { getDefaultProvider, getDefaultModel, setDefaultProviderModel, setDefaultParams } from '@/lib/appSettings';
 
 export default function AdminSettings() {
@@ -178,7 +177,6 @@ export default function AdminSettings() {
 
         <TabsContent value="api-keys">
           <div className="space-y-6">
-            <EnvDebugger />
             <ApiKeyDiagnostic />
             
           <Card>

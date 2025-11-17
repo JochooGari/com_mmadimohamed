@@ -55,6 +55,7 @@ export const AI_PROVIDERS: AIProvider[] = [
 export const getApiKey = (provider: string): string | null => {
   // En production, ces clés devraient être stockées côté serveur
   // et récupérées via une API sécurisée
+  // Note: Vite requires VITE_ prefix for client-side env vars
   switch (provider) {
     case 'openai':
       return import.meta.env.VITE_OPENAI_API_KEY || null;

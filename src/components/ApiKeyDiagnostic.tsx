@@ -2,68 +2,78 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { 
-  Key, 
+import {
+  Key,
   CheckCircle,
   AlertCircle,
-  Eye,
-  EyeOff,
   RefreshCw,
-  Copy
+  Loader2
 } from 'lucide-react';
-import { getApiKey } from '@/lib/aiProviders';
+
+interface ProviderStatus {
+  id: string;
+  name: string;
+  status: 'loading' | 'configured' | 'missing' | 'error';
+  message?: string;
+}
 
 export default function ApiKeyDiagnostic() {
-  const [apiKeys, setApiKeys] = useState<Record<string, string | null>>({});
-  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
-  const [envVars, setEnvVars] = useState<Record<string, string | undefined>>({});
+  const [providers, setProviders] = useState<ProviderStatus[]>([
+    { id: 'openai', name: 'OpenAI', status: 'loading' },
+    { id: 'anthropic', name: 'Anthropic', status: 'loading' },
+    { id: 'perplexity', name: 'Perplexity', status: 'loading' },
+    { id: 'google', name: 'Google AI', status: 'loading' },
+    { id: 'mistral', name: 'Mistral AI', status: 'loading' }
+  ]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const providers = [
-    { id: 'openai', name: 'OpenAI', envVar: 'VITE_OPENAI_API_KEY' },
-    { id: 'anthropic', name: 'Anthropic', envVar: 'VITE_ANTHROPIC_API_KEY' },
-    { id: 'google', name: 'Google AI', envVar: 'VITE_GOOGLE_AI_API_KEY' },
-    { id: 'mistral', name: 'Mistral AI', envVar: 'VITE_MISTRAL_API_KEY' },
-    { id: 'perplexity', name: 'Perplexity', envVar: 'VITE_PERPLEXITY_API_KEY' }
-  ];
+  const checkApiKeys = async () => {
+    setIsLoading(true);
+
+    // Test each provider via server-side API
+    const updatedProviders = await Promise.all(
+      providers.map(async (provider) => {
+        try {
+          const response = await fetch('/api/check-api-key', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider: provider.id })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            return {
+              ...provider,
+              status: data.configured ? 'configured' : 'missing',
+              message: data.message
+            } as ProviderStatus;
+          } else {
+            return {
+              ...provider,
+              status: 'error',
+              message: 'Erreur lors de la vérification'
+            } as ProviderStatus;
+          }
+        } catch (error) {
+          return {
+            ...provider,
+            status: 'error',
+            message: 'API non disponible'
+          } as ProviderStatus;
+        }
+      })
+    );
+
+    setProviders(updatedProviders);
+    setIsLoading(false);
+  };
 
   useEffect(() => {
-    // Diagnostic des clés API
-    const keys: Record<string, string | null> = {};
-    const env: Record<string, string | undefined> = {};
-    
-    providers.forEach(provider => {
-      keys[provider.id] = getApiKey(provider.id);
-      env[provider.envVar] = import.meta.env[provider.envVar];
-    });
-    
-    setApiKeys(keys);
-    setEnvVars(env);
-    
-    console.log('🔍 Diagnostic des clés API:');
-    console.log('Variables d\'environnement:', env);
-    console.log('Clés récupérées:', keys);
+    checkApiKeys();
   }, []);
 
-  const toggleKeyVisibility = (providerId: string) => {
-    setShowKeys(prev => ({ ...prev, [providerId]: !prev[providerId] }));
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert('Copié dans le presse-papier !');
-  };
-
-  const maskKey = (key: string | null) => {
-    if (!key) return null;
-    if (key.length <= 8) return key;
-    return key.substring(0, 6) + '...' + key.substring(key.length - 4);
-  };
-
-  const refresh = () => {
-    window.location.reload();
-  };
+  const configuredCount = providers.filter(p => p.status === 'configured').length;
+  const missingCount = providers.filter(p => p.status === 'missing').length;
 
   return (
     <Card>
@@ -73,12 +83,16 @@ export default function ApiKeyDiagnostic() {
             <Key className="h-5 w-5" />
             Diagnostic des clés API
           </div>
-          <Button variant="outline" size="sm" onClick={refresh}>
-            <RefreshCw className="h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={checkApiKeys} disabled={isLoading}>
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
           </Button>
         </CardTitle>
         <CardDescription>
-          Vérification de la configuration des variables d'environnement
+          Vérification des clés API configurées côté serveur
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -86,13 +100,13 @@ export default function ApiKeyDiagnostic() {
         <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
           <div className="text-center">
             <div className="text-lg font-bold text-green-600">
-              {Object.values(apiKeys).filter(key => key && key.length > 0).length}
+              {configuredCount}
             </div>
             <div className="text-sm text-gray-600">Clés configurées</div>
           </div>
           <div className="text-center">
             <div className="text-lg font-bold text-red-600">
-              {Object.values(apiKeys).filter(key => !key || key.length === 0).length}
+              {missingCount}
             </div>
             <div className="text-sm text-gray-600">Clés manquantes</div>
           </div>
@@ -106,99 +120,64 @@ export default function ApiKeyDiagnostic() {
 
         {/* Détail par provider */}
         <div className="space-y-3">
-          <h3 className="font-medium">Détail par provider</h3>
-          {providers.map(provider => {
-            const hasKey = apiKeys[provider.id] && apiKeys[provider.id]!.length > 0;
-            const envValue = envVars[provider.envVar];
-            
-            return (
-              <div key={provider.id} className="p-4 border rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{provider.name}</span>
-                    {hasKey ? (
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <AlertCircle className="h-4 w-4 text-red-600" />
-                    )}
-                    <Badge variant={hasKey ? 'default' : 'destructive'}>
-                      {hasKey ? 'Configuré' : 'Manquant'}
-                    </Badge>
-                  </div>
-                  {hasKey && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleKeyVisibility(provider.id)}
-                    >
-                      {showKeys[provider.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  )}
-                </div>
-
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <Label className="text-xs text-gray-500">Variable d'environnement</Label>
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs bg-gray-100 px-2 py-1 rounded">{provider.envVar}</code>
-                      {envValue && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => copyToClipboard(envValue)}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label className="text-xs text-gray-500">Valeur détectée</Label>
-                    <div className="font-mono text-xs p-2 bg-gray-100 rounded">
-                      {hasKey ? (
-                        showKeys[provider.id] ? 
-                          apiKeys[provider.id] : 
-                          maskKey(apiKeys[provider.id])
-                      ) : (
-                        <span className="text-red-600">❌ Aucune clé détectée</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {!hasKey && (
-                    <div className="p-2 bg-yellow-50 border border-yellow-200 rounded">
-                      <p className="text-xs text-yellow-800">
-                        💡 <strong>Pour corriger :</strong>
-                      </p>
-                      <ol className="text-xs text-yellow-700 mt-1 ml-4 list-decimal">
-                        <li>Ajoutez <code>{provider.envVar}=votre_clé_ici</code> dans <code>.env.local</code></li>
-                        <li>Redémarrez le serveur de développement</li>
-                        <li>Actualisez cette page</li>
-                      </ol>
-                    </div>
-                  )}
-                </div>
+          <h3 className="font-medium">Statut par provider</h3>
+          {providers.map(provider => (
+            <div key={provider.id} className="p-3 border rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="font-medium">{provider.name}</span>
+                {provider.status === 'loading' && (
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                )}
+                {provider.status === 'configured' && (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                )}
+                {provider.status === 'missing' && (
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                )}
+                {provider.status === 'error' && (
+                  <AlertCircle className="h-4 w-4 text-yellow-600" />
+                )}
               </div>
-            );
-          })}
+              <div>
+                {provider.status === 'loading' && (
+                  <Badge variant="outline">Vérification...</Badge>
+                )}
+                {provider.status === 'configured' && (
+                  <Badge variant="default" className="bg-green-100 text-green-700">
+                    Configurée
+                  </Badge>
+                )}
+                {provider.status === 'missing' && (
+                  <Badge variant="destructive">
+                    Manquante
+                  </Badge>
+                )}
+                {provider.status === 'error' && (
+                  <Badge variant="outline" className="bg-yellow-100 text-yellow-700">
+                    Erreur
+                  </Badge>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Instructions */}
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h4 className="font-medium text-blue-800 mb-2">📋 Instructions de configuration</h4>
-          <div className="text-sm text-blue-700 space-y-2">
-            <p><strong>1. Ouvrez le fichier :</strong> <code>.env.local</code></p>
-            <p><strong>2. Ajoutez vos clés :</strong></p>
-            <pre className="text-xs bg-blue-100 p-2 rounded mt-1">
-{`VITE_OPENAI_API_KEY=sk-...
-VITE_ANTHROPIC_API_KEY=sk-ant-...
-VITE_PERPLEXITY_API_KEY=pplx-...`}
-            </pre>
-            <p><strong>3. Redémarrez :</strong> <code>npm run dev</code></p>
-            <p><strong>4. Actualisez cette page</strong></p>
+        {missingCount > 0 && (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="font-medium text-blue-800 mb-2">Configuration des clés API</h4>
+            <div className="text-sm text-blue-700 space-y-2">
+              <p>Les clés API sont configurées de manière sécurisée côté serveur :</p>
+              <ul className="list-disc ml-4 space-y-1">
+                <li><strong>En local :</strong> Dans le fichier <code>.env.local</code></li>
+                <li><strong>En production :</strong> Dans les variables d'environnement Vercel</li>
+              </ul>
+              <p className="mt-2">
+                Variables requises : <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, <code>PERPLEXITY_API_KEY</code>
+              </p>
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );
