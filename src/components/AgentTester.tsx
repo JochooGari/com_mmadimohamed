@@ -241,12 +241,13 @@ Public: Dirigeants B2B cherchant des solutions concrètes.`
   const calculateCost = (provider: string, model: string, tokens: number): number => {
     // Coûts approximatifs en centimes d'euro pour 1000 tokens
     const costs: Record<string, Record<string, number>> = {
-      'openai': { 'gpt-4-turbo': 0.02, 'gpt-5': 0.03, 'gpt-4': 0.015 },
-      'anthropic': { 'claude-3-opus': 0.025, 'claude-3-sonnet': 0.006 },
+      'openai': { 'gpt-4o': 0.005, 'gpt-4-turbo': 0.02, 'gpt-3.5-turbo': 0.002 },
+      'anthropic': { 'claude-sonnet-4-5-20250514': 0.003, 'claude-3-5-sonnet-latest': 0.003, 'claude-3-5-haiku-latest': 0.001 },
       'mistral': { 'mistral-large': 0.008 },
-      'perplexity': { 'sonar': 0.005, 'sonar-pro': 0.012, 'llama-3.1-sonar-large-128k-online': 0.004, 'llama-3.1-sonar-small-128k-online': 0.003 }
+      'perplexity': { 'sonar': 0.005, 'sonar-pro': 0.012, 'llama-3.1-sonar-large-128k-online': 0.004, 'llama-3.1-sonar-small-128k-online': 0.003 },
+      'google': { 'gemini-pro': 0.0005, 'gemini-2.0-flash': 0.0001 }
     };
-    
+
     const costPer1k = costs[provider]?.[model] || 0.01;
     return (tokens / 1000) * costPer1k;
   };

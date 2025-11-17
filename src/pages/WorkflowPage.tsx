@@ -15,6 +15,7 @@ import { WorkflowTimeline } from '@/components/WorkflowTimeline';
 import { DebugConsole } from '@/components/DebugConsole';
 import { MetricsPanel } from '@/components/MetricsPanel';
 import { ToastProvider, useToast } from '@/components/ErrorToast';
+import { useAgents, Agent } from '@/hooks/useAgents';
 
 interface WorkflowAgent {
   id: string;
@@ -64,6 +65,15 @@ interface CustomTopic {
 }
 
 function WorkflowInner() {
+  // Use centralized agents hook for synchronization with Admin Agents
+  const {
+    agents: centralAgents,
+    updateAgent: updateCentralAgent,
+    getAgent,
+    syncWithWorkflowStorage,
+    saveWorkflowPrompts
+  } = useAgents();
+
   const [config, setConfig] = useState<WorkflowConfig>({
     siteUrl: '',
     targetScores: {
@@ -78,90 +88,56 @@ function WorkflowInner() {
     }
   });
 
-  const [agents, setAgents] = useState<WorkflowAgent[]>([
-    {
-      id: 'search-content',
-      name: 'Agent Search Content',
-      description: 'Analyse votre site et propose des sujets d\'articles ou utilise vos sujets personnalisés',
-      provider: 'perplexity',
-      model: 'sonar',
-      temperature: 0.7,
-      maxTokens: 2000,
-      status: 'inactive',
-      prompt: `Tu es un agent spécialisé dans l'analyse de contenu web et la proposition de sujets d'articles.
-
-Analyse le site web fourni et propose 3-5 sujets d'articles pertinents.
-
-Retourne UNIQUEMENT un JSON valide avec cette structure :
-{
-  "topics": [
-    {
-      "title": "Titre suggéré",
-      "keywords": ["mot-clé1", "mot-clé2"],
-      "angle": "Description de l'angle",
-      "audience": "Description du public cible",
-      "sources": ["source1", "source2"]
+  // Convert central agents to WorkflowAgent format for local use
+  const workflowAgentIds = ['search-content', 'ghostwriter', 'review-content'];
+  const agents: WorkflowAgent[] = workflowAgentIds.map(id => {
+    const agent = getAgent(id);
+    if (!agent) {
+      // Fallback defaults if agent not found
+      return {
+        id,
+        name: id === 'search-content' ? 'Agent Search Content' :
+              id === 'ghostwriter' ? 'Agent Ghostwriter' : 'Agent Reviewer',
+        description: '',
+        provider: (id === 'search-content' ? 'perplexity' :
+                  id === 'ghostwriter' ? 'openai' : 'anthropic') as 'perplexity' | 'openai' | 'anthropic',
+        model: id === 'search-content' ? 'sonar' :
+               id === 'ghostwriter' ? 'gpt-4o' : 'claude-sonnet-4-5-20250514',
+        temperature: id === 'review-content' ? 0.3 : id === 'ghostwriter' ? 0.8 : 0.7,
+        maxTokens: id === 'ghostwriter' ? 8000 : 2000,
+        status: 'inactive' as const,
+        prompt: ''
+      };
     }
-  ]
-}`
-    },
-    {
-      id: 'ghostwriter',
-      name: 'Agent Ghostwriter',
-      description: 'Rédige des articles complets et optimisés SEO',
-      provider: 'openai',
-      model: 'gpt-4o',
-      temperature: 0.8,
-      maxTokens: 4000,
-      status: 'inactive',
-      prompt: `Tu es un rédacteur expert. Rédige un article complet et optimisé SEO.
+    return {
+      id: agent.id,
+      name: agent.name,
+      description: agent.description || '',
+      provider: (agent.provider || 'openai') as 'perplexity' | 'openai' | 'anthropic',
+      model: agent.model,
+      temperature: agent.temperature,
+      maxTokens: agent.maxTokens,
+      status: (agent.status || 'inactive') as 'active' | 'inactive',
+      prompt: agent.prompt || ''
+    };
+  });
 
-Retourne UNIQUEMENT un JSON valide avec cette structure :
-{
-  "article": {
-    "title": "Titre H1",
-    "metaDescription": "Meta description SEO (150-160 caractères)",
-    "introduction": "Introduction engageante",
-    "content": "Corps de l'article en HTML avec balises H2, H3, p, ul, li",
-    "conclusion": "Conclusion avec call-to-action",
-    "images": ["suggestion1.jpg", "suggestion2.jpg"],
-    "wordCount": 1500
-  }
-}`
-    },
-    {
-      id: 'review-content',
-      name: 'Agent Reviewer',
-      description: 'Analyse les articles et donne des scores SEO/GEO avec recommandations',
-      provider: 'anthropic',
-      model: 'claude-3-sonnet-20240229',
-      temperature: 0.3,
-      maxTokens: 2000,
-      status: 'inactive',
-      prompt: `Analyse cet article et donne un score détaillé.
-
-Retourne UNIQUEMENT un JSON valide avec cette structure :
-{
-  "review": {
-    "globalScore": 85,
-    "detailedScores": {
-      "writing": 22,
-      "relevance": 18,
-      "seo": 17,
-      "geo": 13,
-      "structure": 13,
-      "engagement": 8,
-      "briefCompliance": 9
-    },
-    "strengths": ["Point fort 1", "Point fort 2"],
-    "improvements": ["Amélioration 1", "Amélioration 2"],
-    "recommendations": ["Recommandation 1", "Recommandation 2"],
-    "actions": ["Action 1", "Action 2"],
-    "targetScore": 95
-  }
-}`
-    }
-  ]);
+  // Wrapper to update agents in central store
+  const setAgents = (updater: WorkflowAgent[] | ((prev: WorkflowAgent[]) => WorkflowAgent[])) => {
+    const newAgents = typeof updater === 'function' ? updater(agents) : updater;
+    newAgents.forEach(agent => {
+      updateCentralAgent(agent.id, {
+        name: agent.name,
+        description: agent.description,
+        provider: agent.provider,
+        model: agent.model,
+        temperature: agent.temperature,
+        maxTokens: agent.maxTokens,
+        status: agent.status,
+        prompt: agent.prompt
+      });
+    });
+  };
 
   const [executions, setExecutions] = useState<WorkflowExecution[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<WorkflowAgent | null>(null);
@@ -256,7 +232,7 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
       },
       reviewerAgent: {
         provider: agents.find(a => a.id === 'review-content')?.provider || 'anthropic',
-        model: agents.find(a => a.id === 'review-content')?.model || 'claude-3-sonnet-20240229',
+        model: agents.find(a => a.id === 'review-content')?.model || 'claude-sonnet-4-5-20250514',
         temperature: agents.find(a => a.id === 'review-content')?.temperature,
         maxTokens: agents.find(a => a.id === 'review-content')?.maxTokens,
         apiKey: config.apiKeys.anthropic
@@ -371,19 +347,13 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
     ));
   };
 
+  // Use centralized hook functions for sync
   const saveAllPrompts = async () => {
-    const mapping: Record<string, { prompt: string }> = {};
-    agents.forEach(a => { mapping[a.id] = { prompt: a.prompt || '' }; });
-    await fetch('/api/storage', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'save_workflow_prompts', data: mapping }) }).catch(()=>{});
+    await saveWorkflowPrompts();
   };
 
   const loadAllPrompts = async () => {
-    try {
-      const r = await fetch('/api/storage?agent=workflow&type=prompts');
-      if (!r.ok) return;
-      const data = await r.json();
-      setAgents(prev => prev.map(a => ({ ...a, prompt: data?.[a.id]?.prompt ?? a.prompt })));
-    } catch {}
+    await syncWithWorkflowStorage();
   };
 
   const handleAddCustomTopic = () => {
