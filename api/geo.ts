@@ -93,12 +93,25 @@ export default async function handler(req: any, res: any) {
         return res.json({ scores: { seo: 85, geo: 86 }, strengths:['structure'], weaknesses:['few sources'], fixes:['add sources'] });
       }
       if (action === 'chain_draft') {
-        const { topic = 'Sujet', locked = [], editable = [], outline = 'H1/H2/H3', models = {}, providers = {}, prompts = {}, minScore = 95, maxIterations = 5 } = req.body || {};
+        const { topic = 'Sujet', locked = [], editable = [], outline = 'H1/H2/H3', models = {}, providers = {}, prompts = {}, minScore = 95, maxIterations = 3 } = req.body || {};
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
         const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=4000) => {
-          const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, model, messages, temperature, maxTokens }) });
-          if (!r.ok) throw new Error(`${provider} ${model} ${r.status}`);
-          return r.json();
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout per call
+          try {
+            const r = await fetch(`${base}/api/ai-proxy`, {
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ provider, model, messages, temperature, maxTokens }),
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (!r.ok) throw new Error(`${provider} ${model} ${r.status}`);
+            return r.json();
+          } catch (e: any) {
+            clearTimeout(timeoutId);
+            throw e;
+          }
         };
 
         const logs:any[] = [];
