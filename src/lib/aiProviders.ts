@@ -14,7 +14,7 @@ export const AI_PROVIDERS: AIProvider[] = [
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     requiresAuth: true,
-    models: ['gpt-5']
+    models: ['gpt-5.1', 'gpt-5', 'gpt-5-mini', 'gpt-5-nano']
   },
   {
     id: 'anthropic',

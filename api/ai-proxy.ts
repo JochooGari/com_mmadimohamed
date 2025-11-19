@@ -16,13 +16,26 @@ function normalize(provider: string, data: any, model: string) {
   let usage: any | undefined;
   switch (provider) {
     case 'openai':
+      // GPT-5 uses Responses API with output_text
+      if (model.startsWith('gpt-5')) {
+        content = data?.output_text || '';
+        usage = data?.usage && {
+          promptTokens: data.usage.input_tokens,
+          completionTokens: data.usage.output_tokens,
+          totalTokens: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0),
+        };
+      } else {
+        content = data?.choices?.[0]?.message?.content || '';
+        usage = data?.usage && {
+          promptTokens: data.usage.prompt_tokens,
+          completionTokens: data.usage.completion_tokens,
+          totalTokens: data.usage.total_tokens,
+        };
+      }
+      break;
     case 'mistral':
     case 'perplexity':
-      // GPT-5 may use output_text or different format
-      content = data?.choices?.[0]?.message?.content
-        || data?.output_text
-        || data?.choices?.[0]?.text
-        || '';
+      content = data?.choices?.[0]?.message?.content || '';
       usage = data?.usage && {
         promptTokens: data.usage.prompt_tokens,
         completionTokens: data.usage.completion_tokens,
@@ -70,12 +83,22 @@ export default async function handler(req: any, res: any) {
 
     switch (provider) {
       case 'openai': {
-        url = 'https://api.openai.com/v1/chat/completions';
         headers.Authorization = `Bearer ${key}`;
-        // GPT-5 uses max_completion_tokens and requires temperature=1
+        // GPT-5 uses Responses API with different format
         if (model.startsWith('gpt-5')) {
-          body = { model, messages, temperature: 1, max_completion_tokens: maxTokens };
+          url = 'https://api.openai.com/v1/responses';
+          // Convert messages to single input string for Responses API
+          const systemMsg = messages.find(m => m.role === 'system')?.content || '';
+          const userMsgs = messages.filter(m => m.role !== 'system').map(m => m.content).join('\n\n');
+          const input = systemMsg ? `${systemMsg}\n\n${userMsgs}` : userMsgs;
+          body = {
+            model,
+            input,
+            reasoning: { effort: 'low' },
+            max_output_tokens: maxTokens
+          };
         } else {
+          url = 'https://api.openai.com/v1/chat/completions';
           body = { model, messages, temperature, max_tokens: maxTokens };
         }
         break;

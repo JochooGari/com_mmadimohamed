@@ -107,7 +107,7 @@ export default async function handler(req: any, res: any) {
           ? `${prompts.openai}\n\nRappel: retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}]}`
           : `Sujet: ${topic}\nOutline: ${outline}\nLocked: ${JSON.stringify(locked).slice(0,1000)}\nEditable: ${JSON.stringify(editable).slice(0,2000)}\nLivrable JSON strict: {"sections":[{"id":"...","title":"...","html":"..."}]}`;
         const draftProvider = providers.draft || 'openai';
-        const draftModel = (models.draft || (models as any).openai || 'gpt-5');
+        const draftModel = (models.draft || (models as any).openai || 'gpt-5.1');
         const openai = await callAI(draftProvider, draftModel, [ {role:'system', content: sys1}, {role:'user', content: usr1} ]).catch(e=>({ error:String(e)}));
         logs.push({ step:'draft', summary: openai?.usage || null, model: draftModel, provider: draftProvider, rawContent: (openai?.content || '').slice(0, 200) });
         const draftTextRaw = (openai?.content || '').trim();
@@ -313,7 +313,7 @@ Retourne UNIQUEMENT un JSON valide avec cette structure:
         const userPrompt = `Analyse ce document:\n\nNom: ${fileName}\nType: ${fileType}\n\nContenu:\n${content.slice(0, 15000)}`;
 
         try {
-          const aiResponse = await callAI('openai', 'gpt-5', [
+          const aiResponse = await callAI('openai', 'gpt-5.1', [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ], 0.3, 2000);
@@ -466,7 +466,7 @@ Retourne UNIQUEMENT un JSON valide:
         const userPrompt = `Extrait les requêtes de ce texte:\n\n${content.slice(0, 12000)}`;
 
         try {
-          const aiResponse = await callAI('openai', 'gpt-5', [
+          const aiResponse = await callAI('openai', 'gpt-5.1', [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ], 0.4, 2000);
