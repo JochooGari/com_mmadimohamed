@@ -16,9 +16,24 @@ function normalize(provider: string, data: any, model: string) {
   let usage: any | undefined;
   switch (provider) {
     case 'openai':
-      // GPT-5 uses Responses API with output_text
+      // GPT-5 uses Responses API with output_text or output[].content[].text
       if (model.startsWith('gpt-5')) {
+        // Try output_text first, then output array, then text field
         content = data?.output_text || '';
+        if (!content && data?.output && Array.isArray(data.output)) {
+          // Extract text from output array: output[].content[].text
+          for (const item of data.output) {
+            if (item?.content && Array.isArray(item.content)) {
+              for (const c of item.content) {
+                if (c?.text) content += c.text;
+              }
+            }
+          }
+        }
+        if (!content && data?.text) {
+          // Fallback to text field if present
+          content = typeof data.text === 'string' ? data.text : JSON.stringify(data.text);
+        }
         usage = data?.usage && {
           promptTokens: data.usage.input_tokens,
           completionTokens: data.usage.output_tokens,
