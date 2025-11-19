@@ -18,7 +18,11 @@ function normalize(provider: string, data: any, model: string) {
     case 'openai':
     case 'mistral':
     case 'perplexity':
-      content = data?.choices?.[0]?.message?.content || '';
+      // GPT-5 may use output_text or different format
+      content = data?.choices?.[0]?.message?.content
+        || data?.output_text
+        || data?.choices?.[0]?.text
+        || '';
       usage = data?.usage && {
         promptTokens: data.usage.prompt_tokens,
         completionTokens: data.usage.completion_tokens,
@@ -113,6 +117,16 @@ export default async function handler(req: any, res: any) {
       return res.status(r.status).json({ error: data?.error?.message || data?.message || r.statusText });
     }
     const normalized = normalize(provider, data, model);
+    // Debug: include raw response structure for GPT-5
+    if (model.startsWith('gpt-5')) {
+      (normalized as any).debug = {
+        hasChoices: !!data?.choices,
+        choicesLength: data?.choices?.length,
+        hasOutputText: !!data?.output_text,
+        firstChoiceKeys: data?.choices?.[0] ? Object.keys(data.choices[0]) : [],
+        rawKeys: Object.keys(data || {})
+      };
+    }
     return res.status(200).json(normalized);
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'Server error' });
