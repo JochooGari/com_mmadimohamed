@@ -107,7 +107,7 @@ export default async function handler(req: any, res: any) {
           ? `${prompts.openai}\n\nRappel: retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}]}`
           : `Sujet: ${topic}\nOutline: ${outline}\nLocked: ${JSON.stringify(locked).slice(0,1000)}\nEditable: ${JSON.stringify(editable).slice(0,2000)}\nLivrable JSON strict: {"sections":[{"id":"...","title":"...","html":"..."}]}`;
         const draftProvider = providers.draft || 'openai';
-        const draftModel = (models.draft || (models as any).openai || 'gpt-4-turbo');
+        const draftModel = (models.draft || (models as any).openai || 'gpt-5');
         const openai = await callAI(draftProvider, draftModel, [ {role:'system', content: sys1}, {role:'user', content: usr1} ]).catch(e=>({ error:String(e)}));
         logs.push({ step:'draft', summary: openai?.usage || null, model: draftModel, provider: draftProvider });
         const draftTextRaw = (openai?.content || openai?.choices?.[0]?.message?.content || '').trim();
@@ -118,7 +118,7 @@ export default async function handler(req: any, res: any) {
           ? `${prompts.anthropic.replace('{draft}', draftText)}\n\nRappel: retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]}`
           : `Review and improve these sections JSON. Keep locked untouched. Return {"sections":[{"id":"...","html":"..."}],"notes":["..."]}.\n\n${draftText}`;
         const reviewProvider = providers.review || 'anthropic';
-        const anthropicModel = (models.review || (models as any).anthropic || 'claude-3-sonnet');
+        const anthropicModel = (models.review || (models as any).anthropic || 'claude-sonnet-4-5-20250514');
         const claude = await callAI(reviewProvider, anthropicModel, [ {role:'system', content: sys2}, {role:'user', content: usr2} ]).catch(e=>({ error:String(e)}));
         logs.push({ step:'review', summary: claude?.usage || null, model: anthropicModel, provider: reviewProvider });
         const reviewTextRaw = (claude?.content || '').trim() || draftText;
@@ -313,7 +313,7 @@ Retourne UNIQUEMENT un JSON valide avec cette structure:
         const userPrompt = `Analyse ce document:\n\nNom: ${fileName}\nType: ${fileType}\n\nContenu:\n${content.slice(0, 15000)}`;
 
         try {
-          const aiResponse = await callAI('openai', 'gpt-4o', [
+          const aiResponse = await callAI('openai', 'gpt-5', [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ], 0.3, 2000);
@@ -466,7 +466,7 @@ Retourne UNIQUEMENT un JSON valide:
         const userPrompt = `Extrait les requêtes de ce texte:\n\n${content.slice(0, 12000)}`;
 
         try {
-          const aiResponse = await callAI('openai', 'gpt-4o', [
+          const aiResponse = await callAI('openai', 'gpt-5', [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ], 0.4, 2000);
