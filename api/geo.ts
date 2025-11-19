@@ -93,57 +93,136 @@ export default async function handler(req: any, res: any) {
         return res.json({ scores: { seo: 85, geo: 86 }, strengths:['structure'], weaknesses:['few sources'], fixes:['add sources'] });
       }
       if (action === 'chain_draft') {
-        const { topic = 'Sujet', locked = [], editable = [], outline = 'H1/H2/H3', models = {}, providers = {}, prompts = {} } = req.body || {};
+        const { topic = 'Sujet', locked = [], editable = [], outline = 'H1/H2/H3', models = {}, providers = {}, prompts = {}, minScore = 95, maxIterations = 5 } = req.body || {};
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
-        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=1200) => {
+        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=2000) => {
           const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, model, messages, temperature, maxTokens }) });
           if (!r.ok) throw new Error(`${provider} ${model} ${r.status}`);
           return r.json();
         };
+
         const logs:any[] = [];
-        // 1) OpenAI draft
+        const draftProvider = providers.draft || 'openai';
+        const draftModel = (models.draft || (models as any).openai || 'gpt-5.1');
+        const reviewProvider = providers.review || 'anthropic';
+        const anthropicModel = (models.review || (models as any).anthropic || 'claude-sonnet-4-5-20250514');
+        const scoreProvider = providers?.score || 'perplexity';
+        const scoreModel = models?.score || (models as any)?.perplexity || 'sonar';
+
+        // Initial draft from Writer
         const sys1 = 'You output ONLY compact JSON. No prose. No markdown. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
         const usr1 = (prompts?.openai||'').trim().length>0
           ? `${prompts.openai}\n\nRappel: retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}]}`
           : `Sujet: ${topic}\nOutline: ${outline}\nLocked: ${JSON.stringify(locked).slice(0,1000)}\nEditable: ${JSON.stringify(editable).slice(0,2000)}\nLivrable JSON strict: {"sections":[{"id":"...","title":"...","html":"..."}]}`;
-        const draftProvider = providers.draft || 'openai';
-        const draftModel = (models.draft || (models as any).openai || 'gpt-5.1');
+
         const openai = await callAI(draftProvider, draftModel, [ {role:'system', content: sys1}, {role:'user', content: usr1} ]).catch(e=>({ error:String(e)}));
-        logs.push({ step:'draft', summary: openai?.usage || null, model: draftModel, provider: draftProvider, rawContent: (openai?.content || '').slice(0, 200) });
-        const draftTextRaw = (openai?.content || '').trim();
-        const draftText = stripFences(draftTextRaw);
-        // 2) Claude review (must return JSON sections)
-        const sys2 = 'You output ONLY compact JSON. No prose. No markdown. Improve clarity/consistency; preserve structure and locks; return strictly {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]} in French.';
-        const usr2 = (prompts?.anthropic||'').trim().length>0
-          ? `${prompts.anthropic.replace('{draft}', draftText)}\n\nRappel: retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]}`
-          : `Review and improve these sections JSON. Keep locked untouched. Return {"sections":[{"id":"...","html":"..."}],"notes":["..."]}.\n\n${draftText}`;
-        const reviewProvider = providers.review || 'anthropic';
-        const anthropicModel = (models.review || (models as any).anthropic || 'claude-sonnet-4-5-20250514');
-        const claude = await callAI(reviewProvider, anthropicModel, [ {role:'system', content: sys2}, {role:'user', content: usr2} ]).catch(e=>({ error:String(e)}));
-        logs.push({ step:'review', summary: claude?.usage || null, model: anthropicModel, provider: reviewProvider });
-        const reviewTextRaw = (claude?.content || '').trim() || draftText;
-        const reviewText = stripFences(reviewTextRaw);
-        let reviewJson: any = null;
-        try { reviewJson = JSON.parse(reviewText); } catch {}
-        let reviewOut = '';
-        if (reviewJson && Array.isArray(reviewJson.sections)) {
-          reviewOut = JSON.stringify(reviewJson);
-        } else {
-          // no fallback content; return empty to let frontend show strict error
-          reviewOut = '';
+        logs.push({ step:'draft', iteration: 0, summary: openai?.usage || null, model: draftModel, provider: draftProvider });
+
+        let currentArticle = stripFences((openai?.content || '').trim());
+        let iteration = 0;
+        let finalScore: any = null;
+        let allNotes: string[] = [];
+
+        // Iterative loop until scores >= minScore or max iterations reached
+        while (iteration < maxIterations) {
+          iteration++;
+
+          // 1) Review by Claude
+          const sys2 = `You output ONLY compact JSON. No prose. No markdown.
+Tu es un expert SEO/GEO. Améliore cet article pour atteindre un score SEO et GEO de 95+/100.
+Applique ces optimisations:
+- Ajoute des mots-clés pertinents naturellement dans le contenu
+- Structure avec H1/H2/H3 hiérarchiques et descriptifs
+- Ajoute des listes à puces, tableaux comparatifs
+- Inclus des données chiffrées avec sources (études, statistiques)
+- Ajoute des liens internes et externes pertinents
+- Crée une section FAQ avec schema markup JSON-LD
+- Ajoute des CTA engageants
+- Optimise pour la lisibilité (paragraphes courts, phrases claires)
+- Ajoute des éléments de confiance (témoignages, certifications, références)
+Return strictly {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]} in French.`;
+
+          const usr2 = `Article actuel à améliorer pour atteindre 95% SEO/GEO:\n\n${currentArticle}\n\nRappel: retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]}`;
+
+          const claude = await callAI(reviewProvider, anthropicModel, [ {role:'system', content: sys2}, {role:'user', content: usr2} ]).catch(e=>({ error:String(e)}));
+          logs.push({ step:'review', iteration, summary: claude?.usage || null, model: anthropicModel, provider: reviewProvider });
+
+          const reviewTextRaw = (claude?.content || '').trim() || currentArticle;
+          const reviewText = stripFences(reviewTextRaw);
+          let reviewJson: any = null;
+          try { reviewJson = JSON.parse(reviewText); } catch {}
+
+          if (reviewJson && Array.isArray(reviewJson.sections)) {
+            currentArticle = JSON.stringify(reviewJson);
+            if (reviewJson.notes) allNotes = [...allNotes, ...reviewJson.notes];
+          }
+
+          // 2) Score by Perplexity
+          const sys3 = 'You output ONLY compact JSON. No prose. No markdown.';
+          const usr3 = `Évalue cet article SEO/GEO (0..100). Sois strict et précis.
+Critères SEO: mots-clés, structure H1/H2/H3, meta, liens, lisibilité, données structurées
+Critères GEO: sources citées, données chiffrées, traçabilité, autorité, fraîcheur
+Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} for:\n${currentArticle}`;
+
+          const scoreRes = await callAI(scoreProvider, scoreModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
+          logs.push({ step:'score', iteration, summary: scoreRes?.usage || null, model: scoreModel, provider: scoreProvider });
+
+          try {
+            const t = stripFences((scoreRes?.content||'').trim());
+            finalScore = JSON.parse(t);
+          } catch {}
+
+          // Check if we've reached the target scores
+          const seoScore = finalScore?.scores?.seo || 0;
+          const geoScore = finalScore?.scores?.geo || 0;
+
+          logs.push({ step:'check', iteration, seo: seoScore, geo: geoScore, target: minScore, passed: seoScore >= minScore && geoScore >= minScore });
+
+          if (seoScore >= minScore && geoScore >= minScore) {
+            break; // Target reached!
+          }
+
+          // If not passed, Writer rewrites based on feedback
+          if (iteration < maxIterations) {
+            const sys4 = 'You output ONLY compact JSON. No prose. No markdown. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
+            const usr4 = `Tu es un rédacteur SEO/GEO expert. Réécris cet article pour corriger les faiblesses identifiées et atteindre 95% SEO/GEO.
+
+Article actuel:
+${currentArticle}
+
+Score actuel: SEO ${seoScore}/100, GEO ${geoScore}/100
+
+Faiblesses à corriger:
+${(finalScore?.weaknesses || []).join('\n- ')}
+
+Corrections demandées:
+${(finalScore?.fixes || []).join('\n- ')}
+
+Applique TOUTES les corrections. Ajoute du contenu substantiel, des sources, des données chiffrées, des liens, une FAQ avec JSON-LD, des tableaux comparatifs.
+Retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}]}`;
+
+            const rewrite = await callAI(draftProvider, draftModel, [ {role:'system', content: sys4}, {role:'user', content: usr4} ]).catch(e=>({ error:String(e)}));
+            logs.push({ step:'rewrite', iteration, summary: rewrite?.usage || null, model: draftModel, provider: draftProvider });
+
+            const rewriteText = stripFences((rewrite?.content || '').trim());
+            if (rewriteText) {
+              currentArticle = rewriteText;
+            }
+          }
         }
-        // 3) Perplexity Sonar scoring (default enabled)
-        const sys3 = 'You output ONLY compact JSON. No prose. No markdown.';
-        const usr3 = (prompts?.perplexity||'').trim().length>0
-          ? `${prompts.perplexity.replace('{article}', reviewOut || reviewText)}`
-          : `Compute SEO/GEO (0..100) + strengths/weaknesses/fixes. Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} for article sections JSON:\n${reviewOut || reviewText}`;
-        const scoreProvider = providers?.score || 'perplexity';
-        const scoreModel = models?.score || (models as any)?.perplexity || 'sonar';
-        let scoreObj: any = null;
-        const scoreRes = await callAI(scoreProvider, scoreModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
-        logs.push({ step:'score', summary: scoreRes?.usage || null, model: scoreModel, provider: scoreProvider });
-        try { const t = stripFences((scoreRes?.content||'').trim()); scoreObj = JSON.parse(t); } catch {}
-        return res.json({ logs, draft: draftText, review: reviewOut, feedback: { openai: 'Draft généré', claude: (reviewJson?.notes||[]), perplexity: scoreObj } });
+
+        return res.json({
+          logs,
+          draft: currentArticle,
+          review: currentArticle,
+          iterations: iteration,
+          finalScores: finalScore?.scores || { seo: 0, geo: 0 },
+          feedback: {
+            openai: `Article généré en ${iteration} itération(s)`,
+            claude: allNotes,
+            perplexity: finalScore
+          }
+        });
       }
       if (action === 'save_settings') {
         const { models, providers, prompts } = req.body || {};
