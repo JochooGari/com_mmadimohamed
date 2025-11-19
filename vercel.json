@@ -1,4 +1,12 @@
 {
+  "functions": {
+    "api/geo.ts": {
+      "maxDuration": 300
+    },
+    "api/ai-proxy.ts": {
+      "maxDuration": 120
+    }
+  },
   "rewrites": [
     { "source": "/robots.txt", "destination": "/api/robots" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
@@ -7,5 +15,3 @@
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
-
-
