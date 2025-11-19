@@ -132,21 +132,17 @@ export default async function handler(req: any, res: any) {
           // no fallback content; return empty to let frontend show strict error
           reviewOut = '';
         }
-        // 3) Optional scoring (no provider forced by default)
+        // 3) Perplexity Sonar scoring (default enabled)
         const sys3 = 'You output ONLY compact JSON. No prose. No markdown.';
         const usr3 = (prompts?.perplexity||'').trim().length>0
           ? `${prompts.perplexity.replace('{article}', reviewOut || reviewText)}`
           : `Compute SEO/GEO (0..100) + strengths/weaknesses/fixes. Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} for article sections JSON:\n${reviewOut || reviewText}`;
-        const scoreProvider = (providers?.score || '').trim();
-        const scoreModel = (models?.score || (scoreProvider ? (models as any)?.[scoreProvider] : '') || '').trim();
+        const scoreProvider = providers?.score || 'perplexity';
+        const scoreModel = models?.score || (models as any)?.perplexity || 'sonar';
         let scoreObj: any = null;
-        if (scoreProvider && scoreModel) {
-          const scoreRes = await callAI(scoreProvider, scoreModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
-          logs.push({ step:'score', summary: scoreRes?.usage || null, model: scoreModel, provider: scoreProvider });
-          try { const t = stripFences((scoreRes?.content||'').trim()); scoreObj = JSON.parse(t); } catch {}
-        } else {
-          logs.push({ step:'score', skipped: true, reason: 'No score provider/model selected' });
-        }
+        const scoreRes = await callAI(scoreProvider, scoreModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
+        logs.push({ step:'score', summary: scoreRes?.usage || null, model: scoreModel, provider: scoreProvider });
+        try { const t = stripFences((scoreRes?.content||'').trim()); scoreObj = JSON.parse(t); } catch {}
         return res.json({ logs, draft: draftText, review: reviewOut, feedback: { openai: 'Draft généré', claude: (reviewJson?.notes||[]), perplexity: scoreObj } });
       }
       if (action === 'save_settings') {
