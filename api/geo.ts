@@ -109,8 +109,8 @@ export default async function handler(req: any, res: any) {
         const draftProvider = providers.draft || 'openai';
         const draftModel = (models.draft || (models as any).openai || 'gpt-5');
         const openai = await callAI(draftProvider, draftModel, [ {role:'system', content: sys1}, {role:'user', content: usr1} ]).catch(e=>({ error:String(e)}));
-        logs.push({ step:'draft', summary: openai?.usage || null, model: draftModel, provider: draftProvider });
-        const draftTextRaw = (openai?.content || openai?.choices?.[0]?.message?.content || '').trim();
+        logs.push({ step:'draft', summary: openai?.usage || null, model: draftModel, provider: draftProvider, rawContent: (openai?.content || '').slice(0, 200) });
+        const draftTextRaw = (openai?.content || '').trim();
         const draftText = stripFences(draftTextRaw);
         // 2) Claude review (must return JSON sections)
         const sys2 = 'You output ONLY compact JSON. No prose. No markdown. Improve clarity/consistency; preserve structure and locks; return strictly {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]} in French.';
