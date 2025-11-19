@@ -731,6 +731,238 @@ Retourne UNIQUEMENT un JSON valide:
         return res.json(clusters);
       }
 
+      // ===== WORKFLOW ASYNCHRONE ÉTAPE PAR ÉTAPE =====
+
+      if (action === 'workflow_start') {
+        const { topic, outline, minScore = 95, maxIterations = 5 } = req.body || {};
+        if (!topic) return res.status(400).json({ error: 'topic required' });
+
+        const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const job = {
+          id: jobId,
+          topic,
+          outline: outline || 'H1/H2/H3',
+          minScore,
+          maxIterations,
+          currentStep: 'research',
+          iteration: 0,
+          status: 'pending',
+          article: '',
+          bestArticle: '',
+          bestScore: 0,
+          research: null,
+          enrichment: null,
+          scores: [],
+          logs: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        await put('agents', `geo/jobs/${jobId}.json`, JSON.stringify(job, null, 2));
+        return res.json({ ok: true, jobId, status: 'pending', nextStep: 'research' });
+      }
+
+      if (action === 'workflow_step') {
+        const { jobId } = req.body || {};
+        if (!jobId) return res.status(400).json({ error: 'jobId required' });
+
+        const job = await getJSON<any>('agents', `geo/jobs/${jobId}.json`);
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+
+        const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
+        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=4000) => {
+          const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, model, messages, temperature, maxTokens }) });
+          if (!r.ok) throw new Error(`${provider} ${model} ${r.status}`);
+          return r.json();
+        };
+
+        const step = job.currentStep;
+        let nextStep = '';
+        let completed = false;
+
+        try {
+          // ===== STEP: RESEARCH =====
+          if (step === 'research') {
+            const researchSys = `Tu es un agent de veille et de collecte d'informations pour contenu GEO/SEO.
+Fournis une liste de liens externes, articles, études, rapports fiables.
+Retourne UNIQUEMENT un JSON valide:
+{
+  "articles": [{"url": "...", "title": "...", "summary": "...", "authority": "high/medium/low"}],
+  "stats": [{"metric": "...", "value": "...", "source": "...", "url": "..."}],
+  "experts": [{"name": "...", "title": "...", "quote": "...", "url": "..."}],
+  "keywords": [],
+  "officialSources": [{"name": "...", "url": "..."}]
+}`;
+            const researchUsr = `Recherche approfondie sur "${job.topic}". Trouve 10-15 liens externes de haute autorité, chiffres avec sources, experts.`;
+
+            const res = await callAI('perplexity', 'sonar', [{role:'system', content: researchSys}, {role:'user', content: researchUsr}], 0.3, 2500);
+            job.logs.push({ step: 'research', usage: res?.usage, timestamp: new Date().toISOString() });
+
+            try {
+              job.research = JSON.parse(stripFences((res?.content || '').trim()));
+            } catch { job.research = { articles: [], stats: [], experts: [], keywords: [] }; }
+
+            nextStep = 'draft';
+          }
+
+          // ===== STEP: DRAFT =====
+          else if (step === 'draft') {
+            const sys1 = 'You output ONLY compact JSON. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
+            const usr1 = `Tu es un expert GEO & SEO. Rédige un article LONG (2000+ mots) style Neil Patel.
+
+Sujet: ${job.topic}
+Outline: ${job.outline}
+
+CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 6000)}
+
+INSTRUCTIONS: Article 2000+ mots, 1 lien externe/200 mots, stats sourcées, FAQ JSON-LD, 2 CTA, Schema.org.`;
+
+            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}]);
+            job.logs.push({ step: 'draft', usage: res?.usage, timestamp: new Date().toISOString() });
+
+            job.article = stripFences((res?.content || '').trim());
+            job.bestArticle = job.article;
+            job.iteration = 1;
+            nextStep = 'review';
+          }
+
+          // ===== STEP: REVIEW =====
+          else if (step === 'review') {
+            const sys2 = `You output ONLY compact JSON. Améliore pour 95%+ SEO/GEO.
+Return {"sections":[{"id":"...","title":"...","html":"..."}],"notes":[]} in French.`;
+            const usr2 = `Article à améliorer:\n${job.article}`;
+
+            const res = await callAI('anthropic', 'claude-sonnet-4-5-20250514', [{role:'system', content: sys2}, {role:'user', content: usr2}]);
+            job.logs.push({ step: 'review', iteration: job.iteration, usage: res?.usage, timestamp: new Date().toISOString() });
+
+            const reviewText = stripFences((res?.content || '').trim());
+            try {
+              const reviewJson = JSON.parse(reviewText);
+              if (reviewJson.sections) job.article = JSON.stringify(reviewJson);
+            } catch {}
+
+            nextStep = 'enrich';
+          }
+
+          // ===== STEP: ENRICH =====
+          else if (step === 'enrich') {
+            const enrichSys = `Agent d'enrichissement SEO/GEO. Trouve liens externes, stats, citations.
+Retourne JSON: {"externalLinks":[], "newStats":[], "citations":[], "improvements":[]}`;
+            const enrichUsr = `Enrichis: ${job.topic}\nArticle: ${job.article.slice(0, 3000)}`;
+
+            const res = await callAI('perplexity', 'sonar', [{role:'system', content: enrichSys}, {role:'user', content: enrichUsr}], 0.3, 1500);
+            job.logs.push({ step: 'enrich', iteration: job.iteration, usage: res?.usage, timestamp: new Date().toISOString() });
+
+            try {
+              job.enrichment = JSON.parse(stripFences((res?.content || '').trim()));
+            } catch { job.enrichment = { externalLinks: [], newStats: [], citations: [] }; }
+
+            nextStep = 'score';
+          }
+
+          // ===== STEP: SCORE =====
+          else if (step === 'score') {
+            const sys3 = `Agent Score GEO/SEO. Évalue sur 100 points.
+Retourne: {"scores":{"seo":0,"geo":0},"breakdown":{},"strengths":[],"weaknesses":[],"fixes":[]}`;
+            const usr3 = `Évalue:\n${job.article.slice(0, 8000)}`;
+
+            const res = await callAI('perplexity', 'sonar', [{role:'system', content: sys3}, {role:'user', content: usr3}], 0.2, 1200);
+            job.logs.push({ step: 'score', iteration: job.iteration, usage: res?.usage, timestamp: new Date().toISOString() });
+
+            let scoreObj: any = null;
+            try { scoreObj = JSON.parse(stripFences((res?.content || '').trim())); } catch {}
+
+            const seo = scoreObj?.scores?.seo || 0;
+            const geo = scoreObj?.scores?.geo || 0;
+            const total = seo + geo;
+
+            job.scores.push({ iteration: job.iteration, seo, geo, total });
+
+            if (total > job.bestScore) {
+              job.bestScore = total;
+              job.bestArticle = job.article;
+            }
+
+            if (seo >= job.minScore && geo >= job.minScore) {
+              job.status = 'completed';
+              job.finalScore = scoreObj;
+              completed = true;
+            } else if (job.iteration >= job.maxIterations) {
+              job.status = 'max_iterations';
+              job.finalScore = scoreObj;
+              completed = true;
+            } else {
+              nextStep = 'rewrite';
+              job.lastScore = scoreObj;
+            }
+          }
+
+          // ===== STEP: REWRITE =====
+          else if (step === 'rewrite') {
+            const sys4 = 'You output ONLY compact JSON. Return {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
+            const usr4 = `Réécris pour 95% SEO/GEO.
+
+Article: ${job.article}
+Score: SEO ${job.lastScore?.scores?.seo}/100, GEO ${job.lastScore?.scores?.geo}/100
+Enrichissements: ${JSON.stringify(job.enrichment || {}).slice(0, 2000)}
+Faiblesses: ${(job.lastScore?.weaknesses || []).join(', ')}
+Fixes: ${(job.lastScore?.fixes || []).join(', ')}`;
+
+            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys4}, {role:'user', content: usr4}]);
+            job.logs.push({ step: 'rewrite', iteration: job.iteration, usage: res?.usage, timestamp: new Date().toISOString() });
+
+            const rewriteText = stripFences((res?.content || '').trim());
+            if (rewriteText) job.article = rewriteText;
+
+            job.iteration++;
+            nextStep = 'review';
+          }
+
+          job.currentStep = nextStep;
+          job.updatedAt = new Date().toISOString();
+          await put('agents', `geo/jobs/${jobId}.json`, JSON.stringify(job, null, 2));
+
+          return res.json({
+            ok: true,
+            jobId,
+            step,
+            nextStep: completed ? null : nextStep,
+            completed,
+            iteration: job.iteration,
+            scores: job.scores,
+            status: job.status
+          });
+
+        } catch (e: any) {
+          job.status = 'error';
+          job.error = e?.message || 'Step failed';
+          job.updatedAt = new Date().toISOString();
+          await put('agents', `geo/jobs/${jobId}.json`, JSON.stringify(job, null, 2));
+          return res.status(500).json({ error: e?.message, jobId, step });
+        }
+      }
+
+      if (action === 'workflow_status') {
+        const { jobId } = req.body || {};
+        if (!jobId) return res.status(400).json({ error: 'jobId required' });
+
+        const job = await getJSON<any>('agents', `geo/jobs/${jobId}.json`);
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+
+        return res.json({
+          jobId: job.id,
+          status: job.status,
+          currentStep: job.currentStep,
+          iteration: job.iteration,
+          scores: job.scores,
+          bestScore: job.bestScore,
+          article: job.status === 'completed' || job.status === 'max_iterations' ? job.bestArticle : null,
+          finalScore: job.finalScore,
+          research: job.research ? { articles: job.research.articles?.length, stats: job.research.stats?.length } : null,
+          logs: job.logs
+        });
+      }
+
       return res.status(400).json({ error: 'Unknown action' });
     }
     return res.status(405).json({ error: 'Method not allowed' });
