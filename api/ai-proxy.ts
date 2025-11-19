@@ -162,7 +162,14 @@ export default async function handler(req: any, res: any) {
         choicesLength: data?.choices?.length,
         hasOutputText: !!data?.output_text,
         firstChoiceKeys: data?.choices?.[0] ? Object.keys(data.choices[0]) : [],
-        rawKeys: Object.keys(data || {})
+        rawKeys: Object.keys(data || {}),
+        outputType: typeof data?.output,
+        outputIsArray: Array.isArray(data?.output),
+        outputLength: Array.isArray(data?.output) ? data.output.length : 0,
+        firstOutputKeys: data?.output?.[0] ? Object.keys(data.output[0]) : [],
+        firstOutputContent: data?.output?.[0]?.content,
+        textType: typeof data?.text,
+        textSample: typeof data?.text === 'string' ? data.text.slice(0, 100) : JSON.stringify(data?.text)?.slice(0, 100)
       };
     }
     return res.status(200).json(normalized);
