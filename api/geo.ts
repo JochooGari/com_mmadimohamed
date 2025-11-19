@@ -770,7 +770,7 @@ Retourne UNIQUEMENT un JSON valide:
         if (!job) return res.status(404).json({ error: 'Job not found' });
 
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
-        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=4000) => {
+        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=2000) => {
           const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, model, messages, temperature, maxTokens }) });
           if (!r.ok) throw new Error(`${provider} ${model} ${r.status}`);
           return r.json();
@@ -795,7 +795,7 @@ Retourne UNIQUEMENT un JSON valide:
 }`;
             const researchUsr = `Recherche approfondie sur "${job.topic}". Trouve 10-15 liens externes de haute autorité, chiffres avec sources, experts.`;
 
-            const res = await callAI('perplexity', 'sonar', [{role:'system', content: researchSys}, {role:'user', content: researchUsr}], 0.3, 2500);
+            const res = await callAI('perplexity', 'sonar', [{role:'system', content: researchSys}, {role:'user', content: researchUsr}], 0.3, 1500);
             job.logs.push({ step: 'research', usage: res?.usage, timestamp: new Date().toISOString() });
 
             try {
