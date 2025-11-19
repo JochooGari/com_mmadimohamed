@@ -97,7 +97,7 @@ export default async function handler(req: any, res: any) {
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
         const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=4000) => {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout per call
+          const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout per call
           try {
             const r = await fetch(`${base}/api/ai-proxy`, {
               method:'POST',
