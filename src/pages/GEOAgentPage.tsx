@@ -641,9 +641,10 @@ export default function GEOAgentPage() {
 
         {/* Onglet Générateur */}
         <TabsContent value="generation">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          {/* Ligne 1: Personas 1/2 + Modules contenu 2/2 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Personas & intentions */}
-            <Card className="lg:col-span-1">
+            <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
@@ -652,7 +653,7 @@ export default function GEOAgentPage() {
                 <CardDescription>Cibles et types de requêtes</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-2">
                   {[
                     { name: 'ESN', color: 'blue', desc: 'Process, outils, ROI' },
                     { name: 'DAF', color: 'green', desc: 'Mesures, budgets, risques' },
@@ -672,14 +673,14 @@ export default function GEOAgentPage() {
 
                 <div className="space-y-2">
                   <Label className="text-xs">Intentions</Label>
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="grid grid-cols-4 gap-2">
                     {[
                       { type: 'Info', desc: 'Qu\'est-ce que' },
                       { type: 'How-to', desc: 'Comment faire' },
                       { type: 'Compare', desc: 'X vs Y' },
                       { type: 'Action', desc: 'Audit, démo' }
                     ].map(intent => (
-                      <label key={intent.type} className="flex items-center gap-1 p-1 text-xs">
+                      <label key={intent.type} className="flex items-center gap-1 p-1 text-xs border rounded">
                         <input type="checkbox" defaultChecked />
                         <span>{intent.type}</span>
                       </label>
@@ -689,13 +690,6 @@ export default function GEOAgentPage() {
               </CardContent>
             </Card>
 
-            <div className="lg:col-span-2">
-              <GEOGenerator className="" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
             {/* Modules de contenu */}
             <Card>
               <CardHeader>
@@ -703,24 +697,24 @@ export default function GEOAgentPage() {
                 <CardDescription>Composants optimisés pour citations IA</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2">
                   {[
-                    { type: 'AnswerBox', desc: '≤60 mots réponse directe', icon: CheckCircle },
-                    { type: 'FAQ', desc: 'Paires Q/A structurées', icon: FileText },
-                    { type: 'HowTo', desc: 'Étapes numérotées', icon: Target },
-                    { type: 'Checklist', desc: 'Liste vérification', icon: CheckCircle },
-                    { type: 'Comparison', desc: 'Tableau comparatif', icon: BarChart3 },
-                    { type: 'StatsTable', desc: 'Données chiffrées', icon: Database },
-                    { type: 'Glossary', desc: 'Définitions entités', icon: Hash },
-                    { type: 'References', desc: 'Sources citées', icon: Link }
+                    { type: 'AnswerBox', desc: '≤60 mots', icon: CheckCircle },
+                    { type: 'FAQ', desc: 'Q/A structurées', icon: FileText },
+                    { type: 'HowTo', desc: 'Étapes', icon: Target },
+                    { type: 'Checklist', desc: 'Vérification', icon: CheckCircle },
+                    { type: 'Comparison', desc: 'Tableau', icon: BarChart3 },
+                    { type: 'StatsTable', desc: 'Données', icon: Database },
+                    { type: 'Glossary', desc: 'Définitions', icon: Hash },
+                    { type: 'References', desc: 'Sources', icon: Link }
                   ].map(module => {
                     const Icon = module.icon;
                     return (
-                      <label key={module.type} className="flex items-center gap-2 p-3 border rounded cursor-pointer hover:bg-gray-50">
+                      <label key={module.type} className="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50">
                         <input type="checkbox" defaultChecked />
-                        <Icon className="h-4 w-4 text-purple-600" />
+                        <Icon className="h-3 w-3 text-purple-600" />
                         <div className="flex-1">
-                          <span className="text-sm font-medium">{module.type}</span>
+                          <span className="text-xs font-medium">{module.type}</span>
                           <p className="text-xs text-gray-500">{module.desc}</p>
                         </div>
                       </label>
@@ -728,32 +722,87 @@ export default function GEOAgentPage() {
                   })}
                 </div>
 
-                <Separator />
-
-                <div className="space-y-2">
-                  <Label>JSON-LD Schema.org</Label>
+                <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    {['FAQPage', 'HowTo', 'BreadcrumbList', 'Product'].map(schema => (
-                      <label key={schema} className="flex items-center gap-2">
-                        <input type="checkbox" defaultChecked />
-                        <Code className="h-4 w-4 text-gray-400" />
-                        <span className="text-sm">{schema}</span>
-                      </label>
-                    ))}
+                    <Label className="text-xs">JSON-LD</Label>
+                    <div className="flex gap-1">
+                      {['FAQ', 'HowTo', 'Breadcrumb'].map(schema => (
+                        <label key={schema} className="flex items-center gap-1 text-xs">
+                          <input type="checkbox" defaultChecked />
+                          <span>{schema}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Langues cibles</Label>
-                  <div className="flex gap-2">
-                    <Badge variant="default">FR</Badge>
-                    <Badge variant="outline">EN</Badge>
-                    <Badge variant="outline">ES</Badge>
+                  <div className="flex gap-1">
+                    <Badge variant="default" className="text-xs">FR</Badge>
+                    <Badge variant="outline" className="text-xs">EN</Badge>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
+
+          {/* Ligne 2: 4 modules compacts */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {/* Liens internes */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Link className="h-4 w-4" />
+                  Liens internes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button size="sm" variant="outline" className="w-full">Suggérer</Button>
+              </CardContent>
+            </Card>
+
+            {/* Live scoring */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Live Scoring
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button size="sm" variant="outline" className="w-full">Analyser</Button>
+              </CardContent>
+            </Card>
+
+            {/* FAQ */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Générer FAQ
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button size="sm" variant="outline" className="w-full">Générer</Button>
+              </CardContent>
+            </Card>
+
+            {/* Pain Point */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  Mode Pain Point
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" />
+                  <span>Activer</span>
+                </label>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Ligne 3: Générateur d'article */}
+          <GEOGenerator className="" />
         </TabsContent>
 
         {/* Onglet Optimisation */}
