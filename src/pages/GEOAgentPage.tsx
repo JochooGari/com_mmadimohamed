@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,12 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  Search, 
-  Upload, 
-  Globe, 
-  Users, 
-  Target, 
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Search,
+  Upload,
+  Globe,
+  Users,
+  Target,
   FileText,
   Calendar,
   BarChart3,
@@ -39,10 +40,26 @@ import {
   Database,
   Link,
   Award,
-  Activity
+  Activity,
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import AgentTester from '@/components/AgentTester';
 import GEOGenerator from '@/components/GEOGenerator';
+
+interface KnowledgeDocument {
+  id: string;
+  filename: string;
+  uploadedAt: string;
+  status: 'processing' | 'completed' | 'error';
+  analysis?: {
+    queries: string[];
+    entities: string[];
+    painPoints: string[];
+    stats: string[];
+    tags: string[];
+  };
+}
 
 interface GEOCampaign {
   id: string;
@@ -78,6 +95,9 @@ interface ContentModule {
 
 export default function GEOAgentPage() {
   const [activeTab, setActiveTab] = useState('knowledge');
+  const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
   const [campaigns, setCampaigns] = useState<GEOCampaign[]>([
     {
       id: '1',
@@ -152,14 +172,103 @@ export default function GEOAgentPage() {
     freshnessDays: 90
   });
 
+  // Load documents from API on mount
+  const loadDocuments = async () => {
+    setIsLoadingDocuments(true);
+    try {
+      const response = await fetch('/api/geo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list_documents' })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.documents) {
+          setDocuments(data.documents);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading documents:', error);
+    } finally {
+      setIsLoadingDocuments(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDocuments();
+  }, []);
+
   const generateGEOContent = async (step: number) => {
     console.log(`Generating GEO content - Step ${step}`);
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (files) {
-      console.log('Uploading files for GEO processing:', files);
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+
+    for (const file of Array.from(files)) {
+      try {
+        // Read file content
+        const content = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsText(file);
+        });
+
+        // Send to API for analysis
+        const response = await fetch('/api/geo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'upload_document',
+            filename: file.name,
+            content: content
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Add new document to state
+          setDocuments(prev => [...prev, {
+            id: data.document.id,
+            filename: data.document.filename,
+            uploadedAt: data.document.uploadedAt,
+            status: 'completed',
+            analysis: data.document.analysis
+          }]);
+        } else {
+          console.error('Upload failed:', await response.text());
+        }
+      } catch (error) {
+        console.error('Error uploading file:', error);
+      }
+    }
+
+    setIsUploading(false);
+    // Reset file input
+    event.target.value = '';
+  };
+
+  const handleDeleteDocument = async (docId: string) => {
+    try {
+      const response = await fetch('/api/geo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete_document',
+          documentId: docId
+        })
+      });
+
+      if (response.ok) {
+        setDocuments(prev => prev.filter(doc => doc.id !== docId));
+      }
+    } catch (error) {
+      console.error('Error deleting document:', error);
     }
   };
 
@@ -238,11 +347,16 @@ export default function GEOAgentPage() {
                     onChange={handleFileUpload}
                     className="hidden"
                     id="geo-file-upload"
+                    disabled={isUploading}
                   />
-                  <label htmlFor="geo-file-upload" className="cursor-pointer">
-                    <Upload className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                  <label htmlFor="geo-file-upload" className={`cursor-pointer ${isUploading ? 'opacity-50' : ''}`}>
+                    {isUploading ? (
+                      <Loader2 className="h-12 w-12 text-purple-600 mx-auto mb-2 animate-spin" />
+                    ) : (
+                      <Upload className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                    )}
                     <p className="text-sm text-gray-600">
-                      Transcripts, études, briefs clients
+                      {isUploading ? 'Analyse en cours...' : 'Transcripts, études, briefs clients'}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
                       L'IA extraira les questions implicites et problèmes
@@ -250,44 +364,62 @@ export default function GEOAgentPage() {
                   </label>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-purple-600" />
-                        <span className="font-medium">9 ChatGPT Writing Tips.txt</span>
-                        <Badge variant="default">Processed</Badge>
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-2">
+                    {isLoadingDocuments ? (
+                      <div className="flex items-center justify-center p-6">
+                        <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                        <span className="ml-2 text-sm text-gray-600">Chargement des documents...</span>
                       </div>
-                      <div className="flex gap-1 mt-1">
-                        <Badge variant="outline" className="text-xs">#prompting</Badge>
-                        <Badge variant="outline" className="text-xs">#AI_writing</Badge>
-                        <Badge variant="outline" className="text-xs">#ESN</Badge>
+                    ) : documents.length === 0 ? (
+                      <div className="text-center p-6 text-gray-500">
+                        <FileText className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">Aucun document uploadé</p>
+                        <p className="text-xs">Uploadez des transcripts pour extraire des requêtes</p>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">23 queries extraites</p>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                    ) : (
+                      documents.map(doc => (
+                        <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-purple-600" />
+                              <span className="font-medium text-sm">{doc.filename}</span>
+                              <Badge variant={doc.status === 'completed' ? 'default' : 'secondary'}>
+                                {doc.status === 'completed' ? 'Processed' : 'Processing'}
+                              </Badge>
+                            </div>
+                            {doc.analysis?.tags && doc.analysis.tags.length > 0 && (
+                              <div className="flex gap-1 mt-1 flex-wrap">
+                                {doc.analysis.tags.slice(0, 3).map(tag => (
+                                  <Badge key={tag} variant="outline" className="text-xs">
+                                    #{tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              {doc.analysis?.queries?.length || 0} queries extraites
+                              {doc.analysis?.entities?.length ? ` • ${doc.analysis.entities.length} entités` : ''}
+                            </p>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" title="Voir détails">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteDocument(doc.id)}
+                              title="Supprimer"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
-
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-purple-600" />
-                        <span className="font-medium">Writing Online 2025.txt</span>
-                        <Badge variant="secondary">Processing</Badge>
-                      </div>
-                      <div className="flex gap-1 mt-1">
-                        <Badge variant="outline" className="text-xs">#content_strategy</Badge>
-                        <Badge variant="outline" className="text-xs">#platforms</Badge>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">En cours d'analyse...</p>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      <Clock className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                </ScrollArea>
               </CardContent>
             </Card>
 

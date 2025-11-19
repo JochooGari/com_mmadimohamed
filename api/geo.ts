@@ -274,6 +274,235 @@ export default async function handler(req: any, res: any) {
         await put('agents', idxPath, JSON.stringify(idx, null, 2));
         return res.json({ ok: true, id, path });
       }
+
+      // ===== KNOWLEDGE BASE: Upload & Analyze Documents =====
+
+      if (action === 'upload_document') {
+        const { content, fileName, fileType, tags = [] } = req.body || {};
+        if (!content || !fileName) {
+          return res.status(400).json({ error: 'content and fileName are required' });
+        }
+
+        const id = Date.now().toString();
+        const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
+
+        // Call AI to extract queries, entities, pain points from document
+        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=2000) => {
+          const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, model, messages, temperature, maxTokens }) });
+          if (!r.ok) throw new Error(`${provider} ${model} ${r.status}`);
+          return r.json();
+        };
+
+        const systemPrompt = `Tu es un expert en analyse de contenu. Analyse ce document et extrait:
+1. Les questions explicites et implicites (queries)
+2. Les entités clés (personnes, entreprises, concepts, technologies)
+3. Les pain points / problématiques mentionnées
+4. Les données chiffrées avec leurs sources
+5. Les tags/thèmes principaux
+
+Retourne UNIQUEMENT un JSON valide avec cette structure:
+{
+  "queries": ["question 1", "question 2", ...],
+  "entities": ["entité 1", "entité 2", ...],
+  "painPoints": ["problème 1", "problème 2", ...],
+  "stats": [{"key": "métrique", "value": "valeur", "source": "source"}],
+  "tags": ["tag1", "tag2", ...],
+  "summary": "résumé en 2-3 phrases"
+}`;
+
+        const userPrompt = `Analyse ce document:\n\nNom: ${fileName}\nType: ${fileType}\n\nContenu:\n${content.slice(0, 15000)}`;
+
+        try {
+          const aiResponse = await callAI('openai', 'gpt-4o', [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ], 0.3, 2000);
+
+          const responseText = stripFences((aiResponse?.content || '').trim());
+          let extracted = { queries: [], entities: [], painPoints: [], stats: [], tags: [], summary: '' };
+
+          try {
+            extracted = JSON.parse(responseText);
+          } catch {
+            // If JSON parsing fails, try to extract what we can
+            extracted.summary = responseText.slice(0, 500);
+          }
+
+          // Merge provided tags with extracted tags
+          const allTags = [...new Set([...tags, ...(extracted.tags || [])])];
+
+          // Save document to knowledge base
+          const document = {
+            id,
+            fileName,
+            fileType,
+            content: content.slice(0, 50000), // Limit stored content
+            extracted: {
+              ...extracted,
+              tags: allTags
+            },
+            status: 'processed',
+            createdAt: new Date().toISOString()
+          };
+
+          await put('agents', `geo/knowledge/documents/${id}.json`, JSON.stringify(document, null, 2));
+
+          // Update documents index
+          const idxPath = 'geo/knowledge/documents/index.json';
+          const idx = (await getJSON<any>('agents', idxPath)) || { items: [] };
+          idx.items.unshift({
+            id,
+            fileName,
+            fileType,
+            tags: allTags,
+            queriesCount: extracted.queries?.length || 0,
+            status: 'processed',
+            createdAt: document.createdAt
+          });
+          await put('agents', idxPath, JSON.stringify(idx, null, 2));
+
+          return res.json({
+            ok: true,
+            id,
+            status: 'processed',
+            extracted: {
+              queries: extracted.queries || [],
+              entities: extracted.entities || [],
+              painPoints: extracted.painPoints || [],
+              stats: extracted.stats || [],
+              tags: allTags,
+              summary: extracted.summary || ''
+            }
+          });
+        } catch (e: any) {
+          // Save document with error status
+          const document = {
+            id,
+            fileName,
+            fileType,
+            content: content.slice(0, 50000),
+            extracted: null,
+            status: 'error',
+            error: e?.message || 'Analysis failed',
+            createdAt: new Date().toISOString()
+          };
+
+          await put('agents', `geo/knowledge/documents/${id}.json`, JSON.stringify(document, null, 2));
+
+          return res.status(500).json({ error: e?.message || 'Document analysis failed', id });
+        }
+      }
+
+      if (action === 'list_documents') {
+        const idx = await getJSON('agents', 'geo/knowledge/documents/index.json') || { items: [] };
+        return res.json(idx);
+      }
+
+      if (action === 'get_document') {
+        const { documentId } = req.body || {};
+        if (!documentId) return res.status(400).json({ error: 'documentId required' });
+
+        const doc = await getJSON('agents', `geo/knowledge/documents/${documentId}.json`);
+        if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+        return res.json(doc);
+      }
+
+      if (action === 'delete_document') {
+        const { documentId } = req.body || {};
+        if (!documentId) return res.status(400).json({ error: 'documentId required' });
+
+        // Remove from index
+        const idxPath = 'geo/knowledge/documents/index.json';
+        const idx = (await getJSON<any>('agents', idxPath)) || { items: [] };
+        idx.items = idx.items.filter((item: any) => item.id !== documentId);
+        await put('agents', idxPath, JSON.stringify(idx, null, 2));
+
+        // Note: Supabase storage doesn't have a simple delete, we just remove from index
+        return res.json({ ok: true });
+      }
+
+      if (action === 'extract_queries') {
+        const { documentId, text } = req.body || {};
+
+        let content = text;
+        if (!content && documentId) {
+          const doc = await getJSON<any>('agents', `geo/knowledge/documents/${documentId}.json`);
+          if (doc) content = doc.content;
+        }
+
+        if (!content) return res.status(400).json({ error: 'text or documentId required' });
+
+        const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
+
+        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=2000) => {
+          const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, model, messages, temperature, maxTokens }) });
+          if (!r.ok) throw new Error(`${provider} ${model} ${r.status}`);
+          return r.json();
+        };
+
+        const systemPrompt = `Tu es un expert en analyse de contenu et SEO. Analyse ce texte et extrait les requêtes/questions que les utilisateurs pourraient poser.
+
+Regroupe les requêtes en clusters thématiques et classifie chaque cluster par:
+- Intent: informational, howto, comparison, transactional
+- Personas cibles: ESN, DAF, Executive, Developer, Marketing, etc.
+- Priorité: high, medium, low (basée sur la pertinence et le potentiel)
+
+Retourne UNIQUEMENT un JSON valide:
+{
+  "clusters": [
+    {
+      "id": "cluster-1",
+      "theme": "Nom du thème",
+      "queries": ["requête 1", "requête 2", ...],
+      "intent": "informational",
+      "personas": ["ESN", "Executive"],
+      "priority": "high",
+      "volumeEstimate": 1000
+    }
+  ]
+}`;
+
+        const userPrompt = `Extrait les requêtes de ce texte:\n\n${content.slice(0, 12000)}`;
+
+        try {
+          const aiResponse = await callAI('openai', 'gpt-4o', [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ], 0.4, 2000);
+
+          const responseText = stripFences((aiResponse?.content || '').trim());
+          let result = { clusters: [] };
+
+          try {
+            result = JSON.parse(responseText);
+          } catch {}
+
+          // Save clusters to knowledge base
+          if (result.clusters && result.clusters.length > 0) {
+            const clustersPath = 'geo/knowledge/queries/clusters.json';
+            const existing = (await getJSON<any>('agents', clustersPath)) || { clusters: [] };
+
+            // Merge new clusters with existing (avoid duplicates by theme)
+            const existingThemes = new Set(existing.clusters.map((c: any) => c.theme));
+            const newClusters = result.clusters.filter((c: any) => !existingThemes.has(c.theme));
+            existing.clusters = [...newClusters, ...existing.clusters];
+            existing.updatedAt = new Date().toISOString();
+
+            await put('agents', clustersPath, JSON.stringify(existing, null, 2));
+          }
+
+          return res.json(result);
+        } catch (e: any) {
+          return res.status(500).json({ error: e?.message || 'Query extraction failed' });
+        }
+      }
+
+      if (action === 'list_query_clusters') {
+        const clusters = await getJSON('agents', 'geo/knowledge/queries/clusters.json') || { clusters: [] };
+        return res.json(clusters);
+      }
+
       return res.status(400).json({ error: 'Unknown action' });
     }
     return res.status(405).json({ error: 'Method not allowed' });
