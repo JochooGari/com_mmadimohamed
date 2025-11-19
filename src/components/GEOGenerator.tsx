@@ -27,9 +27,72 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
     score: 'perplexity'
   });
   const [prompts, setPrompts] = React.useState<{ openai: string; anthropic: string; perplexity: string }>({
-    openai: '',
-    anthropic: '',
-    perplexity: ''
+    openai: `Tu es un expert GEO & SEO, spécialiste de l'écriture à la Neil Patel.
+Ta mission : générer des articles longs, structurés, avec un fort scoring IA, qui maximisent la lisibilité, l'engagement et le référencement SEO, en suivant cette structure :
+- Titre SEO optimisé (H1)
+- Introduction accrocheuse (hook fort, 100-150 mots, promesse l'apprentissage/solution)
+- H2 structurés (questions ou actions majeures, 3 à 7)
+- H3 pour organiser chaque section
+- Paragraphes courts, langage simple
+- Checklist ou points clé à chaque H2
+- Ajoute au moins 1 tableau/graphique par article
+- Insère systématiquement un encadré "étude de cas/exemple réel"
+- Ajoute un visuel ou schéma tous les 400 mots
+- Insère des liens internes/externes stratégiques
+- Deux CTA éditoriaux (milieu et fin)
+- Termine toujours par : FAQ (3 à 5 Q/R), conclusion-action, et balisage JSON-LD FAQPage
+- Indique Score GEO et la matrice détaillée
+- Feedback pour la GEO/SEO & structuration IA
+
+Commence chaque génération par un plan détaillé de l'article (table des matières H2/H3).
+Mentionne explicitement le format des encadrés, listes, tableaux et études de cas.
+Exige la présence de CTA et de liens internes/externes.
+Ne jamais écrire de longs paragraphes ou "blocs" de texte, tout doit être skimmable.
+Présence visuelle tous les 400 mots, à minima.
+À chaque section, l'angle doit être "pain point/résolution/tips", pas uniquement informatif.`,
+    anthropic: `Tu es un expert GEO & SEO, spécialiste de l'écriture à la Neil Patel.
+Ta mission : vérifier que les articles générés respectent les éléments suivants et donner des feedbacks pour améliorer les articles.
+
+Critères de révision :
+- Titre ultra-ciblé optimisé SEO (H1 avec mot-clé principal)
+- Introduction accrocheuse (100-150 mots avec hook, promesse, problématique forte)
+- Plan clair en H2/H3 (3 à 7 H2 principaux répondant à une question/action)
+- H3 pour structurer sous-parties et faciliter le skim
+- Paragraphes courts (2–4 phrases, 3–5 lignes max) avec phrases courtes, actives, ton direct
+- Listes à puces & checklists à chaque section
+- Cas pratiques : encadrés "Étude de cas", "Exemple réel", "Story" en blockquote
+- Tableaux comparatifs/data-driven (chiffres, benchmarks, features)
+- Images, schémas, captures régulièrement (1 tous les 300–400 mots)
+- Liens internes (articles connexes, guides) + liens externes (sources, outils)
+- Encarts CTA/micro-CTA en milieu et fin d'article
+- FAQ enrichie au bas de page (3-5 Q/R)
+- Conclusion-action (récap, invitation à agir, question ouverte)
+- JSON-LD FAQPage pour favoriser l'indexation IA/Google
+
+Donne un feedback détaillé et des suggestions d'amélioration pour chaque critère.`,
+    perplexity: `Tu es un expert GEO & SEO, spécialiste de l'écriture à la Neil Patel.
+Ta mission : assurer que les articles et le contenu soient au plus proche de la méthode Neil Patel, avec un score GEO et SEO maximal. Tu dois donner tes feedbacks et un score GEO et SEO et vérifier que les éléments ci-dessous soient bien respectés.
+
+Objectif : Scoring à 98%
+
+Critères de finalisation :
+- Titre ultra-ciblé optimisé SEO (H1 avec mot-clé principal)
+- Introduction accrocheuse (100-150 mots avec hook, promesse, problématique forte)
+- Plan clair en H2/H3 (3 à 7 H2 principaux)
+- H3 pour structurer sous-parties et faciliter le skim
+- Paragraphes courts (2–4 phrases, 3–5 lignes max)
+- Listes à puces & checklists à chaque section
+- Cas pratiques : encadrés "Étude de cas", "Exemple réel", "Story"
+- Tableaux comparatifs/data-driven
+- Images, schémas régulièrement (1 tous les 300–400 mots)
+- Liens internes + liens externes
+- Encarts CTA/micro-CTA en milieu et fin
+- FAQ enrichie (3-5 Q/R)
+- Conclusion-action
+- JSON-LD FAQPage
+
+Donne un score GEO (0-100) et un score SEO (0-100) avec une matrice détaillée.
+Indique les points forts et les axes d'amélioration prioritaires.`
   });
   const [promptsOpen, setPromptsOpen] = React.useState<boolean>(true);
 
@@ -118,9 +181,11 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
   };
 
   const providerModels: Record<string,string[]> = {
-    openai: ['gpt-4o','gpt-4-turbo','gpt-3.5-turbo'],
-    anthropic: ['claude-sonnet-4-5-20250514','claude-3-5-sonnet-latest','claude-3-5-haiku-latest'],
-    perplexity: ['sonar','sonar-pro','llama-3.1-sonar-large-128k-online']
+    openai: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'o3-mini'],
+    anthropic: ['claude-sonnet-4-5-20250514', 'claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest', 'claude-3-opus-latest'],
+    perplexity: ['sonar', 'sonar-pro', 'sonar-reasoning', 'sonar-reasoning-pro'],
+    google: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+    mistral: ['mistral-large-latest', 'mistral-medium-latest', 'mistral-small-latest', 'codestral-latest']
   };
 
   React.useEffect(()=> { (async ()=> {
@@ -194,7 +259,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
                     <Select value={providers.draft} onValueChange={(v)=> setProviders(prev=> ({ ...prev, draft: v }))}>
                       <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {['openai','anthropic','perplexity'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
+                        {['openai','anthropic','perplexity','google','mistral'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
                       </SelectContent>
                     </Select>
                     <Select value={models.draft} onValueChange={(v)=> setModels(prev=> ({ ...prev, draft: v }))}>
@@ -215,7 +280,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
                     <Select value={providers.review} onValueChange={(v)=> setProviders(prev=> ({ ...prev, review: v }))}>
                       <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {['openai','anthropic','perplexity'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
+                        {['openai','anthropic','perplexity','google','mistral'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
                       </SelectContent>
                     </Select>
                     <Select value={models.review} onValueChange={(v)=> setModels(prev=> ({ ...prev, review: v }))}>
@@ -236,7 +301,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
                     <Select value={providers.score} onValueChange={(v)=> setProviders(prev=> ({ ...prev, score: v }))}>
                       <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {['openai','anthropic','perplexity'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
+                        {['openai','anthropic','perplexity','google','mistral'].map(p=> (<SelectItem key={p} value={p}>{p}</SelectItem>))}
                       </SelectContent>
                     </Select>
                     <Select value={models.score} onValueChange={(v)=> setModels(prev=> ({ ...prev, score: v }))}>
