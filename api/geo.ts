@@ -109,11 +109,67 @@ export default async function handler(req: any, res: any) {
         const scoreProvider = providers?.score || 'perplexity';
         const scoreModel = models?.score || (models as any)?.perplexity || 'sonar';
 
-        // Initial draft from Writer
+        // ===== PHASE 0: AGENT RECHERCHE (Perplexity) - Veille approfondie =====
+        const researchSys = `Tu es un agent de veille et de recherche expert. Effectue une recherche web approfondie sur le sujet donné.
+Identifie:
+1. Les articles de référence les plus pertinents (avec URLs)
+2. Les études et rapports récents avec données chiffrées
+3. Les sources officielles et autorités du domaine
+4. Les statistiques clés avec leurs sources
+5. Les experts et témoignages reconnus
+6. Les tendances actuelles et mots-clés importants
+
+Retourne UNIQUEMENT un JSON valide:
+{
+  "articles": [{"url": "...", "title": "...", "summary": "...", "authority": "high/medium/low"}],
+  "stats": [{"metric": "...", "value": "...", "source": "...", "url": "...", "year": "..."}],
+  "experts": [{"name": "...", "title": "...", "quote": "...", "source": "..."}],
+  "keywords": ["mot-clé 1", "mot-clé 2", ...],
+  "trends": ["tendance 1", "tendance 2", ...],
+  "officialSources": [{"name": "...", "url": "...", "type": "..."}]
+}`;
+
+        const researchUsr = `Effectue une recherche web approfondie sur: "${topic}"
+
+Recherche également les sujets connexes pour enrichir le contexte.
+Trouve des sources françaises et internationales de qualité.
+Privilégie les données récentes (2023-2025).`;
+
+        const researchRes = await callAI('perplexity', 'sonar', [ {role:'system', content: researchSys}, {role:'user', content: researchUsr} ], 0.3, 2000).catch(e=>({ error:String(e)}));
+        logs.push({ step:'research', iteration: 0, summary: researchRes?.usage || null, model: 'sonar', provider: 'perplexity' });
+
+        let research: any = { articles: [], stats: [], experts: [], keywords: [], trends: [], officialSources: [] };
+        try {
+          const researchText = stripFences((researchRes?.content || '').trim());
+          research = JSON.parse(researchText);
+        } catch {}
+
+        // ===== PHASE 1: AGENT WRITER (GPT-5.1) - Rédaction avec contexte enrichi =====
         const sys1 = 'You output ONLY compact JSON. No prose. No markdown. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
-        const usr1 = (prompts?.openai||'').trim().length>0
-          ? `${prompts.openai}\n\nRappel: retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}]}`
-          : `Sujet: ${topic}\nOutline: ${outline}\nLocked: ${JSON.stringify(locked).slice(0,1000)}\nEditable: ${JSON.stringify(editable).slice(0,2000)}\nLivrable JSON strict: {"sections":[{"id":"...","title":"...","html":"..."}]}`;
+        const usr1 = `Tu es un rédacteur SEO/GEO expert style Neil Patel.
+
+Sujet: ${topic}
+Outline: ${outline}
+
+CONTEXTE DE RECHERCHE (utilise ces informations):
+- Articles de référence: ${JSON.stringify(research.articles || []).slice(0, 2000)}
+- Statistiques avec sources: ${JSON.stringify(research.stats || []).slice(0, 1500)}
+- Experts et citations: ${JSON.stringify(research.experts || []).slice(0, 1000)}
+- Mots-clés importants: ${(research.keywords || []).join(', ')}
+- Tendances: ${(research.trends || []).join(', ')}
+- Sources officielles: ${JSON.stringify(research.officialSources || []).slice(0, 1000)}
+
+INSTRUCTIONS:
+- Intègre les statistiques avec leurs sources (ex: "Selon [Source], 75% des...")
+- Ajoute des liens externes vers les articles de référence
+- Cite les experts avec leurs credentials
+- Utilise les mots-clés naturellement
+- Structure H1/H2/H3 hiérarchique
+- Ajoute tableaux comparatifs, listes à puces
+- Crée une section FAQ avec JSON-LD
+- Ajoute des CTA engageants
+
+Retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}]}`;
 
         const openai = await callAI(draftProvider, draftModel, [ {role:'system', content: sys1}, {role:'user', content: usr1} ]).catch(e=>({ error:String(e)}));
         logs.push({ step:'draft', iteration: 0, summary: openai?.usage || null, model: draftModel, provider: draftProvider });
@@ -123,26 +179,25 @@ export default async function handler(req: any, res: any) {
         let finalScore: any = null;
         let allNotes: string[] = [];
 
-        // Iterative loop until scores >= minScore or max iterations reached
+        // ===== BOUCLE ITÉRATIVE =====
         while (iteration < maxIterations) {
           iteration++;
 
-          // 1) Review by Claude
+          // ===== PHASE 2: AGENT REVIEW (Claude) - Révision SEO/GEO =====
           const sys2 = `You output ONLY compact JSON. No prose. No markdown.
 Tu es un expert SEO/GEO. Améliore cet article pour atteindre un score SEO et GEO de 95+/100.
 Applique ces optimisations:
-- Ajoute des mots-clés pertinents naturellement dans le contenu
-- Structure avec H1/H2/H3 hiérarchiques et descriptifs
-- Ajoute des listes à puces, tableaux comparatifs
-- Inclus des données chiffrées avec sources (études, statistiques)
-- Ajoute des liens internes et externes pertinents
-- Crée une section FAQ avec schema markup JSON-LD
-- Ajoute des CTA engageants
-- Optimise pour la lisibilité (paragraphes courts, phrases claires)
-- Ajoute des éléments de confiance (témoignages, certifications, références)
+- Vérifie que les mots-clés sont bien intégrés
+- Optimise la structure H1/H2/H3
+- Améliore les listes et tableaux
+- Vérifie la présence de données chiffrées sourcées
+- Optimise les liens internes et externes
+- Améliore la section FAQ
+- Renforce les CTA
+- Optimise la lisibilité
 Return strictly {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]} in French.`;
 
-          const usr2 = `Article actuel à améliorer pour atteindre 95% SEO/GEO:\n\n${currentArticle}\n\nRappel: retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]}`;
+          const usr2 = `Article à améliorer:\n\n${currentArticle}\n\nRappel: retourne UNIQUEMENT le JSON strict`;
 
           const claude = await callAI(reviewProvider, anthropicModel, [ {role:'system', content: sys2}, {role:'user', content: usr2} ]).catch(e=>({ error:String(e)}));
           logs.push({ step:'review', iteration, summary: claude?.usage || null, model: anthropicModel, provider: reviewProvider });
@@ -157,11 +212,42 @@ Return strictly {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["
             if (reviewJson.notes) allNotes = [...allNotes, ...reviewJson.notes];
           }
 
-          // 2) Score by Perplexity
+          // ===== PHASE 3: AGENT ENRICHISSEMENT (Perplexity) - Liens et sources =====
+          const enrichSys = `Tu es un agent d'enrichissement SEO/GEO. Recherche sur le web pour trouver:
+1. Des liens externes de haute autorité à ajouter
+2. Des données chiffrées récentes avec sources vérifiables
+3. Des backlinks potentiels (sites qui pourraient linker cet article)
+4. Des références académiques ou officielles
+
+Retourne UNIQUEMENT un JSON valide:
+{
+  "externalLinks": [{"url": "...", "anchorText": "...", "context": "où l'insérer dans l'article"}],
+  "newStats": [{"metric": "...", "value": "...", "source": "...", "url": "..."}],
+  "citations": [{"text": "...", "source": "...", "url": "..."}],
+  "improvements": ["amélioration 1", "amélioration 2", ...]
+}`;
+
+          const enrichUsr = `Enrichis cet article avec des liens externes et sources vérifiables:
+
+Sujet: ${topic}
+Article actuel (résumé): ${currentArticle.slice(0, 3000)}
+
+Trouve des sources de haute autorité (sites officiels, études, experts reconnus).`;
+
+          const enrichRes = await callAI('perplexity', 'sonar', [ {role:'system', content: enrichSys}, {role:'user', content: enrichUsr} ], 0.3, 1500).catch(e=>({ error:String(e)}));
+          logs.push({ step:'enrich', iteration, summary: enrichRes?.usage || null, model: 'sonar', provider: 'perplexity' });
+
+          let enrichment: any = { externalLinks: [], newStats: [], citations: [], improvements: [] };
+          try {
+            const enrichText = stripFences((enrichRes?.content || '').trim());
+            enrichment = JSON.parse(enrichText);
+          } catch {}
+
+          // ===== PHASE 4: AGENT SCORE (Perplexity) - Scoring =====
           const sys3 = 'You output ONLY compact JSON. No prose. No markdown.';
           const usr3 = `Évalue cet article SEO/GEO (0..100). Sois strict et précis.
-Critères SEO: mots-clés, structure H1/H2/H3, meta, liens, lisibilité, données structurées
-Critères GEO: sources citées, données chiffrées, traçabilité, autorité, fraîcheur
+Critères SEO: mots-clés, structure H1/H2/H3, meta, liens externes, lisibilité, données structurées
+Critères GEO: sources citées avec URLs, données chiffrées vérifiables, traçabilité, autorité, fraîcheur
 Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} for:\n${currentArticle}`;
 
           const scoreRes = await callAI(scoreProvider, scoreModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
@@ -172,7 +258,6 @@ Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} fo
             finalScore = JSON.parse(t);
           } catch {}
 
-          // Check if we've reached the target scores
           const seoScore = finalScore?.scores?.seo || 0;
           const geoScore = finalScore?.scores?.geo || 0;
 
@@ -182,15 +267,21 @@ Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} fo
             break; // Target reached!
           }
 
-          // If not passed, Writer rewrites based on feedback
+          // ===== PHASE 5: AGENT WRITER REWRITE (GPT-5.1) - Réécriture avec enrichissements =====
           if (iteration < maxIterations) {
             const sys4 = 'You output ONLY compact JSON. No prose. No markdown. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
-            const usr4 = `Tu es un rédacteur SEO/GEO expert. Réécris cet article pour corriger les faiblesses identifiées et atteindre 95% SEO/GEO.
+            const usr4 = `Tu es un rédacteur SEO/GEO expert. Réécris cet article pour atteindre 95% SEO/GEO.
 
 Article actuel:
 ${currentArticle}
 
 Score actuel: SEO ${seoScore}/100, GEO ${geoScore}/100
+
+ENRICHISSEMENTS À INTÉGRER (de Perplexity):
+- Liens externes: ${JSON.stringify(enrichment.externalLinks || []).slice(0, 1500)}
+- Nouvelles stats: ${JSON.stringify(enrichment.newStats || []).slice(0, 1000)}
+- Citations: ${JSON.stringify(enrichment.citations || []).slice(0, 1000)}
+- Améliorations suggérées: ${(enrichment.improvements || []).join(', ')}
 
 Faiblesses à corriger:
 ${(finalScore?.weaknesses || []).join('\n- ')}
@@ -198,7 +289,7 @@ ${(finalScore?.weaknesses || []).join('\n- ')}
 Corrections demandées:
 ${(finalScore?.fixes || []).join('\n- ')}
 
-Applique TOUTES les corrections. Ajoute du contenu substantiel, des sources, des données chiffrées, des liens, une FAQ avec JSON-LD, des tableaux comparatifs.
+IMPORTANT: Intègre TOUS les liens externes, stats et citations fournis. Ajoute les URLs dans des balises <a href="...">.
 Retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}]}`;
 
             const rewrite = await callAI(draftProvider, draftModel, [ {role:'system', content: sys4}, {role:'user', content: usr4} ]).catch(e=>({ error:String(e)}));
@@ -217,6 +308,11 @@ Retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html"
           review: currentArticle,
           iterations: iteration,
           finalScores: finalScore?.scores || { seo: 0, geo: 0 },
+          research: {
+            articles: research.articles?.length || 0,
+            stats: research.stats?.length || 0,
+            keywords: research.keywords || []
+          },
           feedback: {
             openai: `Article généré en ${iteration} itération(s)`,
             claude: allNotes,
