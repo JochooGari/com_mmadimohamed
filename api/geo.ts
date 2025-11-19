@@ -956,10 +956,75 @@ Fixes: ${(job.lastScore?.fixes || []).join(', ')}`;
           iteration: job.iteration,
           scores: job.scores,
           bestScore: job.bestScore,
-          article: job.status === 'completed' || job.status === 'max_iterations' ? job.bestArticle : null,
+          article: job.bestArticle || null,
           finalScore: job.finalScore,
           research: job.research ? { articles: job.research.articles?.length, stats: job.research.stats?.length } : null,
           logs: job.logs
+        });
+      }
+
+      if (action === 'workflow_save_article') {
+        const { jobId, title } = req.body || {};
+        if (!jobId) return res.status(400).json({ error: 'jobId required' });
+
+        const job = await getJSON<any>('agents', `geo/jobs/${jobId}.json`);
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+        if (!job.bestArticle) return res.status(400).json({ error: 'No article in job' });
+
+        // Parse the article JSON to get sections
+        let sections = [];
+        try {
+          const articleData = JSON.parse(job.bestArticle);
+          sections = articleData.sections || [];
+        } catch {
+          // If parsing fails, try to treat it as sections array directly
+          sections = [];
+        }
+
+        // Convert sections to HTML
+        const htmlContent = sections.map((s: any) => s.html || '').join('\n');
+
+        // Extract outline from HTML
+        const outline = extractOutline(htmlContent);
+
+        // Save as a template/article
+        const id = Date.now().toString();
+        const record = {
+          id,
+          html: htmlContent,
+          url: '',
+          outline,
+          metadata: {
+            topic: job.topic,
+            jobId: job.id,
+            bestScore: job.bestScore,
+            iterations: job.iteration,
+            scores: job.scores,
+            generatedAt: new Date().toISOString()
+          },
+          createdAt: new Date().toISOString()
+        };
+
+        await put('agents', `geo/articles/${id}.json`, JSON.stringify(record, null, 2));
+
+        // Update templates index so it appears in the UI
+        const idx = (await getJSON<any>('agents', 'geo/templates/index.json')) || { items: [] };
+        idx.items.unshift({
+          id,
+          title: title || job.topic || 'Article GEO',
+          createdAt: record.createdAt,
+          url: `workflow:${jobId}`,
+          score: job.bestScore,
+          iterations: job.iteration
+        });
+        await put('agents', 'geo/templates/index.json', JSON.stringify(idx, null, 2));
+
+        return res.json({
+          ok: true,
+          id,
+          outline,
+          html: htmlContent,
+          metadata: record.metadata
         });
       }
 
