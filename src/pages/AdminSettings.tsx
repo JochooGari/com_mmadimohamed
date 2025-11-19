@@ -58,7 +58,7 @@ export default function AdminSettings() {
 
   // Chat test (unifié)
   const [chatProvider, setChatProvider] = useState<string>(getDefaultProvider() || 'openai');
-  const [chatModel, setChatModel] = useState<string>(getDefaultModel() || 'gpt-4o');
+  const [chatModel, setChatModel] = useState<string>(getDefaultModel() || 'gpt-5');
   const [chatMemory, setChatMemory] = useState<boolean>(true);
   const [chatTemp, setChatTemp] = useState<number>(0.7);
   const [chatMaxTokens, setChatMaxTokens] = useState<number>(2000);

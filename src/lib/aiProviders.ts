@@ -14,7 +14,7 @@ export const AI_PROVIDERS: AIProvider[] = [
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     requiresAuth: true,
-    models: ['gpt-5', 'gpt-4-turbo', 'gpt-4', 'gpt-4o']
+    models: ['gpt-5']
   },
   {
     id: 'anthropic',
@@ -22,10 +22,10 @@ export const AI_PROVIDERS: AIProvider[] = [
     baseUrl: 'https://api.anthropic.com/v1',
     requiresAuth: true,
     models: [
-      'claude-sonnet-4-5',
-      'claude-haiku-4-5',
+      'claude-sonnet-4-5-20250514',
       'claude-3-5-sonnet-latest',
-      'claude-3-5-haiku-latest'
+      'claude-3-5-haiku-latest',
+      'claude-3-opus-latest'
     ]
   },
   {
@@ -33,21 +33,21 @@ export const AI_PROVIDERS: AIProvider[] = [
     name: 'Google AI',
     baseUrl: 'https://generativelanguage.googleapis.com/v1',
     requiresAuth: true,
-    models: ['gemini-pro', 'gemini-pro-vision']
+    models: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash']
   },
   {
     id: 'mistral',
     name: 'Mistral AI',
     baseUrl: 'https://api.mistral.ai/v1',
     requiresAuth: true,
-    models: ['mistral-large', 'mistral-medium', 'mistral-small']
+    models: ['mistral-large-latest', 'mistral-medium-latest', 'mistral-small-latest', 'codestral-latest']
   },
   {
     id: 'perplexity',
     name: 'Perplexity',
     baseUrl: 'https://api.perplexity.ai',
     requiresAuth: true,
-    models: ['sonar', 'sonar-pro', 'llama-3.1-sonar-small-128k-online', 'llama-3.1-sonar-large-128k-online']
+    models: ['sonar', 'sonar-pro', 'sonar-reasoning', 'sonar-reasoning-pro']
   }
 ];
 

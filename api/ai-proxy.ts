@@ -68,7 +68,12 @@ export default async function handler(req: any, res: any) {
       case 'openai': {
         url = 'https://api.openai.com/v1/chat/completions';
         headers.Authorization = `Bearer ${key}`;
-        body = { model, messages, temperature, max_tokens: maxTokens };
+        // GPT-5 uses max_completion_tokens and requires temperature=1
+        if (model.startsWith('gpt-5')) {
+          body = { model, messages, temperature: 1, max_completion_tokens: maxTokens };
+        } else {
+          body = { model, messages, temperature, max_tokens: maxTokens };
+        }
         break;
       }
       case 'anthropic': {
