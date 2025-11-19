@@ -95,7 +95,7 @@ export default async function handler(req: any, res: any) {
       if (action === 'chain_draft') {
         const { topic = 'Sujet', locked = [], editable = [], outline = 'H1/H2/H3', models = {}, providers = {}, prompts = {}, minScore = 95, maxIterations = 5 } = req.body || {};
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
-        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=2000) => {
+        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=4000) => {
           const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, model, messages, temperature, maxTokens }) });
           if (!r.ok) throw new Error(`${provider} ${model} ${r.status}`);
           return r.json();
@@ -110,32 +110,32 @@ export default async function handler(req: any, res: any) {
         const scoreModel = models?.score || (models as any)?.perplexity || 'sonar';
 
         // ===== PHASE 0: AGENT RECHERCHE (Perplexity) - Veille approfondie =====
-        const researchSys = `Tu es un agent de veille et de recherche expert. Effectue une recherche web approfondie sur le sujet donné.
-Identifie:
-1. Les articles de référence les plus pertinents (avec URLs)
-2. Les études et rapports récents avec données chiffrées
-3. Les sources officielles et autorités du domaine
-4. Les statistiques clés avec leurs sources
-5. Les experts et témoignages reconnus
-6. Les tendances actuelles et mots-clés importants
+        const researchSys = `Tu es un agent de veille et de collecte d'informations pour contenu GEO/SEO.
+Ta mission : rechercher les meilleures sources web sur le sujet demandé, ainsi que des thèmes connexes stratégiques.
+Fournis une liste de liens externes, articles, études, rapports, documents, et bases de données fiables (.org, .edu, .gov, grandes marques, leaders du secteur).
+
+Pour chaque lien, indique le titre, résumé, pertinence pour le sujet, date ou fraîcheur, et tout chiffre ou donnée clé à extraire.
 
 Retourne UNIQUEMENT un JSON valide:
 {
-  "articles": [{"url": "...", "title": "...", "summary": "...", "authority": "high/medium/low"}],
+  "articles": [{"url": "...", "title": "...", "summary": "...", "authority": "high/medium/low", "date": "..."}],
   "stats": [{"metric": "...", "value": "...", "source": "...", "url": "...", "year": "..."}],
-  "experts": [{"name": "...", "title": "...", "quote": "...", "source": "..."}],
+  "experts": [{"name": "...", "title": "...", "quote": "...", "source": "...", "url": "..."}],
   "keywords": ["mot-clé 1", "mot-clé 2", ...],
   "trends": ["tendance 1", "tendance 2", ...],
   "officialSources": [{"name": "...", "url": "...", "type": "..."}]
 }`;
 
-        const researchUsr = `Effectue une recherche web approfondie sur: "${topic}"
+        const researchUsr = `Recherche approfondie sur "${topic}".
+Retourne :
+- 10 à 15 liens externes de haute autorité
+- Titres, résumés, pertinence, date
+- Chiffres/statistiques clés avec sources
+- Experts reconnus avec citations
+- Propose aussi des angles connexes utiles
+Privilégie les données récentes (2023-2025) et sources françaises/internationales.`;
 
-Recherche également les sujets connexes pour enrichir le contexte.
-Trouve des sources françaises et internationales de qualité.
-Privilégie les données récentes (2023-2025).`;
-
-        const researchRes = await callAI('perplexity', 'sonar', [ {role:'system', content: researchSys}, {role:'user', content: researchUsr} ], 0.3, 2000).catch(e=>({ error:String(e)}));
+        const researchRes = await callAI('perplexity', 'sonar', [ {role:'system', content: researchSys}, {role:'user', content: researchUsr} ], 0.3, 2500).catch(e=>({ error:String(e)}));
         logs.push({ step:'research', iteration: 0, summary: researchRes?.usage || null, model: 'sonar', provider: 'perplexity' });
 
         let research: any = { articles: [], stats: [], experts: [], keywords: [], trends: [], officialSources: [] };
@@ -146,35 +146,40 @@ Privilégie les données récentes (2023-2025).`;
 
         // ===== PHASE 1: AGENT WRITER (GPT-5.1) - Rédaction avec contexte enrichi =====
         const sys1 = 'You output ONLY compact JSON. No prose. No markdown. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
-        const usr1 = `Tu es un rédacteur SEO/GEO expert style Neil Patel.
+        const usr1 = `Tu es un expert GEO & SEO. Rédige un article LONG (minimum 2000 mots) structuré style Neil Patel.
 
 Sujet: ${topic}
 Outline: ${outline}
 
 CONTEXTE DE RECHERCHE (utilise ces informations):
-- Articles de référence: ${JSON.stringify(research.articles || []).slice(0, 2000)}
-- Statistiques avec sources: ${JSON.stringify(research.stats || []).slice(0, 1500)}
-- Experts et citations: ${JSON.stringify(research.experts || []).slice(0, 1000)}
+- Articles de référence: ${JSON.stringify(research.articles || []).slice(0, 2500)}
+- Statistiques avec sources: ${JSON.stringify(research.stats || []).slice(0, 2000)}
+- Experts et citations: ${JSON.stringify(research.experts || []).slice(0, 1500)}
 - Mots-clés importants: ${(research.keywords || []).join(', ')}
 - Tendances: ${(research.trends || []).join(', ')}
-- Sources officielles: ${JSON.stringify(research.officialSources || []).slice(0, 1000)}
+- Sources officielles: ${JSON.stringify(research.officialSources || []).slice(0, 1500)}
 
-INSTRUCTIONS:
-- Intègre les statistiques avec leurs sources (ex: "Selon [Source], 75% des...")
-- Ajoute des liens externes vers les articles de référence
-- Cite les experts avec leurs credentials
-- Utilise les mots-clés naturellement
-- Structure H1/H2/H3 hiérarchique
-- Ajoute tableaux comparatifs, listes à puces
-- Crée une section FAQ avec JSON-LD
-- Ajoute des CTA engageants
+INSTRUCTIONS OBLIGATOIRES:
+- Article de 2000+ mots minimum, contenu substantiel
+- 1 lien externe minimum tous les 200 mots (balise <a href="..." target="_blank">)
+- Chaque chiffre/stat DOIT être sourcé avec hyperlien
+- Meta title & description optimisés avec mots-clés
+- Structure H1/H2/H3 hiérarchique claire
+- Tableaux comparatifs, listes à puces détaillées
+- Section FAQ avec 5+ questions et schema JSON-LD FAQPage
+- 2 CTA engageants minimum
+- Liens internes vers contenus connexes
+- Schema.org Article, BreadcrumbList
+- Cite les experts avec credentials et sources
 
-Retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html":"..."}]}`;
+JSON final : {"sections":[{"id":"...","title":"...","html":"..."}]}`;
 
         const openai = await callAI(draftProvider, draftModel, [ {role:'system', content: sys1}, {role:'user', content: usr1} ]).catch(e=>({ error:String(e)}));
         logs.push({ step:'draft', iteration: 0, summary: openai?.usage || null, model: draftModel, provider: draftProvider });
 
         let currentArticle = stripFences((openai?.content || '').trim());
+        let bestArticle = currentArticle;
+        let bestScore = 0;
         let iteration = 0;
         let finalScore: any = null;
         let allNotes: string[] = [];
@@ -243,14 +248,40 @@ Trouve des sources de haute autorité (sites officiels, études, experts reconnu
             enrichment = JSON.parse(enrichText);
           } catch {}
 
-          // ===== PHASE 4: AGENT SCORE (Perplexity) - Scoring =====
+          // ===== PHASE 4: AGENT SCORE (Perplexity) - Scoring détaillé =====
           const sys3 = 'You output ONLY compact JSON. No prose. No markdown.';
-          const usr3 = `Évalue cet article SEO/GEO (0..100). Sois strict et précis.
-Critères SEO: mots-clés, structure H1/H2/H3, meta, liens externes, lisibilité, données structurées
-Critères GEO: sources citées avec URLs, données chiffrées vérifiables, traçabilité, autorité, fraîcheur
-Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} for:\n${currentArticle}`;
+          const usr3 = `Tu es l'agent Score GEO/SEO expert. Évalue cet article sur 100 points.
 
-          const scoreRes = await callAI(scoreProvider, scoreModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 800).catch(e=>({ error:String(e)}));
+CRITÈRES SEO (50 points):
+- Structure H1/H2/H3 (10 pts)
+- Mots-clés et sémantique (10 pts)
+- Meta title/description (5 pts)
+- Liens externes de qualité (10 pts)
+- Lisibilité et UX (5 pts)
+- Données structurées schema.org (10 pts)
+
+CRITÈRES GEO (50 points):
+- Sources citées avec URLs vérifiables (15 pts)
+- Données chiffrées avec références (10 pts)
+- Fraîcheur du contenu (5 pts)
+- Autorité et expertise démontrée (10 pts)
+- Traçabilité des informations (10 pts)
+
+Retourne:
+{
+  "scores": {"seo": 0, "geo": 0, "total": 0},
+  "breakdown": {
+    "seo": {"structure": 0, "keywords": 0, "meta": 0, "links": 0, "readability": 0, "schema": 0},
+    "geo": {"sources": 0, "stats": 0, "freshness": 0, "authority": 0, "traceability": 0}
+  },
+  "strengths": [],
+  "weaknesses": [],
+  "fixes": []
+}
+
+Article à évaluer:\n${currentArticle.slice(0, 8000)}`;
+
+          const scoreRes = await callAI(scoreProvider, scoreModel, [ {role:'system', content: sys3}, {role:'user', content: usr3} ], 0.2, 1200).catch(e=>({ error:String(e)}));
           logs.push({ step:'score', iteration, summary: scoreRes?.usage || null, model: scoreModel, provider: scoreProvider });
 
           try {
@@ -260,8 +291,15 @@ Return {"scores":{"seo":0,"geo":0},"strengths":[],"weaknesses":[],"fixes":[]} fo
 
           const seoScore = finalScore?.scores?.seo || 0;
           const geoScore = finalScore?.scores?.geo || 0;
+          const totalScore = seoScore + geoScore;
 
-          logs.push({ step:'check', iteration, seo: seoScore, geo: geoScore, target: minScore, passed: seoScore >= minScore && geoScore >= minScore });
+          // Conserver la meilleure version pour éviter la régression
+          if (totalScore > bestScore) {
+            bestScore = totalScore;
+            bestArticle = currentArticle;
+          }
+
+          logs.push({ step:'check', iteration, seo: seoScore, geo: geoScore, total: totalScore, bestScore, target: minScore, passed: seoScore >= minScore && geoScore >= minScore });
 
           if (seoScore >= minScore && geoScore >= minScore) {
             break; // Target reached!
@@ -302,19 +340,25 @@ Retourne UNIQUEMENT le JSON strict {"sections":[{"id":"...","title":"...","html"
           }
         }
 
+        // Retourner la meilleure version (pas la dernière si régression)
+        const finalArticle = bestScore > (finalScore?.scores?.seo || 0) + (finalScore?.scores?.geo || 0) ? bestArticle : currentArticle;
+
         return res.json({
           logs,
-          draft: currentArticle,
-          review: currentArticle,
+          draft: finalArticle,
+          review: finalArticle,
           iterations: iteration,
           finalScores: finalScore?.scores || { seo: 0, geo: 0 },
+          bestScore,
+          breakdown: finalScore?.breakdown || null,
           research: {
             articles: research.articles?.length || 0,
             stats: research.stats?.length || 0,
-            keywords: research.keywords || []
+            keywords: research.keywords || [],
+            experts: research.experts?.length || 0
           },
           feedback: {
-            openai: `Article généré en ${iteration} itération(s)`,
+            openai: `Article généré en ${iteration} itération(s) - Meilleur score: ${bestScore}`,
             claude: allNotes,
             perplexity: finalScore
           }
