@@ -17,7 +17,7 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
   const [logs, setLogs] = React.useState<any[]>([]);
   const [chainPreview, setChainPreview] = React.useState<{draft?:string; review?:string} | null>(null);
   const [models, setModels] = React.useState<{ draft: string; review: string; score: string }>({
-    draft: 'gpt-4o',
+    draft: 'gpt-5',
     review: 'claude-sonnet-4-5-20250514',
     score: 'sonar'
   });
@@ -181,7 +181,7 @@ Indique les points forts et les axes d'amélioration prioritaires.`
   };
 
   const providerModels: Record<string,string[]> = {
-    openai: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'o3-mini'],
+    openai: ['gpt-5'],
     anthropic: ['claude-sonnet-4-5-20250514', 'claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest', 'claude-3-opus-latest'],
     perplexity: ['sonar', 'sonar-pro', 'sonar-reasoning', 'sonar-reasoning-pro'],
     google: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
