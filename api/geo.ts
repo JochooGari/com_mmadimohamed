@@ -118,7 +118,7 @@ export default async function handler(req: any, res: any) {
         const draftProvider = providers.draft || 'openai';
         const draftModel = (models.draft || (models as any).openai || 'gpt-5.1');
         const reviewProvider = providers.review || 'anthropic';
-        const anthropicModel = (models.review || (models as any).anthropic || 'claude-sonnet-4-5-20250514');
+        const anthropicModel = (models.review || (models as any).anthropic || 'claude-sonnet-4-5-20250929');
         const scoreProvider = providers?.score || 'perplexity';
         const scoreModel = models?.score || (models as any)?.perplexity || 'sonar';
 
@@ -832,7 +832,7 @@ INSTRUCTIONS: Article 2000+ mots, 1 lien externe/200 mots, stats sourcées, FAQ 
 Return {"sections":[{"id":"...","title":"...","html":"..."}],"notes":[]} in French.`;
             const usr2 = `Article à améliorer:\n${job.article}`;
 
-            const res = await callAI('anthropic', 'claude-sonnet-4-5-20250514', [{role:'system', content: sys2}, {role:'user', content: usr2}]);
+            const res = await callAI('anthropic', 'claude-sonnet-4-5-20250929', [{role:'system', content: sys2}, {role:'user', content: usr2}]);
             job.logs.push({ step: 'review', iteration: job.iteration, usage: res?.usage, timestamp: new Date().toISOString() });
 
             const reviewText = stripFences((res?.content || '').trim());
