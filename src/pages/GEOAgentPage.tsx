@@ -434,46 +434,68 @@ export default function GEOAgentPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Domaines institutionnels (.org/.gov)</Label>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {['oecd.org', 'imf.org', 'worldbank.org', 'eurostat.ec.europa.eu'].map(domain => (
-                      <Badge key={domain} variant="default" className="flex items-center gap-1">
-                        <Shield className="h-3 w-3" />
-                        {domain}
-                        <X className="h-3 w-3 cursor-pointer" />
-                      </Badge>
-                    ))}
+                  <Label>Ajouter un domaine</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="exemple.com"
+                      id="new-domain-input"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const input = e.target as HTMLInputElement;
+                          const domain = input.value.trim();
+                          if (domain && !contentSources.whitelistDomains.includes(domain)) {
+                            setContentSources(prev => ({
+                              ...prev,
+                              whitelistDomains: [...prev.whitelistDomains, domain]
+                            }));
+                            input.value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const input = document.getElementById('new-domain-input') as HTMLInputElement;
+                        const domain = input?.value.trim();
+                        if (domain && !contentSources.whitelistDomains.includes(domain)) {
+                          setContentSources(prev => ({
+                            ...prev,
+                            whitelistDomains: [...prev.whitelistDomains, domain]
+                          }));
+                          input.value = '';
+                        }
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Médias de référence</Label>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {['reuters.com', 'ft.com', 'bbc.com', 'lesechos.fr'].map(domain => (
-                      <Badge key={domain} variant="secondary" className="flex items-center gap-1">
-                        {domain}
-                        <X className="h-3 w-3 cursor-pointer" />
-                      </Badge>
-                    ))}
-                  </div>
+                  <Label>Domaines autorisés ({contentSources.whitelistDomains.length})</Label>
+                  <ScrollArea className="h-[200px]">
+                    <div className="flex flex-wrap gap-2">
+                      {contentSources.whitelistDomains.map(domain => (
+                        <Badge key={domain} variant="secondary" className="flex items-center gap-1">
+                          <Shield className="h-3 w-3" />
+                          {domain}
+                          <X
+                            className="h-3 w-3 cursor-pointer hover:text-red-500"
+                            onClick={() => {
+                              setContentSources(prev => ({
+                                ...prev,
+                                whitelistDomains: prev.whitelistDomains.filter(d => d !== domain)
+                              }));
+                            }}
+                          />
+                        </Badge>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Fréquence de crawl</Label>
-                  <Select value={contentSources.crawlFrequency} onValueChange={(value) => 
-                    setContentSources(prev => ({ ...prev, crawlFrequency: value }))
-                  }>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2h">Toutes les 2h</SelectItem>
-                      <SelectItem value="12h">Toutes les 12h</SelectItem>
-                      <SelectItem value="24h">Quotidien</SelectItem>
-                      <SelectItem value="weekly">Hebdomadaire</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Separator />
 
                 <div className="space-y-2">
                   <Label>Seuil de confiance</Label>
@@ -484,9 +506,9 @@ export default function GEOAgentPage() {
                       max="1"
                       step="0.05"
                       value={contentSources.confidenceThreshold}
-                      onChange={(e) => setContentSources(prev => ({ 
-                        ...prev, 
-                        confidenceThreshold: parseFloat(e.target.value) 
+                      onChange={(e) => setContentSources(prev => ({
+                        ...prev,
+                        confidenceThreshold: parseFloat(e.target.value)
                       }))}
                       className="w-full"
                     />
@@ -496,112 +518,6 @@ export default function GEOAgentPage() {
                       <span>1.0</span>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Personas & intentions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Personas & Intentions
-                </CardTitle>
-                <CardDescription>Cibles et types de requêtes à couvrir</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="p-3 border rounded-lg text-center">
-                    <h3 className="font-semibold text-blue-600">ESN</h3>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Process, outils, ROI
-                    </p>
-                    <Badge variant="outline" className="mt-2 text-xs">
-                      RDV qualifiés
-                    </Badge>
-                  </div>
-                  <div className="p-3 border rounded-lg text-center">
-                    <h3 className="font-semibold text-green-600">DAF</h3>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Mesures, budgets, risques
-                    </p>
-                    <Badge variant="outline" className="mt-2 text-xs">
-                      Couverture FX
-                    </Badge>
-                  </div>
-                  <div className="p-3 border rounded-lg text-center">
-                    <h3 className="font-semibold text-purple-600">Executive</h3>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Stratégie, décisions
-                    </p>
-                    <Badge variant="outline" className="mt-2 text-xs">
-                      Time-to-decision
-                    </Badge>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-3">
-                  <Label>Types d'intentions à cibler</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { type: 'Informational', desc: 'Qu\'est-ce que, pourquoi', color: 'blue' },
-                      { type: 'How-to', desc: 'Comment faire, étapes', color: 'green' },
-                      { type: 'Comparison', desc: 'X vs Y, alternatives', color: 'purple' },
-                      { type: 'Transactional', desc: 'Audit, démo, essai', color: 'orange' }
-                    ].map(intent => (
-                      <label key={intent.type} className="flex items-center gap-2 p-2 border rounded">
-                        <input type="checkbox" defaultChecked />
-                        <div className="flex-1">
-                          <span className={`text-sm font-medium text-${intent.color}-600`}>
-                            {intent.type}
-                          </span>
-                          <p className="text-xs text-gray-500">{intent.desc}</p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Moteurs IA cibles */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Brain className="h-5 w-5" />
-                  Moteurs IA ciblés
-                </CardTitle>
-                <CardDescription>Optimisation pour plateformes spécifiques</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {targetEngines.map(engine => (
-                  <div key={engine.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <Switch 
-                        checked={engine.active}
-                        onCheckedChange={(checked) => console.log(`Toggle ${engine.name}: ${checked}`)}
-                      />
-                      <div>
-                        <span className="font-medium">{engine.name}</span>
-                        <p className="text-xs text-gray-500">
-                          {engine.citations} citations ce mois
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant={engine.active ? 'default' : 'secondary'}>
-                      {engine.active ? 'Actif' : 'Inactif'}
-                    </Badge>
-                  </div>
-                ))}
-
-                <div className="mt-4 p-3 bg-blue-50 border-blue-200 border rounded-lg">
-                  <p className="text-sm font-medium text-blue-800 mb-1">💡 Conseil GEO</p>
-                  <p className="text-sm text-blue-700">
-                    Perplexity privilégie les sources récentes (&lt; 90j) avec preuves chiffrées.
-                    AI Overviews favorise les réponses structurées en 60 mots + développement.
-                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -725,68 +641,60 @@ export default function GEOAgentPage() {
 
         {/* Onglet Générateur */}
         <TabsContent value="generation">
-          <GEOGenerator className="mb-6" />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Pipeline GEO */}
-            <Card>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            {/* Personas & intentions */}
+            <Card className="lg:col-span-1">
               <CardHeader>
-                <CardTitle>Pipeline GEO (3 étapes)</CardTitle>
-                <CardDescription>Mining → Brief → Livrable optimisé IA</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Personas & Intentions
+                </CardTitle>
+                <CardDescription>Cibles et types de requêtes</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="text-center">
-                  <Button 
-                    size="lg" 
-                    className="text-lg px-8 py-4"
-                    onClick={() => generateGEOContent(1)}
-                  >
-                    <Play className="h-5 w-5 mr-2" />
-                    Générer GEO (1→2→3)
-                  </Button>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  {[
+                    { name: 'ESN', color: 'blue', desc: 'Process, outils, ROI' },
+                    { name: 'DAF', color: 'green', desc: 'Mesures, budgets, risques' },
+                    { name: 'Executive', color: 'purple', desc: 'Stratégie, décisions' }
+                  ].map(persona => (
+                    <div key={persona.name} className="p-2 border rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <h3 className={`font-semibold text-${persona.color}-600 text-sm`}>{persona.name}</h3>
+                        <input type="checkbox" defaultChecked />
+                      </div>
+                      <p className="text-xs text-gray-600">{persona.desc}</p>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="space-y-4">
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                        <span className="text-purple-600 font-semibold">1</span>
-                      </div>
-                      <h3 className="font-semibold">Mining requêtes</h3>
-                      <Badge variant="outline">Ready</Badge>
-                    </div>
-                    <p className="text-sm text-gray-600 ml-11">
-                      Extraction queries + entities + preuves depuis transcripts/web
-                    </p>
-                  </div>
+                <Separator />
 
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                        <span className="text-orange-600 font-semibold">2</span>
-                      </div>
-                      <h3 className="font-semibold">Brief GEO</h3>
-                      <Badge variant="secondary">Pending</Badge>
-                    </div>
-                    <p className="text-sm text-gray-600 ml-11">
-                      Angles answer-first + modules (FAQ, HowTo, Comparaison) par query
-                    </p>
-                  </div>
-
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                        <span className="text-green-600 font-semibold">3</span>
-                      </div>
-                      <h3 className="font-semibold">Livrables</h3>
-                      <Badge variant="secondary">Pending</Badge>
-                    </div>
-                    <p className="text-sm text-gray-600 ml-11">
-                      Article GEO + chunks Q/A + posts LinkedIn/X + JSON-LD
-                    </p>
+                <div className="space-y-2">
+                  <Label className="text-xs">Intentions</Label>
+                  <div className="grid grid-cols-2 gap-1">
+                    {[
+                      { type: 'Info', desc: 'Qu\'est-ce que' },
+                      { type: 'How-to', desc: 'Comment faire' },
+                      { type: 'Compare', desc: 'X vs Y' },
+                      { type: 'Action', desc: 'Audit, démo' }
+                    ].map(intent => (
+                      <label key={intent.type} className="flex items-center gap-1 p-1 text-xs">
+                        <input type="checkbox" defaultChecked />
+                        <span>{intent.type}</span>
+                      </label>
+                    ))}
                   </div>
                 </div>
               </CardContent>
             </Card>
+
+            <div className="lg:col-span-2">
+              <GEOGenerator className="" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* Modules de contenu */}
             <Card>

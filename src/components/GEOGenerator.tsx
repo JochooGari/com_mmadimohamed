@@ -123,31 +123,14 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
     perplexity: ['sonar','sonar-pro','llama-3.1-sonar-large-128k-online']
   };
 
-  const [toc, setToc] = React.useState<{id:string; title:string; level:number}[]>([]);
   React.useEffect(()=> { (async ()=> {
     // autoload settings
     try { const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'get_settings' }) }); if (r.ok) { const s = await r.json(); if (s?.models) setModels(s.models); if (s?.providers) setProviders(s.providers); if (s?.prompts) setPrompts(s.prompts); } } catch {}
   })(); }, []);
-  const generateTOC = async () => {
-    const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'toc_generate', sections }) });
-    if (r.ok) {
-      const d = await r.json(); setToc(d.toc || []);
-    }
-  };
-  const [media, setMedia] = React.useState<any[]>([]);
-  const suggestMedia = async () => {
-    const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'media_suggest', topic, sections }) });
-    if (r.ok) setMedia((await r.json()).items || []);
-  };
   const [links, setLinks] = React.useState<any[]>([]);
   const suggestLinks = async () => {
     const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'internal_links', topic }) });
     if (r.ok) setLinks((await r.json()).links || []);
-  };
-  const [ctas, setCtas] = React.useState<any[]>([]);
-  const generateCTA = async () => {
-    const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'cta_generate', topic }) });
-    if (r.ok) setCtas((await r.json()).ctas || []);
   };
   const [liveScore, setLiveScore] = React.useState<{scores?: {seo?:number; geo?:number}; fixes?:string[]}>({});
   const refreshScore = async () => {
@@ -163,16 +146,6 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
   const togglePainpoint = async (v:boolean) => {
     setPainpoint(v);
     await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'set_painpoint_mode', enabled: v }) });
-  };
-  const [history, setHistory] = React.useState<any[]>([]);
-  const logEvent = async (event:string, payload?:any) => {
-    setHistory(prev=> [{ ts: new Date().toISOString(), event }, ...prev]);
-    await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'version_log', event, payload }) });
-  };
-  const [bench, setBench] = React.useState<any[]>([]);
-  const runBenchmark = async () => {
-    const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'benchmark', topic }) });
-    if (r.ok) setBench((await r.json()).rows || []);
   };
   const [showSections, setShowSections] = React.useState(false);
   const fullHtml = React.useMemo(()=> sections.map(s=> (s.title ? `\n<h2 id="${s.id}">${s.title}</h2>\n` : '') + (s.html||'')).join('\n'), [sections]);
@@ -356,49 +329,8 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
         </Card>
       )}
 
-      {/* TOC + Assistants */}
+      {/* Assistants */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader><CardTitle>Plan / TDM</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <Button size="sm" onClick={generateTOC}>Générer le plan</Button>
-            <ul className="list-disc ml-5 text-sm">
-              {toc.map(item => (
-                <li key={item.id} className={item.level===3 ? 'ml-4' : ''}>
-                  <a href={`#${item.id}`} onClick={(e)=> { e.preventDefault(); const el=document.getElementById(item.id); if(el) el.scrollIntoView({behavior:'smooth'}); }}>{item.title}</a>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>Rich media assistant</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <Button size="sm" onClick={suggestMedia}>Suggérer médias</Button>
-            {media.slice(0,5).map((m:any)=> (
-              <div key={m.sectionId} className="text-sm border rounded p-2">
-                <div className="font-medium">Section: {m.sectionId}</div>
-                <ul className="list-disc ml-5">
-                  {m.suggestions.map((s:any,i:number)=> (<li key={i}>{s.type}: {s.prompt}</li>))}
-                </ul>
-                <div className="flex gap-2 mt-2">
-                  <Button size="sm" variant="outline" onClick={async ()=>{
-                    const text = prompt('Prompt image OpenAI', m.suggestions?.[0]?.prompt || '') || '';
-                    if (!text) return;
-                    const r = await fetch('/api/geo', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'image_generate', prompt: text }) });
-                    const d = await r.json();
-                    if (d?.url) {
-                      // insertion directe dans la section
-                      setSections(prev => prev.map(sec => sec.id === m.sectionId ? { ...sec, html: (sec.html||'') + `\n<p><img src="${d.url}" alt="${text}" /></p>` } : sec));
-                    }
-                  }}>Générer & insérer</Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader><CardTitle>Liens internes</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -408,29 +340,12 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
                 <li key={i} className="flex items-center gap-2">
                   <a className="text-blue-600" href={l.url} target="_blank" rel="noreferrer">{l.url}</a>
                   <Button size="sm" variant="outline" onClick={() => {
-                    // insérer le lien dans l’introduction si présente, sinon dans la première section
+                    // insérer le lien dans l'introduction si présente, sinon dans la première section
                     setSections(prev => prev.map((s,idx) => idx===0 ? { ...s, html: (s.html||'') + `\n<p><a href="${l.url}" rel="noopener">${l.title||'Lien interne'}</a></p>` } : s));
                   }}>Insérer</Button>
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>CTA</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <Button size="sm" onClick={generateCTA}>Générer CTA</Button>
-            <div className="flex flex-wrap gap-2">
-              {ctas.map((c:any,i:number)=> (
-                <div key={i} className="flex items-center gap-2">
-                  <Button variant={c.variant||'outline'}>{c.label}</Button>
-                  <Button size="sm" variant="outline" onClick={() => {
-                    setSections(prev => prev.map((s,idx)=> idx===prev.length-1 ? { ...s, html: (s.html||'') + `\n<p class=\"cta\"><a href=\"${c.href}\">${c.label}</a></p>` } : s));
-                  }}>Insérer</Button>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
 
@@ -465,40 +380,8 @@ export default function GEOGenerator({ className='' }: { className?: string }) {
           <CardContent className="space-y-2">
             <label className="text-sm flex items-center gap-2">
               <input type="checkbox" checked={painpoint} onChange={(e)=> togglePainpoint(e.target.checked)} />
-              Forcer l’angle Pain Point / Résolution / Tips dans chaque section
+              Forcer l'angle Pain Point / Résolution / Tips dans chaque section
             </label>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>Historique & versions</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex gap-2">
-              <Button size="sm" onClick={()=> logEvent('draft_generated')}>Logger: draft</Button>
-              <Button size="sm" onClick={()=> logEvent('reviewed')}>Logger: review</Button>
-            </div>
-            <ul className="list-disc ml-5 text-sm">
-              {history.map((h:any,i:number)=> (<li key={i}>{new Date(h.ts).toLocaleString('fr-FR')} – {h.event}</li>))}
-            </ul>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>Benchmark auto</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            <Button size="sm" onClick={runBenchmark}>Lancer benchmark</Button>
-            <table className="w-full text-sm">
-              <thead><tr><th className="text-left">Titre</th><th>Score</th><th>Médias</th></tr></thead>
-              <tbody>
-                {bench.map((b:any,i:number)=> (
-                  <tr key={i} className="border-t">
-                    <td className="py-1"><a className="text-blue-600" href={b.url} target="_blank" rel="noreferrer">{b.title || b.url}</a></td>
-                    <td className="text-center">{b.score}</td>
-                    <td className="text-center">{b.media}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </CardContent>
         </Card>
       </div>
