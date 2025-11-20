@@ -899,7 +899,7 @@ EXIGENCES DE QUALITÉ:
 
 IMPORTANT: Traite TOUTES les sections de l'outline de manière EXHAUSTIVE avec TOUS les éléments (tableaux, études de cas, CTA, FAQ, JSON-LD)!`;
 
-            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}], 0.3, 10000);
+            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}], 0.3, 8000);
             job.logs.push({ step: 'draft', usage: res?.usage, timestamp: new Date().toISOString() });
 
             job.article = stripFences((res?.content || '').trim());
@@ -1068,7 +1068,7 @@ INSTRUCTIONS STRICTES:
 ❌ Ne perds aucun tableau, encadré, CTA
 ❌ Ne dégrade pas la structure visuelle`;
 
-            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys4}, {role:'user', content: usr4}], 0.3, 10000);
+            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys4}, {role:'user', content: usr4}], 0.3, 8000);
             job.logs.push({ step: 'rewrite', iteration: job.iteration, usage: res?.usage, timestamp: new Date().toISOString() });
 
             const rewriteText = stripFences((res?.content || '').trim());
