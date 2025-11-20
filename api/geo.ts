@@ -10,7 +10,9 @@ function getSupabase() {
 
 async function put(bucket: string, path: string, text: string, contentType='application/json') {
   const sb = getSupabase();
-  await sb.storage.from(bucket).upload(path, new Blob([text]) as any, { upsert: true, contentType });
+  const { data, error } = await sb.storage.from(bucket).upload(path, new Blob([text]) as any, { upsert: true, contentType });
+  if (error) throw new Error(`Storage upload failed: ${error.message}`);
+  return data;
 }
 async function getJSON<T=any>(bucket: string, path: string): Promise<T|null> {
   const sb = getSupabase();
