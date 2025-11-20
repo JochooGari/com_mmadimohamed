@@ -895,6 +895,54 @@ Retourne: {"scores":{"seo":0,"geo":0},"breakdown":{},"strengths":[],"weaknesses"
               nextStep = 'rewrite';
               job.lastScore = scoreObj;
             }
+
+            // Auto-save article as template when workflow completes
+            if (completed && job.bestArticle) {
+              try {
+                let sections = [];
+                try {
+                  const articleData = JSON.parse(job.bestArticle);
+                  sections = articleData.sections || [];
+                } catch {}
+
+                const htmlContent = sections.map((s: any) => s.html || '').join('\n');
+                const templateId = `wf_${Date.now()}`;
+                const record = {
+                  id: templateId,
+                  html: htmlContent,
+                  url: `workflow:${jobId}`,
+                  outline: extractOutline(htmlContent),
+                  metadata: {
+                    topic: job.topic,
+                    jobId,
+                    bestScore: job.bestScore,
+                    iterations: job.iteration,
+                    scores: job.scores,
+                    status: job.status,
+                    generatedAt: new Date().toISOString()
+                  },
+                  createdAt: new Date().toISOString()
+                };
+
+                await put('agents', `geo/articles/${templateId}.json`, JSON.stringify(record, null, 2));
+
+                const idx = (await getJSON<any>('agents', 'geo/templates/index.json')) || { items: [] };
+                idx.items.unshift({
+                  id: templateId,
+                  title: job.topic || 'Article GEO',
+                  createdAt: record.createdAt,
+                  url: record.url,
+                  score: job.bestScore,
+                  iterations: job.iteration,
+                  status: job.status
+                });
+                await put('agents', 'geo/templates/index.json', JSON.stringify(idx, null, 2));
+
+                job.templateId = templateId;
+              } catch (err: any) {
+                console.error('Failed to auto-save article:', err);
+              }
+            }
           }
 
           // ===== STEP: REWRITE =====
