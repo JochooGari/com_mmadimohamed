@@ -113,21 +113,8 @@ export default async function handler(req: any, res: any) {
             max_output_tokens: maxTokens
           };
           // Add text.format for JSON mode in GPT-5 Responses API
-          if (response_format?.type === 'json_object') {
-            body.text = {
-              format: {
-                type: 'json_schema',
-                json_schema: {
-                  name: 'json_response',
-                  strict: true,
-                  schema: {
-                    type: 'object',
-                    properties: {},
-                    additionalProperties: true
-                  }
-                }
-              }
-            };
+          if (response_format) {
+            body.response_format = response_format;
           }
         } else {
           url = 'https://api.openai.com/v1/chat/completions';
@@ -173,7 +160,20 @@ export default async function handler(req: any, res: any) {
     const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      return res.status(r.status).json({ error: data?.error?.message || data?.message || r.statusText });
+      // Detailed error logging for debugging
+      console.error('❌ API Error:', {
+        provider,
+        model,
+        status: r.status,
+        statusText: r.statusText,
+        errorData: JSON.stringify(data, null, 2),
+        requestBody: JSON.stringify(body, null, 2)
+      });
+      return res.status(r.status).json({
+        error: data?.error?.message || data?.message || r.statusText,
+        details: data,
+        requestBody: body
+      });
     }
     const normalized = normalize(provider, data, model);
     // Debug: include raw response structure for GPT-5
@@ -198,5 +198,4 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: err?.message || 'Server error' });
   }
 }
-
 
