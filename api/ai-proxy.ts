@@ -112,6 +112,23 @@ export default async function handler(req: any, res: any) {
             reasoning: { effort: 'low' },
             max_output_tokens: maxTokens
           };
+          // Add text.format for JSON mode in GPT-5 Responses API
+          if (response_format?.type === 'json_object') {
+            body.text = {
+              format: {
+                type: 'json_schema',
+                json_schema: {
+                  name: 'json_response',
+                  strict: true,
+                  schema: {
+                    type: 'object',
+                    properties: {},
+                    additionalProperties: true
+                  }
+                }
+              }
+            };
+          }
         } else {
           url = 'https://api.openai.com/v1/chat/completions';
           body = { model, messages, temperature, max_tokens: maxTokens };
