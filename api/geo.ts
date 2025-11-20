@@ -42,6 +42,52 @@ async function getJSON<T=any>(bucket: string, path: string): Promise<T|null> {
   }
 }
 
+// ===== DATABASE HELPERS FOR SECTIONAL STORAGE =====
+async function saveSection(jobId: string, sectionIndex: number, sectionId: string, sectionTitle: string, content: any) {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('articles_content')
+    .upsert({
+      job_id: jobId,
+      section_index: sectionIndex,
+      section_id: sectionId,
+      section_title: sectionTitle,
+      content: content,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'job_id,section_index'
+    })
+    .select();
+
+  if (error) throw new Error(`Failed to save section ${sectionIndex}: ${error.message}`);
+  console.log(`✅ Section ${sectionIndex} saved to DB: ${sectionTitle}`);
+  return data;
+}
+
+async function getAllSections(jobId: string): Promise<any[]> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('articles_content')
+    .select('*')
+    .eq('job_id', jobId)
+    .order('section_index', { ascending: true });
+
+  if (error) throw new Error(`Failed to fetch sections: ${error.message}`);
+  console.log(`✅ Retrieved ${data?.length || 0} sections from DB`);
+  return data || [];
+}
+
+async function deleteSections(jobId: string) {
+  const sb = getSupabase();
+  const { error } = await sb
+    .from('articles_content')
+    .delete()
+    .eq('job_id', jobId);
+
+  if (error) console.error(`⚠️  Failed to delete old sections: ${error.message}`);
+  else console.log(`✅ Deleted old sections for job ${jobId}`);
+}
+
 function extractOutline(html: string) {
   const getText = (re: RegExp) => {
     const arr: { title:string; level:number; id:string }[] = [];
@@ -999,94 +1045,227 @@ Retourne UNIQUEMENT un JSON valide:
               job.research = JSON.parse(stripFences((res?.content || '').trim()));
             } catch { job.research = { articles: [], stats: [], experts: [], keywords: [] }; }
 
-            nextStep = 'draft_part1';
+            nextStep = 'draft_sections';
           }
 
-          // ===== STEP: DRAFT PART 1 (H1 + intro + 3 premières sections H2) =====
-          else if (step === 'draft_part1') {
-            const outlineParts = (job.outline || '').split('|').map(s => s.trim());
-            const firstSections = outlineParts.slice(0, 4); // H1 + 3 premiers H2
+          // ===== NEW STEP: DRAFT SECTIONS (Sectional generation with 2500 tokens each) =====
+          else if (step === 'draft_sections') {
+            console.log('🚀 === SECTIONAL GENERATION START ===');
 
-            const sys1 = 'You output ONLY compact JSON. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
-            const usr1 = `Tu es un expert GEO & SEO, spécialiste Neil Patel.
-Rédige la PREMIÈRE PARTIE d'un article long (2500-3000 mots pour cette partie).
+            // Clean up any old sections from previous runs
+            await deleteSections(jobId);
+
+            const outlineParts = (job.outline || '').split('|').map(s => s.trim()).filter(Boolean);
+            console.log(`📋 Outline parts: ${outlineParts.length} sections`);
+
+            // 1. Generate H1 + Intro Section (Section 0)
+            console.log('\n📝 Generating Section 0: H1 + Intro');
+            const introSys = 'You output ONLY compact JSON. Return strictly {"id":"intro","title":"Introduction","html":"..."} in French.';
+            const introUsr = `Tu es un expert GEO & SEO, spécialiste Neil Patel.
+Rédige UNIQUEMENT le H1 et l'introduction d'un article (150-200 mots max).
 
 SUJET: ${job.topic}
-SECTIONS À TRAITER: ${firstSections.join(' | ')}
-CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 6000)}
+CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 3000)}
 
-STRUCTURE OBLIGATOIRE:
-1. H1 titre SEO + intro 100-150 mots (hook, promise, valeur)
-2. 3 premières sections H2 complètes (800-1000 mots CHACUNE)
-
-Chaque H2:
-- Angle: Pain point → Résolution → Tips
-- H3 pour structurer
-- Paragraphes courts (2-4 lignes)
-- Tableaux HTML <table> si pertinent
-- Encadrés: <div class="tip-box"><strong>💡 Astuce:</strong>...</div>
-- Encadrés: <div class="key-points"><h4>✅ Points clés:</h4><ul><li>...</li></ul></div>
-- Liens externes fiables <a href="" target="_blank" rel="noopener">
-- 1 lien tous les 150-200 mots
-- Stats sourcées
+STRUCTURE:
+- H1 titre SEO accrocheur (<h1>...</h1>)
+- Introduction 150-200 mots:
+  * Hook (stat ou question)
+  * Promise (ce que le lecteur va apprendre)
+  * Valeur (pourquoi c'est important)
 
 Schema.org Article:
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Article","headline":"${job.topic}","author":{"@type":"Person","name":"Expert"},"inLanguage":"fr"}
+{"@context":"https://schema.org","@type":"Article","headline":"${job.topic}","author":{"@type":"Person","name":"Expert"},"inLanguage":"fr","datePublished":"${new Date().toISOString()}"}
 </script>
 
-CTA milieu: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
+Return JSON format: {"id":"intro","title":"Introduction","html":"<h1>...</h1><p>...</p>..."}`;
 
-            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}], 0.3, 8000);
-            job.logs.push({ step: 'draft_part1', usage: res?.usage, timestamp: new Date().toISOString() });
+            const introRes = await callAI('openai', 'gpt-5.1', [
+              {role:'system', content: introSys},
+              {role:'user', content: introUsr}
+            ], 0.3, 2500);
 
-            // 🔎 === DIAGNOSTIC LOGS - WHERE IS TRUNCATION? ===
-            const rawContent = res?.content || '';
-            console.log('🔎 === DIAGNOSTIC DRAFT_PART1 ===');
-            console.log(`🔎 [0] finish_reason: ${res?.finish_reason || 'unknown'}`);
-            console.log(`🔎 [0a] usage: ${JSON.stringify(res?.usage)}`);
-            console.log(`🔎 [1] rawContent.length (from API): ${rawContent.length} chars`);
-            console.log(`🔎 [2] First 200 chars of raw: ${rawContent.slice(0, 200)}`);
-            console.log(`🔎 [3] Last 200 chars of raw: ${rawContent.slice(-200)}`);
+            job.logs.push({ step: 'draft_section_0', usage: introRes?.usage, finish_reason: introRes?.finish_reason, timestamp: new Date().toISOString() });
 
-            const part1Content = stripFences(rawContent.trim());
-            console.log(`🔎 [4] part1Content.length (after stripFences): ${part1Content.length} chars`);
-            console.log(`🔎 [5] First 100 chars: ${part1Content.slice(0, 100)}`);
-            console.log(`🔎 [6] Last 100 chars: ${part1Content.slice(-100)}`);
+            const introContent = stripFences((introRes?.content || '').trim());
+            const introData = JSON.parse(introContent);
 
-            // Verify JSON validity BEFORE upload
-            let jsonValid = false;
-            try {
-              JSON.parse(part1Content);
-              jsonValid = true;
-              console.log('🔎 [7] JSON valid BEFORE upload ✅');
-            } catch (e: any) {
-              console.log(`🔎 [7] JSON ALREADY INVALID BEFORE upload ❌: ${e.message}`);
-              console.log(`🔎 [7a] Error position: ${e.message.match(/position (\d+)/)?.[1] || 'unknown'}`);
+            await saveSection(jobId, 0, 'intro', 'Introduction', introData);
+            console.log(`✅ Section 0 saved: ${(introData.html || '').length} chars`);
+
+            // 2. Generate each H2 section individually (Sections 1-N)
+            for (let i = 1; i < outlineParts.length; i++) {
+              const sectionTitle = outlineParts[i];
+              console.log(`\n📝 Generating Section ${i}: ${sectionTitle}`);
+
+              const sectionSys = 'You output ONLY compact JSON. Return strictly {"id":"...","title":"...","html":"..."} in French.';
+              const sectionUsr = `Tu es un expert GEO & SEO, spécialiste Neil Patel.
+Rédige UNE SECTION H2 complète d'un article long (800-1000 mots).
+
+SUJET GLOBAL: ${job.topic}
+SECTION À TRAITER: ${sectionTitle}
+CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 3000)}
+
+STRUCTURE OBLIGATOIRE:
+- H2 titre: ${sectionTitle}
+- Contenu 800-1000 mots structuré avec:
+  * Angle: Pain point → Résolution → Tips concrets
+  * H3 pour structurer les sous-parties
+  * Paragraphes courts (2-4 lignes max)
+  * Tableaux HTML <table> si données comparatives
+  * Encadrés tips: <div class="tip-box"><strong>💡 Astuce:</strong>...</div>
+  * Encadrés key points: <div class="key-points"><h4>✅ Points clés:</h4><ul><li>...</li></ul></div>
+  * Liens externes fiables <a href="..." target="_blank" rel="noopener">source</a>
+  * Stats sourcées avec chiffres précis
+  * 1 lien tous les 150-200 mots
+
+CTA au milieu: <div class="cta-box"><strong>🎯 [Action]:</strong> [Message]</div>
+
+Return JSON: {"id":"section-${i}","title":"${sectionTitle}","html":"<h2>...</h2><p>...</p>..."}`;
+
+              const sectionRes = await callAI('openai', 'gpt-5.1', [
+                {role:'system', content: sectionSys},
+                {role:'user', content: sectionUsr}
+              ], 0.3, 2500);
+
+              job.logs.push({
+                step: `draft_section_${i}`,
+                usage: sectionRes?.usage,
+                finish_reason: sectionRes?.finish_reason,
+                timestamp: new Date().toISOString()
+              });
+
+              const sectionContent = stripFences((sectionRes?.content || '').trim());
+              const sectionData = JSON.parse(sectionContent);
+
+              await saveSection(jobId, i, `section-${i}`, sectionTitle, sectionData);
+              console.log(`✅ Section ${i} saved: ${(sectionData.html || '').length} chars`);
             }
 
-            // 🆕 Sauvegarder Part 1 séparément dans geo/articles/
-            try {
-              console.log(`🔎 [8] Starting upload: ${part1Content.length} chars → put('agents', 'geo/articles/${jobId}_part1.json', ...)`);
-              await put('agents', `geo/articles/${jobId}_part1.json`, part1Content);
-              console.log(`🔎 [9] Upload completed successfully ✅`);
-              job.articlePart1Ready = true;
-            } catch (error: any) {
-              console.error(`🔎 [10] Upload FAILED ❌: ${error.message}`);
-              job.status = 'error';
-              job.error = `Failed to save Part 1: ${error.message}`;
-              throw error;
-            }
+            // 3. Generate FAQ + Conclusion (Final Section)
+            const finalIndex = outlineParts.length;
+            console.log(`\n📝 Generating Section ${finalIndex}: FAQ + Conclusion`);
 
-            // Ne pas stocker dans job.article pour éviter la troncation
-            job.article = null;
-            nextStep = 'draft_part2';
+            const finalSys = 'You output ONLY compact JSON. Return strictly {"id":"conclusion","title":"FAQ & Conclusion","html":"..."} in French.';
+            const finalUsr = `Tu es un expert GEO & SEO, spécialiste Neil Patel.
+Rédige la FAQ et la conclusion d'un article.
+
+SUJET: ${job.topic}
+CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 3000)}
+
+STRUCTURE OBLIGATOIRE:
+
+1. FAQ (3-5 questions/réponses):
+<h2>FAQ</h2>
+[Questions pratiques avec réponses courtes]
+
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"...","acceptedAnswer":{"@type":"Answer","text":"..."}}]}
+</script>
+
+2. Conclusion-action (200-250 mots):
+<h2>Conclusion</h2>
+- Résumé des points clés (2-3 bullets)
+- Next steps concrets
+- Call-to-action final
+
+CTA final: <div class="cta-box"><strong>🎯 Prêt à passer à l'action ?</strong> [Message]</div>
+
+Return JSON: {"id":"conclusion","title":"FAQ & Conclusion","html":"<h2>FAQ</h2>..."}`;
+
+            const finalRes = await callAI('openai', 'gpt-5.1', [
+              {role:'system', content: finalSys},
+              {role:'user', content: finalUsr}
+            ], 0.3, 2500);
+
+            job.logs.push({
+              step: `draft_section_${finalIndex}`,
+              usage: finalRes?.usage,
+              finish_reason: finalRes?.finish_reason,
+              timestamp: new Date().toISOString()
+            });
+
+            const finalContent = stripFences((finalRes?.content || '').trim());
+            const finalData = JSON.parse(finalContent);
+
+            await saveSection(jobId, finalIndex, 'conclusion', 'FAQ & Conclusion', finalData);
+            console.log(`✅ Section ${finalIndex} (FAQ+Conclusion) saved: ${(finalData.html || '').length} chars`);
+
+            console.log('✅ === SECTIONAL GENERATION COMPLETE ===');
+            nextStep = 'assemble_article';
           }
 
-          // ===== STEP: DRAFT PART 2 (3 dernières sections + FAQ + Conclusion) =====
+          // ===== NEW STEP: ASSEMBLE ARTICLE (Reconstruct from DB sections) =====
+          else if (step === 'assemble_article') {
+            console.log('🔨 === ASSEMBLING ARTICLE FROM DB SECTIONS ===');
+
+            try {
+              // Retrieve all sections from database
+              const dbSections = await getAllSections(jobId);
+
+              if (dbSections.length === 0) {
+                throw new Error('No sections found in database');
+              }
+
+              console.log(`📦 Retrieved ${dbSections.length} sections from DB`);
+
+              // Extract HTML from each section's content JSONB
+              const sections = dbSections.map((dbSection: any) => ({
+                id: dbSection.content.id,
+                title: dbSection.content.title,
+                html: dbSection.content.html
+              }));
+
+              // Generate complete HTML
+              const html = generateHTMLFromSections(sections, jobId);
+              console.log(`✅ HTML assembled: ${html.length} chars from ${sections.length} sections`);
+
+              // Save HTML to storage
+              await put('agents', `geo/articles/${jobId}.html`, html, 'text/html');
+              console.log(`✅ HTML saved to geo/articles/${jobId}.html`);
+
+              // Update job metadata
+              job.htmlReady = true;
+              job.htmlUrl = `https://storage.supabase.co/v1/object/public/agents/geo/articles/${jobId}.html`;
+              job.sectionsCount = sections.length;
+              job.article = null; // Don't store in job object
+              job.bestArticle = null;
+              job.iteration = 1;
+
+              // Add verification metadata
+              job.verification = {
+                sectionsGenerated: dbSections.length,
+                htmlSize: html.length,
+                generationMethod: 'sectional_with_db',
+                generatedAt: new Date().toISOString(),
+                sectionsDetails: dbSections.map((s: any) => ({
+                  index: s.section_index,
+                  title: s.section_title,
+                  size: (s.content.html || '').length
+                }))
+              };
+
+              console.log(`✅ Assembly verification:`, job.verification);
+              console.log('✅ === ASSEMBLY COMPLETE ===');
+
+              // Skip review/enrich and go directly to done
+              nextStep = 'done';
+
+            } catch (error: any) {
+              console.error(`❌ Failed to assemble article:`, error.message);
+              job.status = 'error';
+              job.error = `Failed to assemble article: ${error.message}`;
+              job.htmlReady = false;
+              throw error;
+            }
+          }
+
+          // ===== LEGACY STEP: DRAFT PART 2 (Kept for backward compatibility) =====
           else if (step === 'draft_part2') {
+            console.log('⚠️  Using legacy draft_part2 - consider migrating to draft_sections + assemble_article');
             const outlineParts = (job.outline || '').split('|').map(s => s.trim());
-            const lastSections = outlineParts.slice(4); // Dernières sections
+            const lastSections = outlineParts.slice(4);
 
             const sys2 = 'You output ONLY compact JSON. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
             const usr2 = `Tu es un expert GEO & SEO, spécialiste Neil Patel.
@@ -1120,84 +1299,25 @@ FAQ:
 
 CTA fin: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
 
-            const res2 = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys2}, {role:'user', content: usr2}], 0.3, 8000);
+            const res2 = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys2}, {role:'user', content: usr2}], 0.3, 2500);
             job.logs.push({ step: 'draft_part2', usage: res2?.usage, timestamp: new Date().toISOString() });
 
-            console.log(`🔎 [draft_part2] finish_reason: ${res2?.finish_reason || 'unknown'}`);
-            console.log(`🔎 [draft_part2] usage: ${JSON.stringify(res2?.usage)}`);
-
             const part2Content = stripFences((res2?.content || '').trim());
-            console.log(`✅ Part 2 generated: ${part2Content.length} chars`);
+            await put('agents', `geo/articles/${jobId}_part2.json`, part2Content);
 
-            // 🆕 Sauvegarder Part 2 séparément
-            try {
-              await put('agents', `geo/articles/${jobId}_part2.json`, part2Content);
-              console.log(`✅ Part 2 saved to geo/articles/${jobId}_part2.json`);
-            } catch (error: any) {
-              console.error(`❌ Failed to save Part 2:`, error.message);
-              job.status = 'error';
-              job.error = `Failed to save Part 2: ${error.message}`;
-              throw error;
-            }
+            const part1Data = await getJSON<any>('agents', `geo/articles/${jobId}_part1.json`);
+            const part2Data = JSON.parse(part2Content);
+            const merged = { sections: [...(part1Data.sections || []), ...(part2Data.sections || [])] };
 
-            // 🆕 Lire Part 1 et fusionner
-            let merged: any = null;
-            let part1DataSize = 0;
-            try {
-              // getJSON returns already-parsed JSON
-              const part1Data = await getJSON<any>('agents', `geo/articles/${jobId}_part1.json`);
-              if (!part1Data) throw new Error('Part 1 not found');
+            const html = generateHTMLFromSections(merged.sections, jobId);
+            await put('agents', `geo/articles/${jobId}.html`, html, 'text/html');
 
-              const part2Data = JSON.parse(part2Content);
-
-              merged = {
-                sections: [...(part1Data.sections || []), ...(part2Data.sections || [])]
-              };
-
-              part1DataSize = JSON.stringify(part1Data).length;
-              console.log(`✅ Merged ${merged.sections.length} sections`);
-            } catch (error: any) {
-              console.error(`❌ Failed to merge parts:`, error.message);
-              job.status = 'error';
-              job.error = `Failed to merge parts: ${error.message}`;
-              throw error;
-            }
-
-            // 🆕 Générer HTML immédiatement
-            try {
-              const html = generateHTMLFromSections(merged.sections, jobId);
-              console.log(`✅ HTML generated: ${html.length} chars, ${merged.sections.length} sections`);
-
-              // Sauvegarder HTML
-              await put('agents', `geo/articles/${jobId}.html`, html, 'text/html');
-              console.log(`✅ HTML saved to geo/articles/${jobId}.html`);
-
-              // Mise à jour du job avec metadata uniquement
-              job.htmlReady = true;
-              job.htmlUrl = `https://storage.supabase.co/v1/object/public/agents/geo/articles/${jobId}.html`;
-              job.sectionsCount = merged.sections.length;
-              job.article = null; // Libérer la mémoire
-              job.bestArticle = null;
-              job.iteration = 1;
-
-              // Ajouter verification
-              job.verification = {
-                part1Size: part1DataSize,
-                part2Size: part2Content.length,
-                htmlSize: html.length,
-                sectionsCount: merged.sections.length,
-                generatedAt: new Date().toISOString()
-              };
-
-              console.log(`✅ Verification:`, job.verification);
-
-            } catch (error: any) {
-              console.error(`❌ Failed to generate HTML:`, error.message);
-              job.status = 'error';
-              job.error = `Failed to generate HTML: ${error.message}`;
-              job.htmlReady = false;
-              throw error;
-            }
+            job.htmlReady = true;
+            job.htmlUrl = `https://storage.supabase.co/v1/object/public/agents/geo/articles/${jobId}.html`;
+            job.sectionsCount = merged.sections.length;
+            job.article = null;
+            job.bestArticle = null;
+            job.iteration = 1;
 
             nextStep = 'review';
           }
