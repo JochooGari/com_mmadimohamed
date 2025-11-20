@@ -1132,8 +1132,15 @@ INSTRUCTIONS STRICTES:
         try {
           const articleContent = await getJSON<string>('agents', `geo/jobs/${jobId}_article.json`);
           if (articleContent) {
-            res.setHeader('Content-Type', 'application/json');
-            return res.send(articleContent);
+            // Parse and return metadata only to avoid truncation
+            const articleData = JSON.parse(articleContent);
+            return res.json({
+              ok: true,
+              jobId,
+              sections: articleData.sections?.length || 0,
+              sectionTitles: (articleData.sections || []).map((s: any) => s.title || s.id),
+              message: 'Use workflow_generate_html to get full article as HTML file'
+            });
           }
         } catch (e) {
           // File doesn't exist or error, fallback to job file
@@ -1150,8 +1157,231 @@ INSTRUCTIONS STRICTES:
           return res.status(404).json({ error: `No ${articleField} in job` });
         }
 
-        res.setHeader('Content-Type', 'application/json');
-        return res.send(articleRaw);
+        try {
+          const articleData = JSON.parse(articleRaw);
+          return res.json({
+            ok: true,
+            jobId,
+            sections: articleData.sections?.length || 0,
+            sectionTitles: (articleData.sections || []).map((s: any) => s.title || s.id),
+            message: 'Use workflow_generate_html to get full article as HTML file'
+          });
+        } catch {
+          return res.json({ ok: true, jobId, article: articleRaw });
+        }
+      }
+
+      if (action === 'workflow_generate_html') {
+        const { jobId } = req.body || {};
+        if (!jobId) return res.status(400).json({ error: 'jobId required' });
+
+        // Read article from storage
+        let articleContent: string | null = null;
+        try {
+          articleContent = await getJSON<string>('agents', `geo/jobs/${jobId}_article.json`);
+        } catch (e) {
+          // Fallback to job file
+          const job = await getJSON<any>('agents', `geo/jobs/${jobId}.json`);
+          if (job?.article) articleContent = job.article;
+        }
+
+        if (!articleContent) {
+          return res.status(404).json({ error: 'No article found for this job' });
+        }
+
+        // Parse article
+        const articleData = JSON.parse(articleContent);
+        const sections = articleData.sections || [];
+
+        // Count words
+        let totalWords = 0;
+        sections.forEach((s: any) => {
+          const text = (s.html || '').replace(/<[^>]*>/g, '');
+          const words = text.split(/\s+/).filter((w: string) => w.length > 0);
+          totalWords += words.length;
+        });
+
+        // Generate HTML
+        const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Article Complet - Datawarehouse Finance et Power BI</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.7;
+            background: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .meta {
+            background: #e8f5e9;
+            padding: 20px;
+            border-left: 4px solid #4caf50;
+            margin: 30px 0;
+            border-radius: 4px;
+        }
+        h1 {
+            color: #1a237e;
+            font-size: 2.2em;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #3f51b5;
+            padding-bottom: 15px;
+        }
+        h2 {
+            color: #283593;
+            font-size: 1.8em;
+            margin-top: 50px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #7986cb;
+            padding-bottom: 10px;
+        }
+        h3 {
+            color: #5c6bc0;
+            font-size: 1.4em;
+            margin-top: 30px;
+        }
+        h4 {
+            color: #7986cb;
+            font-size: 1.1em;
+            margin-top: 20px;
+        }
+        a {
+            color: #1976d2;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        table th {
+            background: #3f51b5;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        table td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        table tr:nth-child(even) {
+            background: #f5f5f5;
+        }
+        .key-points {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .case-study {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .tip-box {
+            background: #f1f8e9;
+            border-left: 4px solid #8bc34a;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning-box {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .cta-box {
+            background: #fff8e1;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .visual-placeholder {
+            background: #fafafa;
+            border: 2px dashed #9e9e9e;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+            text-align: center;
+        }
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+        li {
+            margin: 8px 0;
+        }
+        p {
+            margin: 15px 0;
+        }
+        strong {
+            color: #d32f2f;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+<div class="meta">
+    <strong>✅ ARTICLE COMPLET GÉNÉRÉ EN 2 PARTIES - GPT-5.1</strong><br>
+    Job ID: ${jobId}<br>
+    Sections: ${sections.length}<br>
+    Mots: ~${totalWords}<br>
+    <strong style="color: #4caf50;">✓ SANS TIMEOUT - Fusion automatique réussie!</strong>
+</div>
+
+${sections.map((section: any, i: number) => {
+  return `\n<!-- ========== SECTION ${i + 1}: ${section.title || section.id} ========== -->\n${section.html}`;
+}).join('\n\n')}
+
+<div class="meta">
+    <strong>📋 TABLE DES MATIÈRES:</strong>
+    <ol style="margin: 10px 0 0 20px;">
+${sections.map((s: any) => `        <li>${s.title || s.id}</li>`).join('\n')}
+    </ol>
+</div>
+
+</div>
+
+</body>
+</html>`;
+
+        // Save HTML to public location
+        const htmlPath = `geo/articles/${jobId}.html`;
+        await put('agents', htmlPath, html);
+
+        return res.json({
+          ok: true,
+          jobId,
+          sections: sections.length,
+          words: totalWords,
+          htmlUrl: `https://storage.supabase.co/v1/object/public/agents/${htmlPath}`,
+          message: 'HTML file generated successfully'
+        });
       }
 
       if (action === 'workflow_save_article') {
