@@ -1040,16 +1040,37 @@ CTA milieu: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
             const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}], 0.3, 4000);
             job.logs.push({ step: 'draft_part1', usage: res?.usage, timestamp: new Date().toISOString() });
 
-            const part1Content = stripFences((res?.content || '').trim());
-            console.log(`✅ Part 1 generated: ${part1Content.length} chars`);
+            // 🔎 === DIAGNOSTIC LOGS - WHERE IS TRUNCATION? ===
+            const rawContent = res?.content || '';
+            console.log('🔎 === DIAGNOSTIC DRAFT_PART1 ===');
+            console.log(`🔎 [1] rawContent.length (from API): ${rawContent.length} chars`);
+            console.log(`🔎 [2] First 200 chars of raw: ${rawContent.slice(0, 200)}`);
+            console.log(`🔎 [3] Last 200 chars of raw: ${rawContent.slice(-200)}`);
+
+            const part1Content = stripFences(rawContent.trim());
+            console.log(`🔎 [4] part1Content.length (after stripFences): ${part1Content.length} chars`);
+            console.log(`🔎 [5] First 100 chars: ${part1Content.slice(0, 100)}`);
+            console.log(`🔎 [6] Last 100 chars: ${part1Content.slice(-100)}`);
+
+            // Verify JSON validity BEFORE upload
+            let jsonValid = false;
+            try {
+              JSON.parse(part1Content);
+              jsonValid = true;
+              console.log('🔎 [7] JSON valid BEFORE upload ✅');
+            } catch (e: any) {
+              console.log(`🔎 [7] JSON ALREADY INVALID BEFORE upload ❌: ${e.message}`);
+              console.log(`🔎 [7a] Error position: ${e.message.match(/position (\d+)/)?.[1] || 'unknown'}`);
+            }
 
             // 🆕 Sauvegarder Part 1 séparément dans geo/articles/
             try {
+              console.log(`🔎 [8] Starting upload: ${part1Content.length} chars → put('agents', 'geo/articles/${jobId}_part1.json', ...)`);
               await put('agents', `geo/articles/${jobId}_part1.json`, part1Content);
-              console.log(`✅ Part 1 saved to geo/articles/${jobId}_part1.json`);
+              console.log(`🔎 [9] Upload completed successfully ✅`);
               job.articlePart1Ready = true;
             } catch (error: any) {
-              console.error(`❌ Failed to save Part 1:`, error.message);
+              console.error(`🔎 [10] Upload FAILED ❌: ${error.message}`);
               job.status = 'error';
               job.error = `Failed to save Part 1: ${error.message}`;
               throw error;
