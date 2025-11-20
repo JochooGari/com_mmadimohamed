@@ -1011,6 +1011,26 @@ Fixes: ${(job.lastScore?.fixes || []).join(', ')}`;
         });
       }
 
+      if (action === 'workflow_get_article') {
+        const { jobId, field = 'article' } = req.body || {};
+        if (!jobId) return res.status(400).json({ error: 'jobId required' });
+
+        const job = await getJSON<any>('agents', `geo/jobs/${jobId}.json`);
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+
+        const articleField = field === 'best' ? 'bestArticle' : 'article';
+        const articleRaw = job[articleField];
+
+        if (!articleRaw) {
+          return res.status(404).json({ error: `No ${articleField} in job` });
+        }
+
+        // Return only the article JSON string - no wrapping
+        // Set content-type to text/plain to avoid JSON parsing limits
+        res.setHeader('Content-Type', 'application/json');
+        return res.send(articleRaw);
+      }
+
       if (action === 'workflow_save_article') {
         const { jobId, title } = req.body || {};
         if (!jobId) return res.status(400).json({ error: 'jobId required' });
