@@ -1176,21 +1176,25 @@ INSTRUCTIONS STRICTES:
         if (!jobId) return res.status(400).json({ error: 'jobId required' });
 
         // Read article from storage
-        let articleContent: string | null = null;
+        let articleData: any = null;
         try {
-          articleContent = await getJSON<string>('agents', `geo/jobs/${jobId}_article.json`);
+          // Try reading from separate article file (returns parsed JSON object)
+          articleData = await getJSON<any>('agents', `geo/jobs/${jobId}_article.json`);
         } catch (e) {
           // Fallback to job file
           const job = await getJSON<any>('agents', `geo/jobs/${jobId}.json`);
-          if (job?.article) articleContent = job.article;
+          if (job?.article) {
+            try {
+              articleData = JSON.parse(job.article);
+            } catch {
+              articleData = job.article;
+            }
+          }
         }
 
-        if (!articleContent) {
-          return res.status(404).json({ error: 'No article found for this job' });
+        if (!articleData || !articleData.sections) {
+          return res.status(404).json({ error: 'No article found for this job', debug: { hasData: !!articleData, hasSections: articleData?.sections } });
         }
-
-        // Parse article
-        const articleData = JSON.parse(articleContent);
         const sections = articleData.sections || [];
 
         // Count words
