@@ -102,10 +102,11 @@ export default async function handler(req: any, res: any) {
         // GPT-5 uses Responses API with different format
         if (model.startsWith('gpt-5')) {
           url = 'https://api.openai.com/v1/responses';
-          // Convert messages to single input string for Responses API
-          const systemMsg = messages.find(m => m.role === 'system')?.content || '';
-          const userMsgs = messages.filter(m => m.role !== 'system').map(m => m.content).join('\n\n');
-          const input = systemMsg ? `${systemMsg}\n\n${userMsgs}` : userMsgs;
+          // Convert messages to structured input array for Responses API (role/content[type: input_text])
+          const input = messages.map(m => ({
+            role: m.role,
+            content: [{ type: 'input_text', text: m.content }]
+          }));
           body = {
             model,
             input,
@@ -214,4 +215,3 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: err?.message || 'Server error' });
   }
 }
-

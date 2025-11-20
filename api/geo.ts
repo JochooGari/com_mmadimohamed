@@ -1075,6 +1075,7 @@ Retourne UNIQUEMENT un JSON valide:
 CRITICAL RULES:
 - Output MUST be valid JSON (parseable by JSON.parse())
 - All quotes inside HTML content MUST be properly escaped
+- Inside HTML, prefer apostrophes (') for French contractions like l'automatisation, d'excellence. Avoid raw " characters except for HTML attributes.
 - NO line breaks inside JSON strings
 - Format: {"id":"intro","title":"Introduction","html":"<h1>...</h1><p>...</p>"}
 - All content in French`;
@@ -1121,6 +1122,7 @@ Return ONLY this JSON (no other text): {"id":"intro","title":"Introduction","htm
 CRITICAL RULES:
 - Output MUST be valid JSON (parseable by JSON.parse())
 - All quotes inside HTML content MUST be properly escaped
+- Inside HTML, prefer apostrophes (') for French contractions like l'automatisation, d'excellence. Avoid raw " characters except for HTML attributes.
 - NO line breaks inside JSON strings
 - Format: {"id":"section-${i}","title":"${sectionTitle}","html":"<h2>...</h2><p>...</p>"}
 - All content in French`;
@@ -1176,6 +1178,7 @@ Return ONLY this JSON (no other text): {"id":"section-${i}","title":"${sectionTi
 CRITICAL RULES:
 - Output MUST be valid JSON (parseable by JSON.parse())
 - All quotes inside HTML content MUST be properly escaped
+- Inside HTML, prefer apostrophes (') for French contractions like l'automatisation, d'excellence. Avoid raw " characters except for HTML attributes.
 - NO line breaks inside JSON strings
 - Format: {"id":"conclusion","title":"FAQ & Conclusion","html":"<h2>FAQ</h2>..."}
 - All content in French`;
@@ -1941,5 +1944,4 @@ ${sections.map((s: any) => `        <li>${s.title || s.id}</li>`).join('\n')}
     return res.status(500).json({ error: e?.message || 'Server error' });
   }
 }
-
 
