@@ -120,9 +120,15 @@ export default async function handler(req: any, res: any) {
                 name: 'json_response',
                 schema: {
                   type: 'object',
-                  additionalProperties: true
+                  properties: {
+                    id: { type: 'string' },
+                    title: { type: 'string' },
+                    html: { type: 'string' }
+                  },
+                  required: ['id', 'title', 'html'],
+                  additionalProperties: false
                 },
-                strict: false
+                strict: true
               }
             };
           }
