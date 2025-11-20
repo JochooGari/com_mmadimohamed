@@ -80,8 +80,8 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { provider = 'openai', model, messages, temperature = 0.2, maxTokens = 800 } = (req.body || {}) as {
-      provider: string; model: string; messages: Message[]; temperature?: number; maxTokens?: number;
+    const { provider = 'openai', model, messages, temperature = 0.2, maxTokens = 800, response_format } = (req.body || {}) as {
+      provider: string; model: string; messages: Message[]; temperature?: number; maxTokens?: number; response_format?: { type: 'json_object' | 'text' };
     };
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -115,6 +115,10 @@ export default async function handler(req: any, res: any) {
         } else {
           url = 'https://api.openai.com/v1/chat/completions';
           body = { model, messages, temperature, max_tokens: maxTokens };
+          // Add response_format if provided (JSON mode)
+          if (response_format) {
+            body.response_format = response_format;
+          }
         }
         break;
       }

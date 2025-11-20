@@ -1013,8 +1013,15 @@ Retourne UNIQUEMENT un JSON valide:
         if (!job) return res.status(404).json({ error: 'Job not found' });
 
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
-        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=2000) => {
-          const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, model, messages, temperature, maxTokens }) });
+        const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=2000, responseFormat?: 'json_object' | 'text') => {
+          const body: any = { provider, model, messages, temperature, maxTokens };
+
+          // Add response_format if json_object requested (OpenAI only)
+          if (responseFormat === 'json_object') {
+            body.response_format = { type: 'json_object' };
+          }
+
+          const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
           if (!r.ok) throw new Error(`${provider} ${model} ${r.status}`);
           return r.json();
         };
@@ -1060,7 +1067,14 @@ Retourne UNIQUEMENT un JSON valide:
 
             // 1. Generate H1 + Intro Section (Section 0)
             console.log('\n📝 Generating Section 0: H1 + Intro');
-            const introSys = 'You output ONLY compact JSON. Return strictly {"id":"intro","title":"Introduction","html":"..."} in French.';
+            const introSys = `You are a JSON generation assistant. You MUST output ONLY valid JSON.
+CRITICAL RULES:
+- Output MUST be valid JSON (parseable by JSON.parse())
+- All quotes inside HTML content MUST be properly escaped
+- NO line breaks inside JSON strings
+- Format: {"id":"intro","title":"Introduction","html":"<h1>...</h1><p>...</p>"}
+- All content in French`;
+
             const introUsr = `Tu es un expert GEO & SEO, spécialiste Neil Patel.
 Rédige UNIQUEMENT le H1 et l'introduction d'un article (150-200 mots max).
 
@@ -1079,12 +1093,12 @@ Schema.org Article:
 {"@context":"https://schema.org","@type":"Article","headline":"${job.topic}","author":{"@type":"Person","name":"Expert"},"inLanguage":"fr","datePublished":"${new Date().toISOString()}"}
 </script>
 
-Return JSON format: {"id":"intro","title":"Introduction","html":"<h1>...</h1><p>...</p>..."}`;
+Return ONLY this JSON (no other text): {"id":"intro","title":"Introduction","html":"<h1>...</h1><p>...</p>..."}`;
 
             const introRes = await callAI('openai', 'gpt-5.1', [
               {role:'system', content: introSys},
               {role:'user', content: introUsr}
-            ], 0.3, 2500);
+            ], 0.3, 2500, 'json_object');
 
             job.logs.push({ step: 'draft_section_0', usage: introRes?.usage, finish_reason: introRes?.finish_reason, timestamp: new Date().toISOString() });
 
@@ -1099,7 +1113,14 @@ Return JSON format: {"id":"intro","title":"Introduction","html":"<h1>...</h1><p>
               const sectionTitle = outlineParts[i];
               console.log(`\n📝 Generating Section ${i}: ${sectionTitle}`);
 
-              const sectionSys = 'You output ONLY compact JSON. Return strictly {"id":"...","title":"...","html":"..."} in French.';
+              const sectionSys = `You are a JSON generation assistant. You MUST output ONLY valid JSON.
+CRITICAL RULES:
+- Output MUST be valid JSON (parseable by JSON.parse())
+- All quotes inside HTML content MUST be properly escaped
+- NO line breaks inside JSON strings
+- Format: {"id":"section-${i}","title":"${sectionTitle}","html":"<h2>...</h2><p>...</p>"}
+- All content in French`;
+
               const sectionUsr = `Tu es un expert GEO & SEO, spécialiste Neil Patel.
 Rédige UNE SECTION H2 complète d'un article long (800-1000 mots).
 
@@ -1122,12 +1143,12 @@ STRUCTURE OBLIGATOIRE:
 
 CTA au milieu: <div class="cta-box"><strong>🎯 [Action]:</strong> [Message]</div>
 
-Return JSON: {"id":"section-${i}","title":"${sectionTitle}","html":"<h2>...</h2><p>...</p>..."}`;
+Return ONLY this JSON (no other text): {"id":"section-${i}","title":"${sectionTitle}","html":"<h2>...</h2><p>...</p>..."}`;
 
               const sectionRes = await callAI('openai', 'gpt-5.1', [
                 {role:'system', content: sectionSys},
                 {role:'user', content: sectionUsr}
-              ], 0.3, 2500);
+              ], 0.3, 2500, 'json_object');
 
               job.logs.push({
                 step: `draft_section_${i}`,
@@ -1147,7 +1168,14 @@ Return JSON: {"id":"section-${i}","title":"${sectionTitle}","html":"<h2>...</h2>
             const finalIndex = outlineParts.length;
             console.log(`\n📝 Generating Section ${finalIndex}: FAQ + Conclusion`);
 
-            const finalSys = 'You output ONLY compact JSON. Return strictly {"id":"conclusion","title":"FAQ & Conclusion","html":"..."} in French.';
+            const finalSys = `You are a JSON generation assistant. You MUST output ONLY valid JSON.
+CRITICAL RULES:
+- Output MUST be valid JSON (parseable by JSON.parse())
+- All quotes inside HTML content MUST be properly escaped
+- NO line breaks inside JSON strings
+- Format: {"id":"conclusion","title":"FAQ & Conclusion","html":"<h2>FAQ</h2>..."}
+- All content in French`;
+
             const finalUsr = `Tu es un expert GEO & SEO, spécialiste Neil Patel.
 Rédige la FAQ et la conclusion d'un article.
 
@@ -1172,12 +1200,12 @@ STRUCTURE OBLIGATOIRE:
 
 CTA final: <div class="cta-box"><strong>🎯 Prêt à passer à l'action ?</strong> [Message]</div>
 
-Return JSON: {"id":"conclusion","title":"FAQ & Conclusion","html":"<h2>FAQ</h2>..."}`;
+Return ONLY this JSON (no other text): {"id":"conclusion","title":"FAQ & Conclusion","html":"<h2>FAQ</h2>..."}`;
 
             const finalRes = await callAI('openai', 'gpt-5.1', [
               {role:'system', content: finalSys},
               {role:'user', content: finalUsr}
-            ], 0.3, 2500);
+            ], 0.3, 2500, 'json_object');
 
             job.logs.push({
               step: `draft_section_${finalIndex}`,
