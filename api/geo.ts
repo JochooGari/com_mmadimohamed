@@ -1093,17 +1093,19 @@ CTA fin: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
 
             // 🆕 Lire Part 1 et fusionner
             let merged: any = null;
+            let part1DataSize = 0;
             try {
-              const part1Raw = await getJSON<string>('agents', `geo/articles/${jobId}_part1.json`);
-              if (!part1Raw) throw new Error('Part 1 not found');
+              // getJSON returns already-parsed JSON
+              const part1Data = await getJSON<any>('agents', `geo/articles/${jobId}_part1.json`);
+              if (!part1Data) throw new Error('Part 1 not found');
 
-              const part1Data = JSON.parse(part1Raw);
               const part2Data = JSON.parse(part2Content);
 
               merged = {
                 sections: [...(part1Data.sections || []), ...(part2Data.sections || [])]
               };
 
+              part1DataSize = JSON.stringify(part1Data).length;
               console.log(`✅ Merged ${merged.sections.length} sections`);
             } catch (error: any) {
               console.error(`❌ Failed to merge parts:`, error.message);
@@ -1131,7 +1133,7 @@ CTA fin: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
 
               // Ajouter verification
               job.verification = {
-                part1Size: part1Raw?.length || 0,
+                part1Size: part1DataSize,
                 part2Size: part2Content.length,
                 htmlSize: html.length,
                 sectionsCount: merged.sections.length,
