@@ -1022,7 +1022,11 @@ Retourne UNIQUEMENT un JSON valide:
           }
 
           const r = await fetch(`${base}/api/ai-proxy`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-          if (!r.ok) throw new Error(`${provider} ${model} ${r.status}`);
+          if (!r.ok) {
+            const errorData = await r.json().catch(() => ({}));
+            console.error('❌ callAI Error:', { provider, model, status: r.status, errorData });
+            throw new Error(`${provider} ${model} ${r.status}: ${JSON.stringify(errorData)}`);
+          }
           return r.json();
         };
 
