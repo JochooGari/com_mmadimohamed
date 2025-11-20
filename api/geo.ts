@@ -802,112 +802,110 @@ Retourne UNIQUEMENT un JSON valide:
               job.research = JSON.parse(stripFences((res?.content || '').trim()));
             } catch { job.research = { articles: [], stats: [], experts: [], keywords: [] }; }
 
-            nextStep = 'draft';
+            nextStep = 'draft_part1';
           }
 
-          // ===== STEP: DRAFT =====
-          else if (step === 'draft') {
+          // ===== STEP: DRAFT PART 1 (H1 + intro + 3 premières sections H2) =====
+          else if (step === 'draft_part1') {
+            const outlineParts = (job.outline || '').split('|').map(s => s.trim());
+            const firstSections = outlineParts.slice(0, 4); // H1 + 3 premiers H2
+
             const sys1 = 'You output ONLY compact JSON. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
-            const usr1 = `Tu es un expert GEO & SEO, spécialiste de l'écriture à la Neil Patel.
-Ta mission : générer un article LONG (5000+ mots), structuré, avec un fort scoring IA, qui maximise la lisibilité, l'engagement et le référencement SEO.
+            const usr1 = `Tu es un expert GEO & SEO, spécialiste Neil Patel.
+Rédige la PREMIÈRE PARTIE d'un article long (2500-3000 mots pour cette partie).
 
 SUJET: ${job.topic}
-OUTLINE: ${job.outline}
-CONTEXTE RECHERCHE: ${JSON.stringify(job.research || {}).slice(0, 6000)}
+SECTIONS À TRAITER: ${firstSections.join(' | ')}
+CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 6000)}
 
-═══════════════════════════════════════════════════════════════════════════════
 STRUCTURE OBLIGATOIRE:
-═══════════════════════════════════════════════════════════════════════════════
+1. H1 titre SEO + intro 100-150 mots (hook, promise, valeur)
+2. 3 premières sections H2 complètes (800-1000 mots CHACUNE)
 
-1. TITRE SEO OPTIMISÉ (H1) - Accrocheur, avec mot-clé principal, promise claire
+Chaque H2:
+- Angle: Pain point → Résolution → Tips
+- H3 pour structurer
+- Paragraphes courts (2-4 lignes)
+- Tableaux HTML <table> si pertinent
+- Encadrés: <div class="tip-box"><strong>💡 Astuce:</strong>...</div>
+- Encadrés: <div class="key-points"><h4>✅ Points clés:</h4><ul><li>...</li></ul></div>
+- Liens externes fiables <a href="" target="_blank" rel="noopener">
+- 1 lien tous les 150-200 mots
+- Stats sourcées
 
-2. INTRODUCTION ACCROCHEUSE (100-150 mots)
-   - Hook fort qui capte l'attention
-   - Promise l'apprentissage ou la solution
-   - Annonce la valeur de l'article
+Schema.org Article:
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"${job.topic}","author":{"@type":"Person","name":"Expert"},"inLanguage":"fr"}
+</script>
 
-3. SECTIONS PRINCIPALES (5-7 H2 selon outline)
-   Chaque H2 DOIT contenir:
-   - 800-1200 mots MINIMUM
-   - Angle OBLIGATOIRE: Pain point → Résolution → Tips pratiques
-   - H3 pour structurer
-   - Paragraphes COURTS (2-4 lignes max)
-   - Langage simple et direct
-   - JAMAIS de longs blocs de texte, tout doit être skimmable
+CTA milieu: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
 
-4. ÉLÉMENTS VISUELS (tous les 400 mots MAX)
-   - Listes à puces ou numérotées
-   - Tableaux comparatifs HTML <table>
-   - Encadrés: <div class="tip-box"><strong>💡 Astuce:</strong> [texte]</div>
-   - Encadrés: <div class="warning-box"><strong>⚠️ Attention:</strong> [texte]</div>
-   - Descriptif visuel: <div class="visual-placeholder"><strong>📊 [Titre graphique]</strong><p>[Description schéma à intégrer]</p></div>
-
-5. ENCADRÉS OBLIGATOIRES PAR ARTICLE
-   - Au moins 1 ÉTUDE DE CAS / EXEMPLE RÉEL
-     Format: <div class="case-study"><h4>📊 Étude de cas: [Titre]</h4><p>[Contexte, chiffres, résultat]</p></div>
-   - Checklist ou points clés à CHAQUE H2
-     Format: <div class="key-points"><h4>✅ Points clés:</h4><ul><li>...</li></ul></div>
-
-6. TABLEAUX (minimum 1 par article)
-   - Format HTML <table border="1" style="border-collapse:collapse; width:100%;">
-   - Données comparatives, chiffrées, ou structurées
-   - Ex: comparaison outils, tarifs, fonctionnalités, checklist
-
-7. LIENS STRATÉGIQUES
-   - 1 lien externe fiable tous les 150-200 mots
-   - Sources: études, rapports, documentation officielle
-   - Format: <a href="URL" target="_blank" rel="noopener">texte ancre</a>
-   - Stats chiffrées avec sources citées
-
-8. CTA ÉDITORIAUX (2 minimum)
-   - 1 CTA milieu d'article
-   - 1 CTA fin d'article
-   Format: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Appel à l'action engageant]</div>
-
-9. FAQ (3-5 questions/réponses)
-   <h2>FAQ</h2>
-   [Questions/réponses]
-   <script type="application/ld+json">
-   {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[...]}
-   </script>
-
-10. CONCLUSION-ACTION
-    - Résumé des points clés
-    - Prochaines étapes concrètes
-    - Message motivant
-
-11. BALISAGE JSON-LD Article
-    <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"Article","headline":"...","description":"...","author":{"@type":"Person","name":"..."},"datePublished":"...","inLanguage":"fr"}
-    </script>
-
-═══════════════════════════════════════════════════════════════════════════════
-EXIGENCES DE QUALITÉ:
-═══════════════════════════════════════════════════════════════════════════════
-✅ MINIMUM 5000 mots (vise 6000-7000 mots)
-✅ TOUTES les sections H2 de l'outline complètes et exhaustives
-✅ Chaque section: problème → solution → conseils pratiques (pas uniquement informatif)
-✅ Paragraphes courts (2-4 lignes) pour lisibilité mobile
-✅ Ton Neil Patel: direct, simple, actionnable
-✅ Transitions fluides entre sections
-
-❌ INTERDICTIONS:
-❌ Longs paragraphes (> 6 lignes)
-❌ Sections courtes (< 600 mots)
-❌ Contenu théorique sans application
-❌ Manque structure visuelle
-
-IMPORTANT: Traite TOUTES les sections de l'outline de manière EXHAUSTIVE avec TOUS les éléments (tableaux, études de cas, CTA, FAQ, JSON-LD)!`;
-
-            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}], 0.3, 8000);
-            job.logs.push({ step: 'draft', usage: res?.usage, timestamp: new Date().toISOString() });
+            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}], 0.3, 4000);
+            job.logs.push({ step: 'draft_part1', usage: res?.usage, timestamp: new Date().toISOString() });
 
             job.article = stripFences((res?.content || '').trim());
-            job.bestArticle = job.article;
-            job.iteration = 1;
+            nextStep = 'draft_part2';
+          }
+
+          // ===== STEP: DRAFT PART 2 (3 dernières sections + FAQ + Conclusion) =====
+          else if (step === 'draft_part2') {
+            const outlineParts = (job.outline || '').split('|').map(s => s.trim());
+            const lastSections = outlineParts.slice(4); // Dernières sections
+
+            const sys2 = 'You output ONLY compact JSON. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
+            const usr2 = `Tu es un expert GEO & SEO, spécialiste Neil Patel.
+Rédige la SECONDE PARTIE d'un article (2500-3000 mots pour cette partie).
+
+SUJET: ${job.topic}
+SECTIONS À TRAITER: ${lastSections.join(' | ')}
+CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 6000)}
+
+STRUCTURE OBLIGATOIRE:
+1. ${lastSections.length} sections H2 complètes (800-1000 mots CHACUNE)
+2. FAQ (3-5 Q/R) avec JSON-LD FAQPage
+3. Conclusion-action (résumé, next steps)
+
+Chaque H2:
+- Angle: Pain point → Résolution → Tips
+- H3 pour structurer
+- Paragraphes courts (2-4 lignes)
+- Tableaux HTML <table>
+- Encadrés études de cas: <div class="case-study"><h4>📊 Étude de cas:</h4><p>...</p></div>
+- Encadrés: <div class="key-points"><h4>✅ Points clés:</h4><ul><li>...</li></ul></div>
+- Liens externes <a href="" target="_blank" rel="noopener">
+- Stats sourcées
+
+FAQ:
+<h2>FAQ</h2>
+[Questions/réponses]
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"...","acceptedAnswer":{"@type":"Answer","text":"..."}}]}
+</script>
+
+CTA fin: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
+
+            const res2 = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys2}, {role:'user', content: usr2}], 0.3, 4000);
+            job.logs.push({ step: 'draft_part2', usage: res2?.usage, timestamp: new Date().toISOString() });
+
+            const part2 = stripFences((res2?.content || '').trim());
+
+            // Fusionner les 2 parties
+            try {
+              const part1Data = JSON.parse(job.article);
+              const part2Data = JSON.parse(part2);
+              const merged = {
+                sections: [...(part1Data.sections || []), ...(part2Data.sections || [])]
+              };
+              job.article = JSON.stringify(merged);
+              job.bestArticle = job.article;
+              job.iteration = 1;
+            } catch {
+              job.article = part2; // Fallback
+            }
+
             nextStep = 'review';
 
-            // Save article to separate file to avoid truncation
+            // Save merged article
             await put('agents', `geo/jobs/${jobId}_article.json`, job.article);
           }
 
