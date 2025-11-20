@@ -10,8 +10,25 @@ function getSupabase() {
 
 async function put(bucket: string, path: string, text: string, contentType='application/json') {
   const sb = getSupabase();
-  const { data, error } = await sb.storage.from(bucket).upload(path, new Blob([text]) as any, { upsert: true, contentType });
+
+  // 🔧 FIX: Utiliser Buffer (Node.js) ou TextEncoder (Edge) au lieu de Blob
+  // Cela évite la troncation avec les caractères UTF-8 et gros contenus
+  const bytes = typeof Buffer !== 'undefined'
+    ? Buffer.from(text, 'utf-8')  // Node.js runtime
+    : new TextEncoder().encode(text);  // Edge runtime
+
+  const byteLength = bytes.byteLength || bytes.length;
+  console.log(`📤 Uploading ${path}: ${text.length} chars → ${byteLength} bytes`);
+
+  const { data, error } = await sb.storage.from(bucket).upload(path, bytes, {
+    upsert: true,
+    contentType,
+    cacheControl: '3600'
+  });
+
   if (error) throw new Error(`Storage upload failed: ${error.message}`);
+
+  console.log(`✅ Upload successful: ${path} (${byteLength} bytes)`);
   return data;
 }
 async function getJSON<T=any>(bucket: string, path: string): Promise<T|null> {
