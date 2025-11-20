@@ -48,6 +48,180 @@ function stripFences(text: string): string {
   return t;
 }
 
+function generateHTMLFromSections(sections: any[], jobId: string): string {
+  // Compter les mots
+  let totalWords = 0;
+  sections.forEach((s: any) => {
+    const text = (s.html || '').replace(/<[^>]*>/g, '');
+    const words = text.split(/\s+/).filter((w: string) => w.length > 0);
+    totalWords += words.length;
+  });
+
+  const generatedAt = new Date().toISOString();
+
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generated-at" content="${generatedAt}">
+    <title>Article Complet - ${sections[0]?.title || 'Article GEO/SEO'}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.7;
+            background: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .meta {
+            background: #e8f5e9;
+            padding: 20px;
+            border-left: 4px solid #4caf50;
+            margin: 30px 0;
+            border-radius: 4px;
+        }
+        h1 {
+            color: #1a237e;
+            font-size: 2.2em;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #3f51b5;
+            padding-bottom: 15px;
+        }
+        h2 {
+            color: #283593;
+            font-size: 1.8em;
+            margin-top: 50px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #7986cb;
+            padding-bottom: 10px;
+        }
+        h3 {
+            color: #5c6bc0;
+            font-size: 1.4em;
+            margin-top: 30px;
+        }
+        h4 {
+            color: #7986cb;
+            font-size: 1.1em;
+            margin-top: 20px;
+        }
+        a {
+            color: #1976d2;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        table th {
+            background: #3f51b5;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        table td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        table tr:nth-child(even) {
+            background: #f5f5f5;
+        }
+        .key-points {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .case-study {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .tip-box {
+            background: #f1f8e9;
+            border-left: 4px solid #8bc34a;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning-box {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .cta-box {
+            background: #fff8e1;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 8px;
+            text-align: center;
+        }
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+        li {
+            margin: 8px 0;
+        }
+        p {
+            margin: 15px 0;
+        }
+        strong {
+            color: #d32f2f;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+<div class="meta">
+    <strong>✅ ARTICLE COMPLET GÉNÉRÉ EN 2 PARTIES - GPT-5.1</strong><br>
+    Job ID: ${jobId}<br>
+    Sections: ${sections.length}<br>
+    Mots: ~${totalWords}<br>
+    Généré le: ${new Date(generatedAt).toLocaleString('fr-FR')}<br>
+    <strong style="color: #4caf50;">✓ GÉNÉRATION DIRECTE HTML - SANS TRONCATION!</strong>
+</div>
+
+${sections.map((section: any, i: number) => {
+  return `\n<!-- ========== SECTION ${i + 1}: ${section.title || section.id} ========== -->\n${section.html}`;
+}).join('\n\n')}
+
+<div class="meta">
+    <strong>📋 TABLE DES MATIÈRES:</strong>
+    <ol style="margin: 10px 0 0 20px;">
+${sections.map((s: any) => `        <li>${s.title || s.id}</li>`).join('\n')}
+    </ol>
+</div>
+
+</div>
+
+</body>
+</html>`;
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -843,7 +1017,23 @@ CTA milieu: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
             const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}], 0.3, 4000);
             job.logs.push({ step: 'draft_part1', usage: res?.usage, timestamp: new Date().toISOString() });
 
-            job.article = stripFences((res?.content || '').trim());
+            const part1Content = stripFences((res?.content || '').trim());
+            console.log(`✅ Part 1 generated: ${part1Content.length} chars`);
+
+            // 🆕 Sauvegarder Part 1 séparément dans geo/articles/
+            try {
+              await put('agents', `geo/articles/${jobId}_part1.json`, part1Content);
+              console.log(`✅ Part 1 saved to geo/articles/${jobId}_part1.json`);
+              job.articlePart1Ready = true;
+            } catch (error: any) {
+              console.error(`❌ Failed to save Part 1:`, error.message);
+              job.status = 'error';
+              job.error = `Failed to save Part 1: ${error.message}`;
+              throw error;
+            }
+
+            // Ne pas stocker dans job.article pour éviter la troncation
+            job.article = null;
             nextStep = 'draft_part2';
           }
 
@@ -887,26 +1077,78 @@ CTA fin: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
             const res2 = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys2}, {role:'user', content: usr2}], 0.3, 4000);
             job.logs.push({ step: 'draft_part2', usage: res2?.usage, timestamp: new Date().toISOString() });
 
-            const part2 = stripFences((res2?.content || '').trim());
+            const part2Content = stripFences((res2?.content || '').trim());
+            console.log(`✅ Part 2 generated: ${part2Content.length} chars`);
 
-            // Fusionner les 2 parties
+            // 🆕 Sauvegarder Part 2 séparément
             try {
-              const part1Data = JSON.parse(job.article);
-              const part2Data = JSON.parse(part2);
-              const merged = {
+              await put('agents', `geo/articles/${jobId}_part2.json`, part2Content);
+              console.log(`✅ Part 2 saved to geo/articles/${jobId}_part2.json`);
+            } catch (error: any) {
+              console.error(`❌ Failed to save Part 2:`, error.message);
+              job.status = 'error';
+              job.error = `Failed to save Part 2: ${error.message}`;
+              throw error;
+            }
+
+            // 🆕 Lire Part 1 et fusionner
+            let merged: any = null;
+            try {
+              const part1Raw = await getJSON<string>('agents', `geo/articles/${jobId}_part1.json`);
+              if (!part1Raw) throw new Error('Part 1 not found');
+
+              const part1Data = JSON.parse(part1Raw);
+              const part2Data = JSON.parse(part2Content);
+
+              merged = {
                 sections: [...(part1Data.sections || []), ...(part2Data.sections || [])]
               };
-              job.article = JSON.stringify(merged);
-              job.bestArticle = job.article;
+
+              console.log(`✅ Merged ${merged.sections.length} sections`);
+            } catch (error: any) {
+              console.error(`❌ Failed to merge parts:`, error.message);
+              job.status = 'error';
+              job.error = `Failed to merge parts: ${error.message}`;
+              throw error;
+            }
+
+            // 🆕 Générer HTML immédiatement
+            try {
+              const html = generateHTMLFromSections(merged.sections, jobId);
+              console.log(`✅ HTML generated: ${html.length} chars, ${merged.sections.length} sections`);
+
+              // Sauvegarder HTML
+              await put('agents', `geo/articles/${jobId}.html`, html, 'text/html');
+              console.log(`✅ HTML saved to geo/articles/${jobId}.html`);
+
+              // Mise à jour du job avec metadata uniquement
+              job.htmlReady = true;
+              job.htmlUrl = `https://storage.supabase.co/v1/object/public/agents/geo/articles/${jobId}.html`;
+              job.sectionsCount = merged.sections.length;
+              job.article = null; // Libérer la mémoire
+              job.bestArticle = null;
               job.iteration = 1;
-            } catch {
-              job.article = part2; // Fallback
+
+              // Ajouter verification
+              job.verification = {
+                part1Size: part1Raw?.length || 0,
+                part2Size: part2Content.length,
+                htmlSize: html.length,
+                sectionsCount: merged.sections.length,
+                generatedAt: new Date().toISOString()
+              };
+
+              console.log(`✅ Verification:`, job.verification);
+
+            } catch (error: any) {
+              console.error(`❌ Failed to generate HTML:`, error.message);
+              job.status = 'error';
+              job.error = `Failed to generate HTML: ${error.message}`;
+              job.htmlReady = false;
+              throw error;
             }
 
             nextStep = 'review';
-
-            // Save merged article
-            await put('agents', `geo/jobs/${jobId}_article.json`, job.article);
           }
 
           // ===== STEP: REVIEW =====
@@ -1091,7 +1333,11 @@ INSTRUCTIONS STRICTES:
             completed,
             iteration: job.iteration,
             scores: job.scores,
-            status: job.status
+            status: job.status,
+            // 🆕 Ajouter htmlUrl si disponible
+            htmlReady: job.htmlReady || false,
+            htmlUrl: job.htmlUrl || null,
+            sectionsCount: job.sectionsCount || null
           });
 
         } catch (e: any) {
@@ -1120,7 +1366,12 @@ INSTRUCTIONS STRICTES:
           article: job.bestArticle || null,
           finalScore: job.finalScore,
           research: job.research ? { articles: job.research.articles?.length, stats: job.research.stats?.length } : null,
-          logs: job.logs
+          logs: job.logs,
+          // 🆕 Nouveaux champs HTML
+          htmlReady: job.htmlReady || false,
+          htmlUrl: job.htmlUrl || null,
+          sectionsCount: job.sectionsCount || null,
+          verification: job.verification || null
         });
       }
 
@@ -1175,14 +1426,37 @@ INSTRUCTIONS STRICTES:
         const { jobId } = req.body || {};
         if (!jobId) return res.status(400).json({ error: 'jobId required' });
 
-        // Read article from storage
+        const job = await getJSON<any>('agents', `geo/jobs/${jobId}.json`);
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+
+        // Si HTML déjà généré, retourner l'URL directement
+        if (job.htmlReady && job.htmlUrl) {
+          return res.json({
+            ok: true,
+            jobId,
+            htmlUrl: job.htmlUrl,
+            sectionsCount: job.sectionsCount,
+            verification: job.verification,
+            message: 'HTML already generated'
+          });
+        }
+
+        // Sinon, génération fallback (pour anciens jobs ou jobs en erreur)
         let articleData: any = null;
         try {
-          // Try reading from separate article file (returns parsed JSON object)
-          articleData = await getJSON<any>('agents', `geo/jobs/${jobId}_article.json`);
+          // Try reading from separate parts
+          const part1Raw = await getJSON<string>('agents', `geo/articles/${jobId}_part1.json`);
+          const part2Raw = await getJSON<string>('agents', `geo/articles/${jobId}_part2.json`);
+
+          if (part1Raw && part2Raw) {
+            const part1Data = JSON.parse(part1Raw);
+            const part2Data = JSON.parse(part2Raw);
+            articleData = {
+              sections: [...(part1Data.sections || []), ...(part2Data.sections || [])]
+            };
+          }
         } catch (e) {
-          // Fallback to job file
-          const job = await getJSON<any>('agents', `geo/jobs/${jobId}.json`);
+          // Fallback to job.article (legacy)
           if (job?.article) {
             try {
               articleData = JSON.parse(job.article);
@@ -1193,7 +1467,11 @@ INSTRUCTIONS STRICTES:
         }
 
         if (!articleData || !articleData.sections) {
-          return res.status(404).json({ error: 'No article found for this job', debug: { hasData: !!articleData, hasSections: articleData?.sections } });
+          return res.status(404).json({
+            error: 'No article found for this job',
+            debug: { hasData: !!articleData, hasSections: articleData?.sections },
+            suggestion: 'Try running draft_part1 and draft_part2 first'
+          });
         }
         const sections = articleData.sections || [];
 
