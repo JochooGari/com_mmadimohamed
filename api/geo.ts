@@ -16,9 +16,13 @@ async function put(bucket: string, path: string, text: string, contentType='appl
 }
 async function getJSON<T=any>(bucket: string, path: string): Promise<T|null> {
   const sb = getSupabase();
-  const { data } = await sb.storage.from(bucket).download(path);
-  if (!data) return null; const txt = await (data as any).text();
-  try { return JSON.parse(txt); } catch { return null; }
+  const { data, error } = await sb.storage.from(bucket).download(path);
+  if (error) throw new Error(`Storage download failed: ${error.message}`);
+  if (!data) return null;
+  const txt = await (data as any).text();
+  try { return JSON.parse(txt); } catch (e: any) {
+    throw new Error(`JSON parse failed for ${path}: ${e.message}`);
+  }
 }
 
 function extractOutline(html: string) {
