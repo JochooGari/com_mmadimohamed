@@ -824,6 +824,9 @@ INSTRUCTIONS: Article 2000+ mots, 1 lien externe/200 mots, stats sourcées, FAQ 
             job.bestArticle = job.article;
             job.iteration = 1;
             nextStep = 'review';
+
+            // Save article to separate file to avoid truncation
+            await put('agents', `geo/jobs/${jobId}_article.json`, job.article);
           }
 
           // ===== STEP: REVIEW =====
@@ -842,6 +845,9 @@ Return {"sections":[{"id":"...","title":"...","html":"..."}],"notes":[]} in Fren
             } catch {}
 
             nextStep = 'enrich';
+
+            // Save article to separate file
+            await put('agents', `geo/jobs/${jobId}_article.json`, job.article);
           }
 
           // ===== STEP: ENRICH =====
@@ -964,6 +970,9 @@ Fixes: ${(job.lastScore?.fixes || []).join(', ')}`;
 
             job.iteration++;
             nextStep = 'review';
+
+            // Save article to separate file
+            await put('agents', `geo/jobs/${jobId}_article.json`, job.article);
           }
 
           job.currentStep = nextStep;
@@ -1015,6 +1024,18 @@ Fixes: ${(job.lastScore?.fixes || []).join(', ')}`;
         const { jobId, field = 'article' } = req.body || {};
         if (!jobId) return res.status(400).json({ error: 'jobId required' });
 
+        // Try to read from separate article file first (new format)
+        try {
+          const articleContent = await getJSON<string>('agents', `geo/jobs/${jobId}_article.json`);
+          if (articleContent) {
+            res.setHeader('Content-Type', 'application/json');
+            return res.send(articleContent);
+          }
+        } catch (e) {
+          // File doesn't exist or error, fallback to job file
+        }
+
+        // Fallback: read from job file (old format)
         const job = await getJSON<any>('agents', `geo/jobs/${jobId}.json`);
         if (!job) return res.status(404).json({ error: 'Job not found' });
 
@@ -1025,8 +1046,6 @@ Fixes: ${(job.lastScore?.fixes || []).join(', ')}`;
           return res.status(404).json({ error: `No ${articleField} in job` });
         }
 
-        // Return only the article JSON string - no wrapping
-        // Set content-type to text/plain to avoid JSON parsing limits
         res.setHeader('Content-Type', 'application/json');
         return res.send(articleRaw);
       }
