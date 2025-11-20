@@ -1037,12 +1037,14 @@ Schema.org Article:
 
 CTA milieu: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
 
-            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}], 0.3, 4000);
+            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}], 0.3, 8000);
             job.logs.push({ step: 'draft_part1', usage: res?.usage, timestamp: new Date().toISOString() });
 
             // 🔎 === DIAGNOSTIC LOGS - WHERE IS TRUNCATION? ===
             const rawContent = res?.content || '';
             console.log('🔎 === DIAGNOSTIC DRAFT_PART1 ===');
+            console.log(`🔎 [0] finish_reason: ${res?.finish_reason || 'unknown'}`);
+            console.log(`🔎 [0a] usage: ${JSON.stringify(res?.usage)}`);
             console.log(`🔎 [1] rawContent.length (from API): ${rawContent.length} chars`);
             console.log(`🔎 [2] First 200 chars of raw: ${rawContent.slice(0, 200)}`);
             console.log(`🔎 [3] Last 200 chars of raw: ${rawContent.slice(-200)}`);
@@ -1118,8 +1120,11 @@ FAQ:
 
 CTA fin: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Action]</div>`;
 
-            const res2 = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys2}, {role:'user', content: usr2}], 0.3, 4000);
+            const res2 = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys2}, {role:'user', content: usr2}], 0.3, 8000);
             job.logs.push({ step: 'draft_part2', usage: res2?.usage, timestamp: new Date().toISOString() });
+
+            console.log(`🔎 [draft_part2] finish_reason: ${res2?.finish_reason || 'unknown'}`);
+            console.log(`🔎 [draft_part2] usage: ${JSON.stringify(res2?.usage)}`);
 
             const part2Content = stripFences((res2?.content || '').trim());
             console.log(`✅ Part 2 generated: ${part2Content.length} chars`);
