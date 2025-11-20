@@ -808,16 +808,98 @@ Retourne UNIQUEMENT un JSON valide:
           // ===== STEP: DRAFT =====
           else if (step === 'draft') {
             const sys1 = 'You output ONLY compact JSON. Return strictly {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
-            const usr1 = `Tu es un expert GEO & SEO. Rédige un article LONG (2000+ mots) style Neil Patel.
+            const usr1 = `Tu es un expert GEO & SEO, spécialiste de l'écriture à la Neil Patel.
+Ta mission : générer un article LONG (5000+ mots), structuré, avec un fort scoring IA, qui maximise la lisibilité, l'engagement et le référencement SEO.
 
-Sujet: ${job.topic}
-Outline: ${job.outline}
+SUJET: ${job.topic}
+OUTLINE: ${job.outline}
+CONTEXTE RECHERCHE: ${JSON.stringify(job.research || {}).slice(0, 6000)}
 
-CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 6000)}
+═══════════════════════════════════════════════════════════════════════════════
+STRUCTURE OBLIGATOIRE:
+═══════════════════════════════════════════════════════════════════════════════
 
-INSTRUCTIONS: Article 2000+ mots, 1 lien externe/200 mots, stats sourcées, FAQ JSON-LD, 2 CTA, Schema.org.`;
+1. TITRE SEO OPTIMISÉ (H1) - Accrocheur, avec mot-clé principal, promise claire
 
-            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}]);
+2. INTRODUCTION ACCROCHEUSE (100-150 mots)
+   - Hook fort qui capte l'attention
+   - Promise l'apprentissage ou la solution
+   - Annonce la valeur de l'article
+
+3. SECTIONS PRINCIPALES (5-7 H2 selon outline)
+   Chaque H2 DOIT contenir:
+   - 800-1200 mots MINIMUM
+   - Angle OBLIGATOIRE: Pain point → Résolution → Tips pratiques
+   - H3 pour structurer
+   - Paragraphes COURTS (2-4 lignes max)
+   - Langage simple et direct
+   - JAMAIS de longs blocs de texte, tout doit être skimmable
+
+4. ÉLÉMENTS VISUELS (tous les 400 mots MAX)
+   - Listes à puces ou numérotées
+   - Tableaux comparatifs HTML <table>
+   - Encadrés: <div class="tip-box"><strong>💡 Astuce:</strong> [texte]</div>
+   - Encadrés: <div class="warning-box"><strong>⚠️ Attention:</strong> [texte]</div>
+   - Descriptif visuel: <div class="visual-placeholder"><strong>📊 [Titre graphique]</strong><p>[Description schéma à intégrer]</p></div>
+
+5. ENCADRÉS OBLIGATOIRES PAR ARTICLE
+   - Au moins 1 ÉTUDE DE CAS / EXEMPLE RÉEL
+     Format: <div class="case-study"><h4>📊 Étude de cas: [Titre]</h4><p>[Contexte, chiffres, résultat]</p></div>
+   - Checklist ou points clés à CHAQUE H2
+     Format: <div class="key-points"><h4>✅ Points clés:</h4><ul><li>...</li></ul></div>
+
+6. TABLEAUX (minimum 1 par article)
+   - Format HTML <table border="1" style="border-collapse:collapse; width:100%;">
+   - Données comparatives, chiffrées, ou structurées
+   - Ex: comparaison outils, tarifs, fonctionnalités, checklist
+
+7. LIENS STRATÉGIQUES
+   - 1 lien externe fiable tous les 150-200 mots
+   - Sources: études, rapports, documentation officielle
+   - Format: <a href="URL" target="_blank" rel="noopener">texte ancre</a>
+   - Stats chiffrées avec sources citées
+
+8. CTA ÉDITORIAUX (2 minimum)
+   - 1 CTA milieu d'article
+   - 1 CTA fin d'article
+   Format: <div class="cta-box"><strong>🎯 [Titre]:</strong> [Appel à l'action engageant]</div>
+
+9. FAQ (3-5 questions/réponses)
+   <h2>FAQ</h2>
+   [Questions/réponses]
+   <script type="application/ld+json">
+   {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[...]}
+   </script>
+
+10. CONCLUSION-ACTION
+    - Résumé des points clés
+    - Prochaines étapes concrètes
+    - Message motivant
+
+11. BALISAGE JSON-LD Article
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"Article","headline":"...","description":"...","author":{"@type":"Person","name":"..."},"datePublished":"...","inLanguage":"fr"}
+    </script>
+
+═══════════════════════════════════════════════════════════════════════════════
+EXIGENCES DE QUALITÉ:
+═══════════════════════════════════════════════════════════════════════════════
+✅ MINIMUM 5000 mots (vise 6000-7000 mots)
+✅ TOUTES les sections H2 de l'outline complètes et exhaustives
+✅ Chaque section: problème → solution → conseils pratiques (pas uniquement informatif)
+✅ Paragraphes courts (2-4 lignes) pour lisibilité mobile
+✅ Ton Neil Patel: direct, simple, actionnable
+✅ Transitions fluides entre sections
+
+❌ INTERDICTIONS:
+❌ Longs paragraphes (> 6 lignes)
+❌ Sections courtes (< 600 mots)
+❌ Contenu théorique sans application
+❌ Manque structure visuelle
+
+IMPORTANT: Traite TOUTES les sections de l'outline de manière EXHAUSTIVE avec TOUS les éléments (tableaux, études de cas, CTA, FAQ, JSON-LD)!`;
+
+            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys1}, {role:'user', content: usr1}], 0.3, 10000);
             job.logs.push({ step: 'draft', usage: res?.usage, timestamp: new Date().toISOString() });
 
             job.article = stripFences((res?.content || '').trim());
@@ -833,9 +915,9 @@ INSTRUCTIONS: Article 2000+ mots, 1 lien externe/200 mots, stats sourcées, FAQ 
           else if (step === 'review') {
             const sys2 = `You output ONLY compact JSON. Améliore pour 95%+ SEO/GEO.
 Return {"sections":[{"id":"...","title":"...","html":"..."}],"notes":[]} in French.`;
-            const usr2 = `Article à améliorer:\n${job.article}`;
+            const usr2 = `Article à améliorer:\n${job.article}\n\nGarde toutes les sections complètes et détaillées. Ne coupe rien.`;
 
-            const res = await callAI('anthropic', 'claude-sonnet-4-5-20250929', [{role:'system', content: sys2}, {role:'user', content: usr2}]);
+            const res = await callAI('anthropic', 'claude-sonnet-4-5-20250929', [{role:'system', content: sys2}, {role:'user', content: usr2}], 0.3, 8000);
             job.logs.push({ step: 'review', iteration: job.iteration, usage: res?.usage, timestamp: new Date().toISOString() });
 
             const reviewText = stripFences((res?.content || '').trim());
@@ -954,15 +1036,39 @@ Retourne: {"scores":{"seo":0,"geo":0},"breakdown":{},"strengths":[],"weaknesses"
           // ===== STEP: REWRITE =====
           else if (step === 'rewrite') {
             const sys4 = 'You output ONLY compact JSON. Return {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
-            const usr4 = `Réécris pour 95% SEO/GEO.
+            const usr4 = `Tu es un expert GEO & SEO. Réécris cet article pour atteindre 95%+ SEO/GEO.
 
-Article: ${job.article}
-Score: SEO ${job.lastScore?.scores?.seo}/100, GEO ${job.lastScore?.scores?.geo}/100
-Enrichissements: ${JSON.stringify(job.enrichment || {}).slice(0, 2000)}
-Faiblesses: ${(job.lastScore?.weaknesses || []).join(', ')}
-Fixes: ${(job.lastScore?.fixes || []).join(', ')}`;
+ARTICLE ACTUEL:
+${job.article}
 
-            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys4}, {role:'user', content: usr4}]);
+SCORES ACTUELS: SEO ${job.lastScore?.scores?.seo}/100, GEO ${job.lastScore?.scores?.geo}/100
+
+ENRICHISSEMENTS DISPONIBLES:
+${JSON.stringify(job.enrichment || {}).slice(0, 2000)}
+
+FAIBLESSES IDENTIFIÉES:
+${(job.lastScore?.weaknesses || []).join('\n- ')}
+
+CORRECTIONS À APPLIQUER:
+${(job.lastScore?.fixes || []).join('\n- ')}
+
+INSTRUCTIONS STRICTES:
+✅ Garde la structure Neil Patel (5000+ mots, Pain point → Solution → Tips)
+✅ Garde TOUS les éléments: tableaux, études de cas, encadrés, CTA, FAQ, JSON-LD
+✅ Améliore liens externes (autorité, diversité, pertinence)
+✅ Ajoute stats manquantes avec sources
+✅ Renforce les encadrés visuels (💡 Astuce, ⚠️ Attention, 📊 Étude de cas)
+✅ Optimise titres H2/H3 pour mots-clés
+✅ Améliore transitions entre sections
+✅ Paragraphes courts (2-4 lignes), langage simple
+✅ Intègre les enrichissements fournis
+✅ Corrige toutes les faiblesses listées
+
+❌ NE COUPE RIEN, NE RACCOURCIS PAS
+❌ Ne perds aucun tableau, encadré, CTA
+❌ Ne dégrade pas la structure visuelle`;
+
+            const res = await callAI('openai', 'gpt-5.1', [{role:'system', content: sys4}, {role:'user', content: usr4}], 0.3, 10000);
             job.logs.push({ step: 'rewrite', iteration: job.iteration, usage: res?.usage, timestamp: new Date().toISOString() });
 
             const rewriteText = stripFences((res?.content || '').trim());
