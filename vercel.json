@@ -1,9 +1,11 @@
 {
   "functions": {
     "api/geo.ts": {
+      "runtime": "nodejs22.x",
       "maxDuration": 300
     },
     "api/ai-proxy.ts": {
+      "runtime": "nodejs22.x",
       "maxDuration": 180
     }
   },
