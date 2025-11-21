@@ -88,6 +88,29 @@ async function deleteSections(jobId: string) {
   else console.log(`✅ Deleted old sections for job ${jobId}`);
 }
 
+async function readJSONBody(req: any) {
+  if (req?.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+    return req.body;
+  }
+
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (chunk: Buffer) => {
+      data += chunk.toString();
+    });
+    req.on('end', () => {
+      if (!data) return resolve({});
+      try {
+        resolve(JSON.parse(data));
+      } catch (err) {
+        console.error('Failed to parse JSON body:', err);
+        resolve({});
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
 function extractOutline(html: string) {
   const getText = (re: RegExp) => {
     const arr: { title:string; level:number; id:string }[] = [];
@@ -373,7 +396,9 @@ export default async function handler(req: any, res: any) {
 
   try {
     if (req.method === 'POST') {
-      const { action } = req.body || {};
+      const body = await readJSONBody(req);
+      req.body = body;
+      const { action } = body || {};
       if (action === 'import_template') {
         let { html, url } = req.body || {};
         if (!html && url) {
