@@ -90,7 +90,11 @@ async function deleteSections(jobId: string) {
 
 async function readJSONBody(req: any) {
   if (req?.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
-    return req.body;
+    const ctorName = req.body?.constructor?.name || '';
+    const isPlainObject = ctorName === 'Object';
+    if (isPlainObject) {
+      return req.body;
+    }
   }
   if (req?.body && typeof req.body === 'string') {
     try {
@@ -413,6 +417,13 @@ export default async function handler(req: any, res: any) {
       const body = await readJSONBody(req);
       req.body = body;
       const { action } = body || {};
+      if (!action) {
+        console.warn('[geo] Missing action in body', {
+          typeofBody: typeof body,
+          bodyKeys: body ? Object.keys(body) : [],
+          rawPreview: JSON.stringify(body).slice(0, 200)
+        });
+      }
       if (action === 'import_template') {
         let { html, url } = req.body || {};
         if (!html && url) {
