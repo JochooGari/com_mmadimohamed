@@ -92,6 +92,20 @@ async function readJSONBody(req: any) {
   if (req?.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
     return req.body;
   }
+  if (req?.body && typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  if (Buffer.isBuffer(req?.body)) {
+    try {
+      return JSON.parse(req.body.toString('utf-8'));
+    } catch {
+      return {};
+    }
+  }
 
   return new Promise((resolve, reject) => {
     let data = '';
