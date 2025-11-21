@@ -291,6 +291,80 @@ ${sections.map((s: any) => `        <li>${s.title || s.id}</li>`).join('\n')}
 </html>`;
 }
 
+function slugify(text: string, fallback = 'article'): string {
+  if (typeof text !== 'string' || !text.trim()) return `${fallback}-${Date.now()}`;
+  return text
+    .toLowerCase()
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '')
+    .slice(0, 120) || `${fallback}-${Date.now()}`;
+}
+
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return html.replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function getInternalArticles(limit = 6) {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const siteBase = process.env.PUBLIC_SITE_URL
+    || process.env.FRONTEND_URL
+    || process.env.SITE_URL
+    || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
+  try {
+    const { data, error } = await sb
+      .from('articles')
+      .select('slug,title,excerpt')
+      .eq('published', true)
+      .order('published_at', { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return data
+      .filter((item: any) => item?.slug)
+      .map((item: any) => ({
+        title: item.title || 'Article',
+        url: siteBase ? `${siteBase.replace(/\/$/, '')}/articles/${item.slug}` : item.slug,
+        excerpt: item.excerpt || ''
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function saveArticleRecord(jobId: string, topic: string, sections: any[], html: string, finalScore?: any) {
+  const sb = getSupabase();
+  if (!sb) return;
+  try {
+    const plainText = sections.map((s: any) => stripHtml(s.html || '')).join(' ');
+    const excerpt = plainText.slice(0, 420);
+    const slug = slugify(topic || sections[0]?.title || 'article');
+    const payload: any = {
+      slug,
+      title: topic || sections[0]?.title || 'Article GEO',
+      excerpt,
+      content: {
+        jobId,
+        html,
+        sections,
+        finalScore
+      },
+      tags: [],
+      published: false,
+      published_at: null,
+      author_id: '00000000-0000-0000-0000-000000000000'
+    };
+    await sb.from('articles').upsert(payload, { onConflict: 'slug' });
+  } catch (err) {
+    console.error('Failed to save article record:', (err as any)?.message || err);
+  }
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -445,6 +519,11 @@ JSON final : {"sections":[{"id":"...","title":"...","html":"..."}]}`;
           iteration++;
 
           // ===== PHASE 2: AGENT REVIEW (Claude) - Révision SEO/GEO =====
+          const internalArticlesReview = Array.isArray(job.internalArticles) ? job.internalArticles : [];
+          const internalLinksBlock = internalArticlesReview.length
+            ? internalArticlesReview.map((link: any, idx: number) => `- ${idx + 1}. ${link.title}: ${link.url}`).join('\n')
+            : 'Aucun lien interne disponible.';
+
           const sys2 = `You output ONLY compact JSON. No prose. No markdown.
 Tu es un expert SEO/GEO. Améliore cet article pour atteindre un score SEO et GEO de 95+/100.
 Applique ces optimisations:
@@ -458,7 +537,7 @@ Applique ces optimisations:
 - Optimise la lisibilité
 Return strictly {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["..."]} in French.`;
 
-          const usr2 = `Article à améliorer:\n\n${currentArticle}\n\nRappel: retourne UNIQUEMENT le JSON strict`;
+          const usr2 = `Article à améliorer:\n\n${currentArticle}\n\nLIENS INTERNES À INSÉRER EN PRIORITÉ:\n${internalLinksBlock}\n\nRappel: retourne UNIQUEMENT le JSON strict`;
 
           const claude = await callAI(reviewProvider, anthropicModel, [ {role:'system', content: sys2}, {role:'user', content: usr2} ]).catch(e=>({ error:String(e)}));
           logs.push({ step:'review', iteration, summary: claude?.usage || null, model: anthropicModel, provider: reviewProvider });
@@ -474,6 +553,11 @@ Return strictly {"sections":[{"id":"...","title":"...","html":"..."}],"notes":["
           }
 
           // ===== PHASE 3: AGENT ENRICHISSEMENT (Perplexity) - Liens et sources =====
+          const internalArticlesEnrich = Array.isArray(job.internalArticles) ? job.internalArticles : [];
+          const internalLinksList = internalArticlesEnrich.length
+            ? internalArticlesEnrich.map((link: any, idx: number) => `- ${idx + 1}. ${link.title}: ${link.url}`).join('\n')
+            : 'Aucun article interne disponible.';
+
           const enrichSys = `Tu es un agent d'enrichissement SEO/GEO. Recherche sur le web pour trouver:
 1. Des liens externes de haute autorité à ajouter
 2. Des données chiffrées récentes avec sources vérifiables
@@ -491,9 +575,11 @@ Retourne UNIQUEMENT un JSON valide:
           const enrichUsr = `Enrichis cet article avec des liens externes et sources vérifiables:
 
 Sujet: ${topic}
-Article actuel (résumé): ${currentArticle.slice(0, 3000)}
+ Article actuel (résumé): ${currentArticle.slice(0, 3000)}
 
-Trouve des sources de haute autorité (sites officiels, études, experts reconnus).`;
+Trouve des sources de haute autorité (sites officiels, études, experts reconnus).
+Priorise également ces liens internes à proposer dans les sections appropriées:
+${internalLinksList}`;
 
           const enrichRes = await callAI('perplexity', 'sonar', [ {role:'system', content: enrichSys}, {role:'user', content: enrichUsr} ], 0.3, 1500).catch(e=>({ error:String(e)}));
           logs.push({ step:'enrich', iteration, summary: enrichRes?.usage || null, model: 'sonar', provider: 'perplexity' });
@@ -1011,6 +1097,9 @@ Retourne UNIQUEMENT un JSON valide:
 
         const job = await getJSON<any>('agents', `geo/jobs/${jobId}.json`);
         if (!job) return res.status(404).json({ error: 'Job not found' });
+        if (!job.internalArticles || !Array.isArray(job.internalArticles)) {
+          job.internalArticles = await getInternalArticles(8);
+        }
 
         const base = process.env.SITE_URL || (process.env.VERCEL_URL ? (process.env.VERCEL_URL.startsWith('http') ? process.env.VERCEL_URL : `https://${process.env.VERCEL_URL}`) : '');
         const callAI = async (provider:string, model:string, messages:any, temperature=0.3, maxTokens=2000, responseFormat?: 'json_object' | 'text') => {
@@ -1141,6 +1230,14 @@ Retourne UNIQUEMENT un JSON valide:
             const outlineParts = (job.outline || '').split('|').map(s => s.trim()).filter(Boolean);
             console.log(`📋 Outline parts: ${outlineParts.length} sections`);
 
+            const internalArticles = Array.isArray(job.internalArticles) ? job.internalArticles : [];
+            const internalLinksText = internalArticles.length
+              ? internalArticles.map((link: any, idx: number) => `- ${idx + 1}. ${link.title}: ${link.url}`).join('\n')
+              : 'Aucun article interne disponible.';
+            const internalLinksInstruction = internalArticles.length
+              ? `LIENS INTERNES DISPONIBLES (${internalArticles.length}):\n${internalLinksText}\nIntègre au moins ${Math.min(2, internalArticles.length)} liens internes pertinents via <a href="..."> dans chaque section.`
+              : 'Aucun lien interne fourni pour cette section.';
+
             // 1. Generate H1 + Intro Section (Section 0)
             console.log('\n📝 Generating Section 0: H1 + Intro');
             const introSys = `You are a JSON generation assistant. You MUST output ONLY valid JSON.
@@ -1157,6 +1254,8 @@ Rédige UNIQUEMENT le H1 et l'introduction d'un article (150-200 mots max).
 
 SUJET: ${job.topic}
 CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 3000)}
+
+${internalLinksInstruction}
 
 STRUCTURE:
 - H1 titre SEO accrocheur (<h1>...</h1>)
@@ -1205,6 +1304,8 @@ Rédige UNE SECTION H2 complète d'un article long (800-1000 mots).
 SUJET GLOBAL: ${job.topic}
 SECTION À TRAITER: ${sectionTitle}
 CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 3000)}
+
+${internalLinksInstruction}
 
 STRUCTURE OBLIGATOIRE:
 - H2 titre: ${sectionTitle}
@@ -1261,6 +1362,8 @@ Rédige la FAQ et la conclusion d'un article.
 SUJET: ${job.topic}
 CONTEXTE: ${JSON.stringify(job.research || {}).slice(0, 3000)}
 
+${internalLinksInstruction}
+
 STRUCTURE OBLIGATOIRE:
 
 1. FAQ (3-5 questions/réponses):
@@ -1299,8 +1402,16 @@ Return ONLY this JSON (no other text): {"id":"conclusion","title":"FAQ & Conclus
             await saveSection(jobId, finalIndex, 'conclusion', 'FAQ & Conclusion', finalData);
             console.log(`✅ Section ${finalIndex} (FAQ+Conclusion) saved: ${(finalData.html || '').length} chars`);
 
-            console.log('✅ === SECTIONAL GENERATION COMPLETE ===');
-            nextStep = 'assemble_article';
+                        console.log('? === SECTIONAL GENERATION COMPLETE ===');
+            const dbSections = await getAllSections(jobId);
+            const orderedSections = dbSections.map((row: any) => row.content);
+            job.sectionsCount = orderedSections.length;
+            job.article = JSON.stringify({ sections: orderedSections });
+            job.bestArticle = job.article;
+            job.bestScore = 0;
+            job.iteration = 0;
+            job.status = 'review';
+            nextStep = 'review';
           }
 
           // ===== NEW STEP: ASSEMBLE ARTICLE (Reconstruct from DB sections) =====
@@ -1315,60 +1426,65 @@ Return ONLY this JSON (no other text): {"id":"conclusion","title":"FAQ & Conclus
                 throw new Error('No sections found in database');
               }
 
-              console.log(`📦 Retrieved ${dbSections.length} sections from DB`);
+              console.log('??? === ASSEMBLING ARTICLE FROM FINAL JSON ===');
 
-              // Extract HTML from each section's content JSONB
-              const sections = dbSections.map((dbSection: any) => ({
-                id: dbSection.content.id,
-                title: dbSection.content.title,
-                html: dbSection.content.html
-              }));
+            try {
+              const articleSource = job.bestArticle || job.article;
+              if (!articleSource) {
+                throw new Error('No article JSON available to assemble');
+              }
 
-              // Generate complete HTML
-              const html = generateHTMLFromSections(sections, jobId);
-              console.log(`✅ HTML assembled: ${html.length} chars from ${sections.length} sections`);
+              const parsedArticle = await safeJSONParse(articleSource, 'assemble_final_article');
+              const finalSections = parsedArticle?.sections || [];
+              if (!finalSections.length) {
+                throw new Error('No sections found in final article payload');
+              }
 
-              // Save HTML to storage
+              await deleteSections(jobId);
+              for (let i = 0; i < finalSections.length; i++) {
+                const section = finalSections[i];
+                await saveSection(jobId, i, section.id || `section-${i}`, section.title || `Section ${i + 1}`, section);
+              }
+
+              const html = generateHTMLFromSections(finalSections, jobId);
+              console.log(`? Final HTML assembled: ${html.length} chars from ${finalSections.length} sections`);
               await put('agents', `geo/articles/${jobId}.html`, html, 'text/html');
-              console.log(`✅ HTML saved to geo/articles/${jobId}.html`);
+              await saveArticleRecord(jobId, job.topic, finalSections, html, job.finalScore);
 
-              // Update job metadata
               job.htmlReady = true;
               job.htmlUrl = `https://storage.supabase.co/v1/object/public/agents/geo/articles/${jobId}.html`;
-              job.sectionsCount = sections.length;
-              job.article = null; // Don't store in job object
+              job.sectionsCount = finalSections.length;
+              job.article = null;
               job.bestArticle = null;
-              job.iteration = 1;
 
-              // Add verification metadata
               job.verification = {
-                sectionsGenerated: dbSections.length,
+                sectionsGenerated: finalSections.length,
                 htmlSize: html.length,
                 generationMethod: 'sectional_with_db',
                 generatedAt: new Date().toISOString(),
-                sectionsDetails: dbSections.map((s: any) => ({
-                  index: s.section_index,
-                  title: s.section_title,
-                  size: (s.content.html || '').length
+                sectionsDetails: finalSections.map((s: any, index: number) => ({
+                  index,
+                  title: s.title,
+                  size: (s.html || '').length
                 }))
               };
 
-              console.log(`✅ Assembly verification:`, job.verification);
-              console.log('✅ === ASSEMBLY COMPLETE ===');
+              job.status = 'completed';
+              console.log(`? Assembly verification:`, job.verification);
+              console.log('? === ASSEMBLY COMPLETE ===');
 
-              // Skip review/enrich and go directly to done
               nextStep = 'done';
+              completed = true;
 
             } catch (error: any) {
-              console.error(`❌ Failed to assemble article:`, error.message);
+              console.error(`? Failed to assemble article:`, error.message);
               job.status = 'error';
               job.error = `Failed to assemble article: ${error.message}`;
               job.htmlReady = false;
               throw error;
             }
-          }
 
-          // ===== LEGACY STEP: DRAFT PART 2 (Kept for backward compatibility) =====
+// ===== LEGACY STEP: DRAFT PART 2 (Kept for backward compatibility) =====
           else if (step === 'draft_part2') {
             console.log('⚠️  Using legacy draft_part2 - consider migrating to draft_sections + assemble_article');
             const outlineParts = (job.outline || '').split('|').map(s => s.trim());
@@ -1489,21 +1605,22 @@ Retourne: {"scores":{"seo":0,"geo":0},"breakdown":{},"strengths":[],"weaknesses"
               job.bestArticle = job.article;
             }
 
+            job.lastScore = scoreObj;
+
             if (seo >= job.minScore && geo >= job.minScore) {
-              job.status = 'completed';
+              job.status = 'assembling';
               job.finalScore = scoreObj;
-              completed = true;
+              nextStep = 'assemble_article';
             } else if (job.iteration >= job.maxIterations) {
-              job.status = 'max_iterations';
+              job.status = 'assembling';
               job.finalScore = scoreObj;
-              completed = true;
+              nextStep = 'assemble_article';
             } else {
               nextStep = 'rewrite';
-              job.lastScore = scoreObj;
             }
 
-            // Auto-save article as template when workflow completes
-            if (completed && job.bestArticle) {
+            if (nextStep === 'assemble_article' && job.bestArticle) {
+              // Auto-save article draft snapshot for traceability
               try {
                 let sections = [];
                 try {
@@ -1544,7 +1661,7 @@ Retourne: {"scores":{"seo":0,"geo":0},"breakdown":{},"strengths":[],"weaknesses"
                 });
                 await put('agents', 'geo/templates/index.json', JSON.stringify(idx, null, 2));
 
-                job.templateId = templateId;
+                job.templateId = job.templateId || templateId;
               } catch (err: any) {
                 console.error('Failed to auto-save article:', err);
               }
@@ -1553,6 +1670,11 @@ Retourne: {"scores":{"seo":0,"geo":0},"breakdown":{},"strengths":[],"weaknesses"
 
           // ===== STEP: REWRITE =====
           else if (step === 'rewrite') {
+            const internalArticlesRewrite = Array.isArray(job.internalArticles) ? job.internalArticles : [];
+            const internalLinksRewrite = internalArticlesRewrite.length
+              ? internalArticlesRewrite.map((link: any, idx: number) => `- ${idx + 1}. ${link.title}: ${link.url}`).join('\n')
+              : 'Aucun article interne disponible.';
+
             const sys4 = 'You output ONLY compact JSON. Return {"sections":[{"id":"...","title":"...","html":"..."}]} in French.';
             const usr4 = `Tu es un expert GEO & SEO. Réécris cet article pour atteindre 95%+ SEO/GEO.
 
@@ -1563,6 +1685,9 @@ SCORES ACTUELS: SEO ${job.lastScore?.scores?.seo}/100, GEO ${job.lastScore?.scor
 
 ENRICHISSEMENTS DISPONIBLES:
 ${JSON.stringify(job.enrichment || {}).slice(0, 2000)}
+
+LIENS INTERNES À INSÉRER IMPÉRATIVEMENT:
+${internalLinksRewrite}
 
 FAIBLESSES IDENTIFIÉES:
 ${(job.lastScore?.weaknesses || []).join('\n- ')}
