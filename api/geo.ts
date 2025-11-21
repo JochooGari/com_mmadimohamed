@@ -1042,6 +1042,28 @@ Retourne UNIQUEMENT un JSON valide:
           }
         };
 
+        const closeDanglingHtmlString = (text: string): string => {
+          const htmlIdx = text.indexOf('"html":"');
+          if (htmlIdx === -1) return text;
+          const start = htmlIdx + 8;
+          let escaped = false;
+          for (let i = start; i < text.length; i++) {
+            const ch = text[i];
+            if (!escaped && ch === '\\') {
+              escaped = true;
+              continue;
+            }
+            if (!escaped && ch === '"') {
+              return text;
+            }
+            escaped = false;
+          }
+          // No closing quote found for html string – trim trailing braces/spaces then close it manually
+          let trimmed = text.replace(/\s+$/g, '');
+          trimmed = trimmed.replace(/}+$/g, '');
+          return `${trimmed}"}`;
+        };
+
         const safeJSONParse = async (rawText: string, context = ''): Promise<any> => {
           try {
             return JSON.parse(rawText);
@@ -1062,6 +1084,7 @@ Retourne UNIQUEMENT un JSON valide:
                   const escaped = htmlContent.replace(/(?<!\\)"/g, '\\"');
                   return `"html":"${escaped}"`;
                 });
+              cleaned = closeDanglingHtmlString(cleaned);
 
               const result = JSON.parse(cleaned);
               console.log(`JSON repaired successfully for ${context}`);
