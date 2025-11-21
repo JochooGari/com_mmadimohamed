@@ -1030,45 +1030,54 @@ Retourne UNIQUEMENT un JSON valide:
           return r.json();
         };
 
-        // Safe JSON parser with automatic repair for common GPT-5 JSON issues
-        const safeJSONParse = (rawText: string, context = ''): any => {
+        // Persist raw JSON failures and attempt automatic repair
+        const logJSONFailure = async (context: string, rawText: string, stage: 'initial' | 'repair' = 'repair') => {
           try {
-            // Attempt 1: Direct parse (fast path for valid JSON)
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const path = `geo/debug/json_failures/${jobId}/${context}-${stage}-${timestamp}.txt`;
+            await put('agents', path, rawText, 'text/plain');
+            console.warn(`JSON failure logged to ${path} (${rawText.length} chars)`);
+          } catch (logErr: any) {
+            console.error(`Failed to log JSON failure for ${context}: ${logErr.message}`);
+          }
+        };
+
+        const safeJSONParse = async (rawText: string, context = ''): Promise<any> => {
+          try {
             return JSON.parse(rawText);
           } catch (error: any) {
-            console.warn(`⚠️ JSON parse failed for ${context}, attempting repair...`);
+            console.warn(`JSON parse failed for ${context}, attempting repair...`);
+            await logJSONFailure(context, rawText, 'initial');
 
             try {
-              // Attempt 2: Targeted cleaning for common issues
               let cleaned = rawText
-                // Fix typographic quotes
-                .replace(/[\u2018\u2019]/g, "'")  // ' ' → '
-                .replace(/[\u201C\u201D]/g, '"')  // " " → "
-
-                // Fix French contractions (l', d', n', etc.)
-                .replace(/\b([lLdDnNmMtTcCsS])[""](\w)/g, "$1'$2")
-
-                // Escape unescaped quotes in HTML content (rough heuristic)
+                .replace(/[\u2018\u2019]/g, "'")
+                .replace(/[\u201C\u201D]/g, '"')
+                .replace(/\b([lLdDnNmMtTcCsS])["”](\w)/g, "$1'$2")
+                .replace(/(href|title|alt)=\\"([^"\\]*?)\\"/gi, (match, attr, val) => {
+                  const escapedVal = val.replace(/(?<!\\)"/g, '\\"');
+                  return `${attr}=\\"${escapedVal}\\"`;
+                })
                 .replace(/"html"\s*:\s*"((?:[^"\\]|\\.)*)"/gs, (match, htmlContent) => {
-                  // Only escape quotes that aren't already escaped
                   const escaped = htmlContent.replace(/(?<!\\)"/g, '\\"');
                   return `"html":"${escaped}"`;
                 });
 
               const result = JSON.parse(cleaned);
-              console.log(`✅ JSON repaired successfully for ${context}`);
+              console.log(`JSON repaired successfully for ${context}`);
               return result;
             } catch (repairError: any) {
-              // Repair failed, log details and throw original error
-              console.error(`❌ JSON repair failed for ${context}:`, {
+              console.error(`JSON repair failed for ${context}:`, {
                 originalError: error.message,
                 repairError: repairError.message,
-                rawTextSample: rawText.slice(0, 200)
+                rawTextSample: rawText.slice(0, 400)
               });
+              await logJSONFailure(context, rawText, 'repair');
               throw error;
             }
           }
         };
+
 
         const step = job.currentStep;
         let nextStep = '';
@@ -1148,7 +1157,7 @@ Return ONLY this JSON (no other text): {"id":"intro","title":"Introduction","htm
             job.logs.push({ step: 'draft_section_0', usage: introRes?.usage, finish_reason: introRes?.finish_reason, timestamp: new Date().toISOString() });
 
             const introContent = stripFences((introRes?.content || '').trim());
-            const introData = safeJSONParse(introContent, 'section_0_intro');
+            const introData = await safeJSONParse(introContent, 'section_0_intro');
 
             await saveSection(jobId, 0, 'intro', 'Introduction', introData);
             console.log(`✅ Section 0 saved: ${(introData.html || '').length} chars`);
@@ -1204,7 +1213,7 @@ Return ONLY this JSON (no other text): {"id":"section-${i}","title":"${sectionTi
               });
 
               const sectionContent = stripFences((sectionRes?.content || '').trim());
-              const sectionData = safeJSONParse(sectionContent, `section_${i}_${sectionTitle}`);
+              const sectionData = await safeJSONParse(sectionContent, `section_${i}_${sectionTitle}`);
 
               await saveSection(jobId, i, `section-${i}`, sectionTitle, sectionData);
               console.log(`✅ Section ${i} saved: ${(sectionData.html || '').length} chars`);
@@ -1262,7 +1271,7 @@ Return ONLY this JSON (no other text): {"id":"conclusion","title":"FAQ & Conclus
             });
 
             const finalContent = stripFences((finalRes?.content || '').trim());
-            const finalData = safeJSONParse(finalContent, 'section_final_faq_conclusion');
+            const finalData = await safeJSONParse(finalContent, 'section_final_faq_conclusion');
 
             await saveSection(jobId, finalIndex, 'conclusion', 'FAQ & Conclusion', finalData);
             console.log(`✅ Section ${finalIndex} (FAQ+Conclusion) saved: ${(finalData.html || '').length} chars`);
