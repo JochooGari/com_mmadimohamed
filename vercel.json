@@ -5,6 +5,9 @@
     },
     "api/ai-proxy.ts": {
       "maxDuration": 180
+    },
+    "api/n8n-geo.ts": {
+      "maxDuration": 300
     }
   },
   "rewrites": [
