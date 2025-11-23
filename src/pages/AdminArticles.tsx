@@ -19,7 +19,9 @@ import {
   BarChart3,
   Bot,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Code2,
+  Sparkles
 } from 'lucide-react';
 import { useAdminData } from '../context/AdminDataContext';
 import { tryGetSupabaseClient } from '../lib/supabase';
@@ -42,14 +44,27 @@ type Article = {
   slug?: string;
 };
 
+type GeneratedArticle = {
+  job_id: string;
+  section_title: string;
+  section_index: number;
+  content: {
+    html: string;
+    score?: number;
+  };
+  created_at: string;
+};
+
 export default function AdminArticles() {
   const admin = useAdminData();
   const supabase = tryGetSupabaseClient();
   const [articles, setArticles] = useState<Article[]>([]);
+  const [generatedArticles, setGeneratedArticles] = useState<GeneratedArticle[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [viewingHtml, setViewingHtml] = useState<{content: string, title: string} | null>(null);
 
   const [draft, setDraft] = useState<Partial<Article>>({
     title: '',
@@ -85,6 +100,22 @@ export default function AdminArticles() {
           slug: r.slug
         }));
         setArticles(rows);
+      }
+    })();
+  }, [supabase]);
+
+  // Load generated articles from articles_content
+  useEffect(() => {
+    (async () => {
+      if (!supabase) return;
+      const { data, error } = await supabase
+        .from('articles_content')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (!error && Array.isArray(data)) {
+        setGeneratedArticles(data as GeneratedArticle[]);
       }
     })();
   }, [supabase]);
@@ -325,6 +356,10 @@ export default function AdminArticles() {
         <Tabs defaultValue="list" className="space-y-6">
           <TabsList>
             <TabsTrigger value="list">Liste des Articles</TabsTrigger>
+            <TabsTrigger value="generated">
+              <Sparkles className="w-4 h-4 mr-1" />
+              Articles Générés IA
+            </TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="style">Style CSS</TabsTrigger>
           </TabsList>
@@ -492,6 +527,138 @@ export default function AdminArticles() {
               </Card>
             )}
           </TabsContent>
+
+          {/* Generated Articles Tab */}
+          <TabsContent value="generated" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {generatedArticles.map((article) => (
+                <Card key={`${article.job_id}-${article.section_index}`} className="hover:shadow-lg transition-shadow duration-200">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-base line-clamp-2 mb-2">
+                          {article.section_title}
+                        </CardTitle>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Badge className="bg-purple-100 text-purple-800">
+                            <Sparkles className="w-3 h-3 mr-1" />
+                            Généré IA
+                          </Badge>
+                          {article.content.score && (
+                            <Badge variant="outline" className="text-green-600">
+                              Score: {article.content.score}%
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <FileText className="w-5 h-5 text-purple-500 ml-2" />
+                    </div>
+                  </CardHeader>
+
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="text-xs text-gray-500">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-mono text-xs">{article.job_id}</span>
+                          <span>Section {article.section_index}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <Calendar className="w-3 h-3 mr-1" />
+                          {formatDate(article.created_at)}
+                        </div>
+                      </div>
+
+                      <div className="flex space-x-2 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setViewingHtml({
+                            content: article.content.html,
+                            title: article.section_title
+                          })}
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          Preview HTML
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(article.content.html);
+                            alert('HTML copié !');
+                          }}
+                        >
+                          <Code2 className="w-3 h-3 mr-1" />
+                          Copier
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {generatedArticles.length === 0 && (
+              <Card className="text-center py-12">
+                <CardContent>
+                  <Sparkles className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    Aucun article généré par IA
+                  </h3>
+                  <p className="text-gray-500">
+                    Les articles générés via le workflow n8n apparaîtront ici
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* HTML Viewer Modal */}
+          {viewingHtml && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setViewingHtml(null)}>
+              <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-4 border-b">
+                  <h2 className="text-lg font-bold">{viewingHtml.title}</h2>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(viewingHtml.content);
+                        alert('HTML copié !');
+                      }}
+                    >
+                      <Code2 className="w-4 h-4 mr-1" />
+                      Copier HTML
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setViewingHtml(null)}>
+                      Fermer
+                    </Button>
+                  </div>
+                </div>
+                <Tabs defaultValue="preview" className="h-full">
+                  <div className="px-4 pt-2">
+                    <TabsList>
+                      <TabsTrigger value="preview">Preview</TabsTrigger>
+                      <TabsTrigger value="html">HTML Brut</TabsTrigger>
+                    </TabsList>
+                  </div>
+                  <TabsContent value="preview" className="p-4 overflow-auto" style={{maxHeight: 'calc(90vh - 140px)'}}>
+                    <div
+                      className="prose max-w-none"
+                      dangerouslySetInnerHTML={{ __html: viewingHtml.content }}
+                    />
+                  </TabsContent>
+                  <TabsContent value="html" className="p-4 overflow-auto" style={{maxHeight: 'calc(90vh - 140px)'}}>
+                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
+                      <code>{viewingHtml.content}</code>
+                    </pre>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </div>
+          )}
 
           {/* Analytics Tab */}
           <TabsContent value="analytics" className="space-y-6">
