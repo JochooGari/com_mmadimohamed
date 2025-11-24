@@ -357,6 +357,91 @@ export function BetaEditorLayout({
 
             <TabsContent value="edition" className="m-0">
               <div className="flex items-center gap-2 flex-wrap">
+                {/* Sélecteur de type de bloc */}
+                <select
+                  className="px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === 'paragraph') {
+                      editor?.chain().focus().setParagraph().run();
+                    } else if (value.startsWith('h')) {
+                      const level = parseInt(value.substring(1)) as 1 | 2 | 3 | 4 | 5 | 6;
+                      editor?.chain().focus().toggleHeading({ level }).run();
+                    }
+                  }}
+                  value={
+                    editor?.isActive('heading', { level: 1 }) ? 'h1' :
+                    editor?.isActive('heading', { level: 2 }) ? 'h2' :
+                    editor?.isActive('heading', { level: 3 }) ? 'h3' :
+                    editor?.isActive('heading', { level: 4 }) ? 'h4' :
+                    editor?.isActive('heading', { level: 5 }) ? 'h5' :
+                    editor?.isActive('heading', { level: 6 }) ? 'h6' :
+                    'paragraph'
+                  }
+                >
+                  <option value="paragraph">Paragraph</option>
+                  <option value="h1">Heading 1</option>
+                  <option value="h2">Heading 2</option>
+                  <option value="h3">Heading 3</option>
+                  <option value="h4">Heading 4</option>
+                  <option value="h5">Heading 5</option>
+                  <option value="h6">Heading 6</option>
+                </select>
+
+                {/* Sélecteur de police */}
+                <select
+                  className="px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white min-w-[140px]"
+                  onChange={(e) => {
+                    if (e.target.value === 'default') {
+                      editor?.chain().focus().unsetFontFamily().run();
+                    } else {
+                      editor?.chain().focus().setFontFamily(e.target.value).run();
+                    }
+                  }}
+                  defaultValue="default"
+                >
+                  <option value="default">Inter, system</option>
+                  <option value="Arial">Arial</option>
+                  <option value="'Arial Black'">Arial Black</option>
+                  <option value="'Comic Sans MS'">Comic Sans MS</option>
+                  <option value="'Courier New'">Courier New</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Helvetica">Helvetica</option>
+                  <option value="Impact">Impact</option>
+                  <option value="'Times New Roman'">Times New Roman</option>
+                  <option value="'Trebuchet MS'">Trebuchet MS</option>
+                  <option value="Verdana">Verdana</option>
+                </select>
+
+                {/* Sélecteur de taille */}
+                <select
+                  className="px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                  onChange={(e) => {
+                    const size = e.target.value;
+                    if (size === 'default') {
+                      editor?.chain().focus().unsetMark('textStyle').run();
+                    } else {
+                      // Pour la taille, on utilise l'attribut style inline
+                      editor?.chain().focus().setMark('textStyle', { fontSize: size }).run();
+                    }
+                  }}
+                  defaultValue="default"
+                >
+                  <option value="default">Taille</option>
+                  <option value="12px">12px</option>
+                  <option value="14px">14px</option>
+                  <option value="16px">16px</option>
+                  <option value="18px">18px</option>
+                  <option value="20px">20px</option>
+                  <option value="24px">24px</option>
+                  <option value="28px">28px</option>
+                  <option value="32px">32px</option>
+                  <option value="36px">36px</option>
+                  <option value="48px">48px</option>
+                </select>
+
+                <div className="w-px h-6 bg-gray-300 mx-1" />
+
                 {/* Formatage de base */}
                 <Button
                   variant="outline"
