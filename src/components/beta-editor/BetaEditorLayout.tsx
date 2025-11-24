@@ -59,6 +59,8 @@ export function BetaEditorLayout({
   const [wordCount, setWordCount] = useState(0);
   const [viewMode, setViewMode] = useState<'visual' | 'html'>('visual');
   const [htmlSource, setHtmlSource] = useState('');
+  const [showPasteModal, setShowPasteModal] = useState(false);
+  const [pasteHtmlInput, setPasteHtmlInput] = useState('');
 
   // Configuration TipTap
   const editor = useEditor({
@@ -145,19 +147,23 @@ export function BetaEditorLayout({
     }
   };
 
-  const pasteHtml = () => {
-    if (!editor) return;
+  const openPasteModal = () => {
+    setPasteHtmlInput('');
+    setShowPasteModal(true);
+  };
 
-    const html = prompt('Collez votre HTML ici:');
-    if (html) {
-      try {
-        editor.commands.setContent(html);
-        const text = editor.getText();
-        setWordCount(text.split(/\s+/).filter(Boolean).length);
-      } catch (error) {
-        console.error('Error pasting HTML:', error);
-        alert('Erreur lors du collage du HTML. Vérifiez la syntaxe.');
-      }
+  const handlePasteHtml = () => {
+    if (!editor || !pasteHtmlInput.trim()) return;
+
+    try {
+      editor.commands.setContent(pasteHtmlInput);
+      const text = editor.getText();
+      setWordCount(text.split(/\s+/).filter(Boolean).length);
+      setShowPasteModal(false);
+      setPasteHtmlInput('');
+    } catch (error) {
+      console.error('Error pasting HTML:', error);
+      alert('Erreur lors du collage du HTML. Vérifiez la syntaxe.');
     }
   };
 
@@ -206,7 +212,7 @@ export function BetaEditorLayout({
                     </>
                   )}
                 </Button>
-                <Button variant="outline" onClick={pasteHtml}>
+                <Button variant="outline" onClick={openPasteModal}>
                   <FileCode className="h-4 w-4 mr-2" />
                   Coller HTML
                 </Button>
@@ -419,6 +425,84 @@ export function BetaEditorLayout({
               }}
               onCancel={() => setShowConfig(false)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Modal Coller HTML */}
+      {showPasteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div>
+                <h2 className="text-xl font-semibold">Coller votre HTML</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Collez le HTML généré par un workflow, GPT, ou autre source
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPasteModal(false)}
+              >
+                ✕
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 p-6 overflow-y-auto">
+              <textarea
+                className="w-full h-[500px] p-4 font-mono text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                value={pasteHtmlInput}
+                onChange={(e) => setPasteHtmlInput(e.target.value)}
+                placeholder={`<!-- Collez votre HTML ici -->
+
+Exemple :
+<article>
+  <h1>Titre de l'article</h1>
+  <p>Paragraphe d'introduction...</p>
+  <h2>Section 1</h2>
+  <p>Contenu de la section...</p>
+</article>`}
+                spellCheck={false}
+                autoFocus
+              />
+              <div className="mt-3 text-xs text-gray-500 flex items-start gap-2">
+                <span>💡</span>
+                <span>
+                  Le HTML sera injecté dans l'éditeur TipTap. Assurez-vous que le HTML est valide
+                  pour éviter les erreurs d'affichage.
+                </span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between p-6 border-t bg-gray-50">
+              <div className="text-sm text-gray-600">
+                {pasteHtmlInput.length > 0 && (
+                  <span>
+                    {pasteHtmlInput.length} caractères • {pasteHtmlInput.split(/\s+/).filter(Boolean).length} mots
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPasteModal(false)}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  variant="default"
+                  onClick={handlePasteHtml}
+                  disabled={!pasteHtmlInput.trim()}
+                >
+                  <FileCode className="h-4 w-4 mr-2" />
+                  Injecter le HTML
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
