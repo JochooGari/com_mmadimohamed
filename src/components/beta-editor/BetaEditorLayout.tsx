@@ -81,6 +81,22 @@ export function BetaEditorLayout({
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
+  const [customCss, setCustomCss] = useState('');
+
+  // Charger le CSS personnalisé depuis l'onglet Style
+  useEffect(() => {
+    (async () => {
+      try {
+        const response = await fetch('/api/storage?agent=site&type=theme');
+        if (response.ok) {
+          const cssText = await response.text();
+          setCustomCss(cssText || '');
+        }
+      } catch (error) {
+        console.error('Error loading custom CSS:', error);
+      }
+    })();
+  }, []);
 
   // Configuration TipTap
   const editor = useEditor({
@@ -613,7 +629,12 @@ export function BetaEditorLayout({
 
             {/* Éditeur TipTap ou HTML source */}
             {viewMode === 'visual' ? (
-              <EditorContent editor={editor} />
+              <div className="article-preview-container">
+                {customCss && (
+                  <style dangerouslySetInnerHTML={{ __html: customCss }} />
+                )}
+                <EditorContent editor={editor} />
+              </div>
             ) : (
               <div className="relative">
                 <textarea

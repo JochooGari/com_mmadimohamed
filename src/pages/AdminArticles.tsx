@@ -626,13 +626,23 @@ export default function AdminArticles() {
               initialContent=""
               onSave={async (content, config) => {
                 try {
+                  console.log('🔄 Début de la sauvegarde...');
+                  console.log('Content length:', content.length);
+                  console.log('Config:', config);
+
                   // Save article to Supabase
                   if (!supabase) {
+                    console.error('❌ Supabase non disponible');
                     alert('Supabase non disponible');
                     return;
                   }
 
+                  // Get current user
+                  const { data: { user } } = await supabase.auth.getUser();
+                  console.log('👤 User:', user?.id);
+
                   const computedSlug = slugifyLocal(config.primaryKeyword) || `article-${Date.now()}`;
+                  console.log('📝 Slug:', computedSlug);
 
                   const payload = {
                     slug: computedSlug,
@@ -642,11 +652,14 @@ export default function AdminArticles() {
                     tags: [config.articleType, config.primaryKeyword, ...(config.secondaryKeywords || [])],
                     published: false,
                     published_at: null,
+                    author_id: user?.id || null,
                     metadata: {
                       config: config,
                       targetLength: config.targetLength
                     }
                   };
+
+                  console.log('📦 Payload:', payload);
 
                   const { data, error } = await supabase
                     .from('articles')
@@ -654,8 +667,12 @@ export default function AdminArticles() {
                     .select('*')
                     .single();
 
-                  if (error) throw error;
+                  if (error) {
+                    console.error('❌ Erreur Supabase:', error);
+                    throw error;
+                  }
 
+                  console.log('✅ Article sauvegardé:', data);
                   alert('Article sauvegardé avec succès !');
 
                   // Reload articles list
