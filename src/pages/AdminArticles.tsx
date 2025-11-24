@@ -652,11 +652,7 @@ export default function AdminArticles() {
                     tags: [config.articleType, config.primaryKeyword, ...(config.secondaryKeywords || [])],
                     published: false,
                     published_at: null,
-                    author_id: user?.id || null,
-                    metadata: {
-                      config: config,
-                      targetLength: config.targetLength
-                    }
+                    author_id: user?.id || null
                   };
 
                   console.log('📦 Payload:', payload);
