@@ -31,7 +31,9 @@ import {
   Save,
   Eye,
   Settings,
-  BarChart3
+  BarChart3,
+  Code,
+  FileCode
 } from 'lucide-react';
 import { ScorePanel } from './ScorePanel';
 import { ArticleConfigForm } from './ArticleConfigForm';
@@ -55,6 +57,8 @@ export function BetaEditorLayout({
   const [articleConfig, setArticleConfig] = useState<ArticleConfig | null>(initialConfig || null);
   const [isSaving, setIsSaving] = useState(false);
   const [wordCount, setWordCount] = useState(0);
+  const [viewMode, setViewMode] = useState<'visual' | 'html'>('visual');
+  const [htmlSource, setHtmlSource] = useState('');
 
   // Configuration TipTap
   const editor = useEditor({
@@ -121,6 +125,42 @@ export function BetaEditorLayout({
     }
   };
 
+  const toggleViewMode = () => {
+    if (!editor) return;
+
+    if (viewMode === 'visual') {
+      // Passer en mode HTML : récupérer le HTML de l'éditeur
+      const html = editor.getHTML();
+      setHtmlSource(html);
+      setViewMode('html');
+    } else {
+      // Passer en mode visuel : injecter le HTML dans l'éditeur
+      try {
+        editor.commands.setContent(htmlSource);
+        setViewMode('visual');
+      } catch (error) {
+        console.error('Error setting HTML content:', error);
+        alert('Erreur lors de l\'injection du HTML. Vérifiez la syntaxe.');
+      }
+    }
+  };
+
+  const pasteHtml = () => {
+    if (!editor) return;
+
+    const html = prompt('Collez votre HTML ici:');
+    if (html) {
+      try {
+        editor.commands.setContent(html);
+        const text = editor.getText();
+        setWordCount(text.split(/\s+/).filter(Boolean).length);
+      } catch (error) {
+        console.error('Error pasting HTML:', error);
+        alert('Erreur lors du collage du HTML. Vérifiez la syntaxe.');
+      }
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-120px)] flex flex-col">
       {/* Ruban supérieur - Tabs */}
@@ -153,9 +193,22 @@ export function BetaEditorLayout({
                   <Save className="h-4 w-4 mr-2" />
                   {isSaving ? 'Sauvegarde...' : 'Enregistrer'}
                 </Button>
-                <Button variant="outline">
-                  <Eye className="h-4 w-4 mr-2" />
-                  Aperçu
+                <Button variant="outline" onClick={toggleViewMode}>
+                  {viewMode === 'visual' ? (
+                    <>
+                      <Code className="h-4 w-4 mr-2" />
+                      Mode HTML
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Mode Visuel
+                    </>
+                  )}
+                </Button>
+                <Button variant="outline" onClick={pasteHtml}>
+                  <FileCode className="h-4 w-4 mr-2" />
+                  Coller HTML
                 </Button>
                 <Button variant="outline" onClick={() => setShowConfig(true)}>
                   <Settings className="h-4 w-4 mr-2" />
@@ -311,8 +364,23 @@ export function BetaEditorLayout({
               </div>
             </div>
 
-            {/* Éditeur TipTap */}
-            <EditorContent editor={editor} />
+            {/* Éditeur TipTap ou HTML source */}
+            {viewMode === 'visual' ? (
+              <EditorContent editor={editor} />
+            ) : (
+              <div className="relative">
+                <textarea
+                  className="w-full min-h-[600px] p-4 font-mono text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  value={htmlSource}
+                  onChange={(e) => setHtmlSource(e.target.value)}
+                  placeholder="<!-- Éditez le HTML ici -->"
+                  spellCheck={false}
+                />
+                <div className="mt-2 text-xs text-gray-500">
+                  💡 Modifiez le HTML directement, puis cliquez sur "Mode Visuel" pour voir le résultat.
+                </div>
+              </div>
+            )}
           </Card>
         </div>
 
