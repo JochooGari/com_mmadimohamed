@@ -28,6 +28,7 @@ import { tryGetSupabaseClient } from '../lib/supabase';
 import EnhancedEditorLayout from '../components/admin/enhanced-editor/EnhancedEditorLayout';
 import { Editor as TinymceEditor } from '@tinymce/tinymce-react';
 import AuthGuard from '../components/admin/AuthGuard';
+import { BetaEditorLayout } from '../components/beta-editor/BetaEditorLayout';
 
 type Article = {
   id: string;
@@ -360,6 +361,10 @@ export default function AdminArticles() {
               <Sparkles className="w-4 h-4 mr-1" />
               Articles Générés IA
             </TabsTrigger>
+            <TabsTrigger value="beta">
+              <Sparkles className="w-4 h-4 mr-1" />
+              Article (bêta)
+            </TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="style">Style CSS</TabsTrigger>
           </TabsList>
@@ -612,6 +617,77 @@ export default function AdminArticles() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* Beta Editor Tab */}
+          <TabsContent value="beta" className="space-y-6">
+            <BetaEditorLayout
+              articleId={undefined}
+              initialContent=""
+              onSave={async (content, config) => {
+                try {
+                  // Save article to Supabase
+                  if (!supabase) {
+                    alert('Supabase non disponible');
+                    return;
+                  }
+
+                  const computedSlug = slugifyLocal(config.primaryKeyword) || `article-${Date.now()}`;
+
+                  const payload = {
+                    slug: computedSlug,
+                    title: config.primaryKeyword,
+                    excerpt: `Article ${config.articleType} - ${config.primaryKeyword}`,
+                    content_md: content,
+                    tags: [config.articleType, config.primaryKeyword, ...(config.secondaryKeywords || [])],
+                    published: false,
+                    published_at: null,
+                    metadata: {
+                      config: config,
+                      targetLength: config.targetLength
+                    }
+                  };
+
+                  const { data, error } = await supabase
+                    .from('articles')
+                    .upsert(payload, { onConflict: 'slug' })
+                    .select('*')
+                    .single();
+
+                  if (error) throw error;
+
+                  alert('Article sauvegardé avec succès !');
+
+                  // Reload articles list
+                  const { data: articlesData } = await supabase
+                    .from('articles')
+                    .select('*')
+                    .order('updated_at', { ascending: false })
+                    .limit(200);
+
+                  if (articlesData) {
+                    const rows: Article[] = articlesData.map((r: any) => ({
+                      id: r.id,
+                      title: r.title,
+                      excerpt: r.excerpt || '',
+                      content: (r.content_md || (typeof r.content === 'string' ? r.content : (r.content?.html || '')) || ''),
+                      status: r.published ? 'published' : 'draft',
+                      createdBy: r.author_id || 'User',
+                      createdAt: r.created_at,
+                      updatedAt: r.updated_at,
+                      tags: r.tags || [],
+                      readTime: Math.ceil(((r.content_md || (typeof r.content==='string'? r.content : (r.content?.html||''))||'')).length / 1000),
+                      seoScore: undefined,
+                      slug: r.slug
+                    }));
+                    setArticles(rows);
+                  }
+                } catch (e: any) {
+                  console.error('Save error:', e);
+                  alert('Erreur lors de la sauvegarde: ' + (e?.message || 'unknown'));
+                }
+              }}
+            />
           </TabsContent>
 
           {/* HTML Viewer Modal */}
