@@ -1,0 +1,393 @@
+{
+  "name": "Article Generation - Sectional (Complete)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-article-sectional",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "generate-article-sectional"
+    },
+    {
+      "parameters": {
+        "jsCode": "const topic = $json.topic;\nconst outline = $json.outline;\nconst sections = outline.split('|').map(s => s.trim());\n\nconst outlinePrompt = `**Tu es un expert SEO & GEO, spécialiste du contenu long-form à la Neil Patel, dédié à l'audience Finance/BI (CFO, DAF, Comex, ETI/PME) en France/Europe.**\n\nSUJET: ${topic}\n\nSECTIONS DEMANDÉES:\n${sections.map((s, i) => `${i + 1}. ${s}`).join('\\n')}\n\n**Ta mission**: Génère un plan détaillé en JSON avec:\n\n1. **H1** (titre principal SEO-optimisé)\n2. **Introduction** (100-150 mots, hook + promesse)\n3. Pour chaque section:\n   - **h2**: Titre de section (question/action, mots-clés)\n   - **h3_list**: Liste des sous-sections H3\n   - **estimated_words**: Estimation mots (400-600 par section)\n   - **key_points**: 3-5 points clés à couvrir\n   - **links_needed**: Types de liens externes à intégrer\n4. **FAQ** (3-5 questions)\n5. **Conclusion** (résumé + CTA)\n\n**Format JSON strict**:\n{\n  \"h1\": \"Titre principal\",\n  \"intro\": \"Texte introduction complète\",\n  \"sections\": [\n    {\n      \"section_index\": 0,\n      \"h2\": \"Titre H2\",\n      \"h3_list\": [\"Sous-titre 1\", \"Sous-titre 2\"],\n      \"estimated_words\": 500,\n      \"key_points\": [\"Point 1\", \"Point 2\"],\n      \"links_needed\": [\"étude gouvernementale\", \"forum LinkedIn\"]\n    }\n  ],\n  \"faq\": [\n    {\"question\": \"Q1?\", \"answer\": \"Réponse courte\"}\n  ],\n  \"conclusion\": \"Texte conclusion + CTA\"\n}\n\nGénère maintenant ce plan détaillé.`;\n\nreturn {\n  json: {\n    topic,\n    sections,\n    outlinePrompt,\n    apiBody: JSON.stringify({\n      model: \"gpt-5.1\",\n      input: [{\n        role: \"user\",\n        content: [{type: \"input_text\", text: outlinePrompt}]\n      }],\n      text: {\n        format: {\n          type: \"json_schema\",\n          name: \"article_outline\",\n          schema: {\n            type: \"object\",\n            properties: {\n              h1: { type: \"string\" },\n              intro: { type: \"string\" },\n              sections: {\n                type: \"array\",\n                items: {\n                  type: \"object\",\n                  properties: {\n                    section_index: { type: \"number\" },\n                    h2: { type: \"string\" },\n                    h3_list: { type: \"array\", items: { type: \"string\" } },\n                    estimated_words: { type: \"number\" },\n                    key_points: { type: \"array\", items: { type: \"string\" } },\n                    links_needed: { type: \"array\", items: { type: \"string\" } }\n                  },\n                  required: [\"section_index\", \"h2\", \"h3_list\", \"estimated_words\", \"key_points\"],\n                  additionalProperties: false\n                }\n              },\n              faq: {\n                type: \"array\",\n                items: {\n                  type: \"object\",\n                  properties: {\n                    question: { type: \"string\" },\n                    answer: { type: \"string\" }\n                  },\n                  required: [\"question\", \"answer\"],\n                  additionalProperties: false\n                }\n              },\n              conclusion: { type: \"string\" }\n            },\n            required: [\"h1\", \"intro\", \"sections\", \"faq\", \"conclusion\"],\n            additionalProperties: false\n          },\n          strict: true\n        }\n      },\n      max_output_tokens: 4000,\n      temperature: 1\n    })\n  }\n};"
+      },
+      "id": "b2c3d4e5-build-outline",
+      "name": "Build Outline Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.apiBody }}",
+        "options": {}
+      },
+      "id": "c3d4e5f6-gpt5-outline",
+      "name": "STEP 1 - Generate Outline (GPT-5)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "CZtCJqLCWSNLG0pB",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $node['Build Outline Prompt'].json;\nconst response = $json;\n\nlet outline;\ntry {\n  const content = response.choices[0].message.content;\n  outline = JSON.parse(content);\n} catch (e) {\n  throw new Error('Failed to parse outline JSON: ' + e.message);\n}\n\nconsole.log('📋 Outline généré:', outline.h1);\nconsole.log('📊 Sections:', outline.sections.length);\n\nreturn {\n  json: {\n    topic: prev.topic,\n    outline: outline,\n    h1: outline.h1,\n    intro: outline.intro,\n    sections: outline.sections,\n    faq: outline.faq,\n    conclusion: outline.conclusion,\n    totalSections: outline.sections.length,\n    job_id: `job_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`\n  }\n};"
+      },
+      "id": "d4e5f6g7-extract-outline",
+      "name": "Extract Outline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "e5f6g7h8-split-sections",
+      "name": "Split Sections",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const outlineData = $node['Extract Outline'].json;\nconst sectionIndex = $node['Split Sections'].context.currentRunIndex;\nconst section = outlineData.sections[sectionIndex];\n\nconst writerPrompt = `**Tu es un expert SEO & GEO, spécialiste du contenu long-form à la Neil Patel, dédié à l'audience Finance/BI (CFO, DAF, Comex, ETI/PME) en France/Europe.**\n\n**CONTEXTE DE L'ARTICLE:**\n- Titre principal (H1): ${outlineData.h1}\n- Section actuelle: ${sectionIndex + 1}/${outlineData.totalSections}\n\n**TA MISSION**: Rédige UNIQUEMENT la section suivante (400-600 mots max):\n\n**H2**: ${section.h2}\n\n**Sous-sections à couvrir (H3)**:\n${section.h3_list.map((h3, i) => `  ${i + 1}. ${h3}`).join('\\n')}\n\n**Points clés obligatoires**:\n${section.key_points.map((p, i) => `  • ${p}`).join('\\n')}\n\n**Liens externes à intégrer** (au moins 2):\n${(section.links_needed || ['étude officielle', 'forum métier']).map(l => `  • ${l}`).join('\\n')}\n\n---\n\n## EXIGENCES STRICTES:\n\n1. **Structure HTML**:\n   - Wrapper: <section id=\"section-${sectionIndex}\" itemscope itemtype=\"https://schema.org/Article\">\n   - H2 principal avec itemprop=\"headline\"\n   - H3 pour chaque sous-section\n   - Paragraphes courts (3-4 phrases max)\n   - FERME TOUJOURS la balise </section>\n\n2. **Contenu**:\n   - 400-600 mots (pas plus!)\n   - Style Neil Patel: paragraphes ultra-courts, actionnables\n   - Au moins 1 liste à puces ou tableau\n   - Au moins 2 liens externes autoritaires (gouvernement, LinkedIn, forum, étude)\n   - Citations communautaires ou cas réels si possible\n   - Chiffres France/Europe récents\n\n3. **SEO**:\n   - Mots-clés naturellement intégrés\n   - Longue traîne dans H3\n   - Schema.org itemprops (headline, articleBody)\n\n4. **GEO**:\n   - Marqueurs France/Europe\n   - Sources locales/institutionnelles\n   - Exemples terrain français\n\n**Format JSON strict de réponse**:\n{\n  \"section_index\": ${sectionIndex},\n  \"h2\": \"${section.h2}\",\n  \"html\": \"<section id=\\\\\"section-${sectionIndex}\\\\\" itemscope itemtype=\\\\\"https://schema.org/Article\\\\\">...</section>\",\n  \"word_count\": 500,\n  \"links_added\": [\"https://...\", \"https://...\"],\n  \"notes\": [\"Points importants couverts\"]\n}\n\n**IMPORTANT**: Le HTML DOIT être complet et fermé (</section> à la fin)!`;\n\nreturn {\n  json: {\n    ...outlineData,\n    sectionIndex,\n    section,\n    writerPrompt,\n    apiBody: JSON.stringify({\n      model: \"gpt-5.1\",\n      input: [{\n        role: \"user\",\n        content: [{type: \"input_text\", text: writerPrompt}]\n      }],\n      text: {\n        format: {\n          type: \"json_schema\",\n          name: \"section_content\",\n          schema: {\n            type: \"object\",\n            properties: {\n              section_index: { type: \"number\" },\n              h2: { type: \"string\" },\n              html: { type: \"string\" },\n              word_count: { type: \"number\" },\n              links_added: { type: \"array\", items: { type: \"string\" } },\n              notes: { type: \"array\", items: { type: \"string\" } }\n            },\n            required: [\"section_index\", \"h2\", \"html\", \"word_count\"],\n            additionalProperties: false\n          },\n          strict: true\n        }\n      },\n      max_output_tokens: 3500,\n      temperature: 0.5\n    })\n  }\n};"
+      },
+      "id": "f6g7h8i9-build-writer",
+      "name": "Build Writer Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.apiBody }}",
+        "options": {}
+      },
+      "id": "g7h8i9j0-writer-section",
+      "name": "STEP 2 - Writer Section (GPT-5.1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "CZtCJqLCWSNLG0pB",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $node['Build Writer Prompt'].json;\nconst response = $json;\n\nlet sectionData;\ntry {\n  const content = response.choices[0].message.content;\n  sectionData = JSON.parse(content);\n} catch (e) {\n  throw new Error('Failed to parse section JSON: ' + e.message);\n}\n\n// VALIDATION HTML\nconst html = sectionData.html;\nconst hasClosingSection = html.includes('</section>');\nconst hasOpeningSection = html.includes('<section');\nconst wordCount = html.split(/\\s+/).length;\n\nif (!hasOpeningSection || !hasClosingSection) {\n  throw new Error(`❌ HTML INCOMPLET pour section ${prev.sectionIndex}! Balise <section> non fermée.`);\n}\n\nif (wordCount < 300) {\n  throw new Error(`❌ Section ${prev.sectionIndex} trop courte: ${wordCount} mots (min 400)`);\n}\n\nconsole.log(`✅ Section ${prev.sectionIndex} validée: ${wordCount} mots, HTML complet`);\n\nreturn {\n  json: {\n    ...prev,\n    sectionHTML: html,\n    h2: sectionData.h2,\n    wordCount: sectionData.word_count || wordCount,\n    linksAdded: sectionData.links_added || [],\n    notes: sectionData.notes || [],\n    htmlValid: true\n  }\n};"
+      },
+      "id": "h8i9j0k1-validate-html",
+      "name": "Validate HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $node['Validate HTML'].json;\n\nconst reviewerPrompt = `Tu es agent reviewer éditorial expert SEO et GEO dans la finance/BI (Power BI, reporting CFO) France/Europe.\n\n**SECTION À ÉVALUER** (Section ${prev.sectionIndex + 1}):\n\n**H2**: ${prev.h2}\n\n**HTML**:\n${prev.sectionHTML}\n\n---\n\n## Ta mission\n\nÉvalue cette section selon le tableau de scoring pondéré ci-dessous et fournis:\n\n1. **Score SEO** (pondération 80%)\n2. **Score GEO** (pondération 19%)\n3. **Score Fraîcheur** (pondération 1%)\n4. **Score global** (/100)\n5. **Feedback actionnable** pour atteindre ≥95\n\n---\n\n## Tableau de scoring (à remplir)\n\n### SEO (80% du score total)\n- Structure H2/H3 (10%)\n- Mots-clés principaux (8%)\n- Longue traîne (7%)\n- Lisibilité/paragraphes courts (7%)\n- Liens externes autorité (8%)\n- Benchmarks/chiffres (8%)\n- Media/tableaux (7%)\n- CTA/lead magnets (6%)\n- Qualité intro/hook (7%)\n- Plan/skimming (8%)\n- FAQ pertinente (7%)\n- Liens internes cluster (7%)\n\n### GEO (19% du score total)\n- Localisation France/EU (5%)\n- Citations communautaires (3%)\n- FAQ GEO contextualisée (3%)\n- Benchmarks marché FR/EU (3%)\n- Sources nationales/institutionnelles (3%)\n- Feedback retours terrain (2%)\n\n### Fraîcheur (1% du score total)\n- Date actualisation visible (1%)\n\n---\n\n**Format JSON strict de réponse**:\n{\n  \"section_index\": ${prev.sectionIndex},\n  \"scores\": {\n    \"seo\": 85,\n    \"geo\": 90,\n    \"freshness\": 100,\n    \"global\": 86\n  },\n  \"feedback\": [\n    \"Ajouter 1 lien externe gouvernemental après le 2e paragraphe\",\n    \"Intégrer citation LinkedIn/forum dans H3.2\",\n    \"Ajouter tableau comparatif outils\"\n  ],\n  \"missing_elements\": {\n    \"external_links\": 1,\n    \"community_quotes\": 1,\n    \"tables\": 1\n  },\n  \"readyForPublication\": false\n}`;\n\nreturn {\n  json: {\n    ...prev,\n    reviewerPrompt,\n    apiBody: JSON.stringify({\n      model: \"claude-sonnet-4-5-20250929\",\n      max_tokens: 2000,\n      temperature: 0.3,\n      messages: [{\n        role: \"user\",\n        content: reviewerPrompt\n      }]\n    })\n  }\n};"
+      },
+      "id": "i9j0k1l2-build-reviewer",
+      "name": "Build Reviewer Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.apiBody }}",
+        "options": {}
+      },
+      "id": "j0k1l2m3-reviewer",
+      "name": "STEP 3 - Reviewer Section (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 300],
+      "credentials": {
+        "anthropicApi": {
+          "id": "TT555VQ7I164GBRX",
+          "name": "Anthropic Claude account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $node['Build Reviewer Prompt'].json;\nconst response = $json;\n\nlet scoreData;\ntry {\n  const content = response.content[0].text;\n  scoreData = JSON.parse(content);\n} catch (e) {\n  throw new Error('Failed to parse reviewer response: ' + e.message);\n}\n\nconst globalScore = scoreData.scores.global;\nconst seoScore = scoreData.scores.seo;\nconst geoScore = scoreData.scores.geo;\n\nconsole.log(`📊 Section ${prev.sectionIndex} - Score: ${globalScore}/100 (SEO: ${seoScore}, GEO: ${geoScore})`);\n\nreturn {\n  json: {\n    ...prev,\n    scoreData,\n    globalScore,\n    seoScore,\n    geoScore,\n    feedback: scoreData.feedback || [],\n    missingElements: scoreData.missing_elements || {},\n    needsEnrichment: globalScore < 95\n  }\n};"
+      },
+      "id": "k1l2m3n4-extract-score",
+      "name": "Extract Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nreturn {\n  json: {\n    job_id: data.job_id,\n    section_index: data.sectionIndex,\n    section_title: data.h2,\n    content: {\n      html: data.sectionHTML,\n      score: data.globalScore,\n      seo_score: data.seoScore,\n      geo_score: data.geoScore,\n      word_count: data.wordCount,\n      links: data.linksAdded || [],\n      feedback: data.feedback || [],\n      validated: data.htmlValid\n    }\n  }\n};"
+      },
+      "id": "l2m3n4o5-prepare-save",
+      "name": "Prepare for Save",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "articles_content",
+        "options": {
+          "queryName": "insert_section"
+        }
+      },
+      "id": "m3n4o5p6-save-section",
+      "name": "STEP 4 - Save Section",
+      "type": "@n8n/n8n-nodes-langchain.supabaseInsert",
+      "typeVersion": 1,
+      "position": [2880, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "WjTJ7AJ4DFGNPXWr",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, message: `Article généré avec ${$node['Extract Outline'].json.totalSections} sections`, job_id: $node['Extract Outline'].json.job_id, total_sections: $node['Extract Outline'].json.totalSections, h1: $node['Extract Outline'].json.h1 } }}",
+        "options": {}
+      },
+      "id": "n4o5p6q7-response",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3100, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Outline Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Outline Prompt": {
+      "main": [
+        [
+          {
+            "node": "STEP 1 - Generate Outline (GPT-5)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STEP 1 - Generate Outline (GPT-5)": {
+      "main": [
+        [
+          {
+            "node": "Extract Outline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Outline": {
+      "main": [
+        [
+          {
+            "node": "Split Sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Sections": {
+      "main": [
+        [
+          {
+            "node": "Build Writer Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Writer Prompt": {
+      "main": [
+        [
+          {
+            "node": "STEP 2 - Writer Section (GPT-5.1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STEP 2 - Writer Section (GPT-5.1)": {
+      "main": [
+        [
+          {
+            "node": "Validate HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate HTML": {
+      "main": [
+        [
+          {
+            "node": "Build Reviewer Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reviewer Prompt": {
+      "main": [
+        [
+          {
+            "node": "STEP 3 - Reviewer Section (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STEP 3 - Reviewer Section (Claude)": {
+      "main": [
+        [
+          {
+            "node": "Extract Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Score": {
+      "main": [
+        [
+          {
+            "node": "Prepare for Save",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare for Save": {
+      "main": [
+        [
+          {
+            "node": "STEP 4 - Save Section",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STEP 4 - Save Section": {
+      "main": [
+        [
+          {
+            "node": "Split Sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-24T00:00:00.000Z",
+  "versionId": "1"
+}
