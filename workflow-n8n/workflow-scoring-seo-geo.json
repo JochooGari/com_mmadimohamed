@@ -1,0 +1,155 @@
+{
+  "name": "Article Scoring - SEO/GEO (Perplexity)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "score-article",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-score",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "score-article"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrait et valide les données d'entrée\nconst data = $json;\n\n// Validation\nif (!data.content) {\n  throw new Error('Missing required field: content');\n}\n\nconst content = typeof data.content === 'string' ? data.content : data.content.html || '';\nconst config = data.config || {};\nconst userProfile = data.userProfile || { industry: 'other', market: 'france' };\nconst analysisLevel = data.level || 'full'; // 'algo_only', 'quick', 'full'\n\n// Extraction des métadonnées\nconst wordCount = content.split(/\\s+/).length;\nconst primaryKeyword = config.primaryKeyword || '';\nconst articleType = config.articleType || 'guide';\n\nconsole.log('📊 Scoring request:', {\n  wordCount,\n  primaryKeyword,\n  articleType,\n  analysisLevel\n});\n\nreturn {\n  json: {\n    content,\n    config,\n    userProfile,\n    analysisLevel,\n    wordCount,\n    primaryKeyword,\n    articleType\n  }\n};"
+      },
+      "id": "extract-input",
+      "name": "Extract Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Perplexity scoring prompt selon le PRD\nconst data = $json;\nconst { content, config, userProfile, analysisLevel } = data;\n\nconst industry = userProfile.industry || 'Finance & BI';\nconst market = userProfile.market || 'france';\nconst primaryKeyword = config.primaryKeyword || '';\nconst articleType = config.articleType || 'guide';\n\n// Prompt système basé sur le PRD Section 4.3 & 6.2\nconst systemPrompt = `Tu es un agent reviewer éditorial expert SEO et GEO dans le secteur \"${industry}\" pour le marché \"${market}\".\n\n## Contexte de l'article\n- Mot-clé principal : \"${primaryKeyword}\"\n- Type d'article : ${articleType}\n- Longueur : ${data.wordCount} mots\n\n## Mission : Scoring SEO/GEO selon framework v1.0\n\nÉvalue l'article sur 21 critères pondérés :\n\n### CRITÈRES SEO (76% du score)\n1. Structure H1/H2/H3 (10%)\n2. Qualité intro & hook (7%)\n3. Densité mots-clés (8%)\n4. Longue traîne (7%)\n5. Skimmabilité (8%)\n6. Lisibilité (7%)\n7. FAQ & Schema (7%)\n8. Preuves & données (6%)\n9. Liens internes (5%)\n10. Liens externes (5%)\n11. Médias (4%)\n12. CTA (2%)\n\n### CRITÈRES GEO (19% du score)\n13. Marqueurs géo (5%)\n14. Citations communautaires (3%)\n15. FAQ contextualisées (3%)\n16. Benchmarks locaux (3%)\n17. Sources nationales (3%)\n18. Retours terrain (2%)\n\n### FRAÎCHEUR (5% du score)\n19. Date publication (2%)\n20. Mentions temporelles (2%)\n21. Âge sources (1%)\n\n## Format JSON strict\n{\n  \"scores\": {\n    \"seo\": number,        // Score SEO /76\n    \"geo\": number,        // Score GEO /19\n    \"freshness\": number,  // Score fraîcheur /5\n    \"global\": number      // Score global /100 (pondéré)\n  },\n  \"criteria\": {\n    \"structure\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"introHook\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"keywordDensity\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"longTail\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"skimmability\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"readability\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"faqSchema\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"proofs\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"internalLinks\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"externalLinks\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"media\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"cta\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"geoMarkers\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"communityCitations\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"faqContextualized\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"localBenchmarks\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"nationalSources\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"fieldFeedback\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"publicationDate\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"temporalMentions\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string },\n    \"sourcesAge\": { \"score\": number, \"severity\": \"ok\"|\"warning\"|\"critical\", \"feedback\": string }\n  },\n  \"priorities\": [\n    { \"criterion\": string, \"severity\": \"critical\"|\"warning\", \"problem\": string, \"action\": string, \"location\": string }\n  ],\n  \"summary\": string,\n  \"freshnessPenalty\": number,  // 1.0, 0.95, 0.90, 0.80\n  \"recommendations\": {\n    \"critical\": [string],  // Actions prioritaires\n    \"improvements\": [string],  // Améliorations suggérées\n    \"strengths\": [string]  // Points forts\n  }\n}`;\n\nconst userPrompt = `Analyse cet article et fournis le scoring détaillé en JSON :\n\n${content}`;\n\nreturn {\n  json: {\n    ...data,\n    apiBody: JSON.stringify({\n      model: \"sonar\",\n      messages: [\n        { role: \"system\", content: systemPrompt },\n        { role: \"user\", content: userPrompt }\n      ],\n      max_tokens: 3000,\n      temperature: 0.3,\n      response_format: { type: \"json_object\" }\n    })\n  }\n};"
+      },
+      "id": "build-scoring-prompt",
+      "name": "Build Scoring Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.apiBody }}",
+        "options": {}
+      },
+      "id": "call-perplexity",
+      "name": "Perplexity Scoring",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "TT555VQ7I164GBRX",
+          "name": "Perplexity API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $node['Build Scoring Prompt'].json;\nconst response = $json;\n\nlet scoringResult;\ntry {\n  const content = response.choices[0].message.content;\n  scoringResult = JSON.parse(content);\n} catch (e) {\n  throw new Error('Failed to parse Perplexity scoring response: ' + e.message);\n}\n\nconst scores = scoringResult.scores || { seo: 0, geo: 0, freshness: 0, global: 0 };\nconst criteria = scoringResult.criteria || {};\nconst priorities = scoringResult.priorities || [];\nconst freshnessPenalty = scoringResult.freshnessPenalty || 1.0;\n\n// Calcul du score global avec formule du PRD (Section 4.3)\nconst scoreGlobal = Math.round(\n  (scores.seo * 0.76 + scores.geo * 0.19 + scores.freshness * 0.05) * freshnessPenalty\n);\n\n// Détermination du statut par zone (PRD Section 5.4)\nlet status = 'critical';\nlet statusColor = 'red';\nlet statusBadge = 'À améliorer';\n\nif (scoreGlobal >= 85) {\n  status = 'excellent';\n  statusColor = 'green';\n  statusBadge = 'Excellent';\n} else if (scoreGlobal >= 70) {\n  status = 'good';\n  statusColor = 'yellow';\n  statusBadge = 'Bon';\n}\n\n// Comptage des critères par sévérité\nconst criteriaBySeverity = {\n  ok: 0,\n  warning: 0,\n  critical: 0\n};\n\nObject.values(criteria).forEach((c: any) => {\n  if (c.severity) {\n    criteriaBySeverity[c.severity]++;\n  }\n});\n\nconsole.log('📊 Scoring result:', {\n  global: scoreGlobal,\n  seo: scores.seo,\n  geo: scores.geo,\n  freshness: scores.freshness,\n  status,\n  criteriaBySeverity\n});\n\nreturn {\n  json: {\n    // Données d'origine\n    content: prev.content,\n    config: prev.config,\n    userProfile: prev.userProfile,\n    analysisLevel: prev.analysisLevel,\n    wordCount: prev.wordCount,\n    \n    // Résultats du scoring\n    scores: {\n      global: scoreGlobal,\n      seo: scores.seo,\n      geo: scores.geo,\n      freshness: scores.freshness\n    },\n    \n    // Détails\n    criteria: criteria,\n    priorities: priorities,\n    freshnessPenalty: freshnessPenalty,\n    recommendations: scoringResult.recommendations || {},\n    summary: scoringResult.summary || '',\n    \n    // Métadonnées\n    status: status,\n    statusColor: statusColor,\n    statusBadge: statusBadge,\n    criteriaCounts: criteriaBySeverity,\n    \n    // Métadonnées de scoring\n    scoringVersion: 'v1.0',\n    llmModel: 'sonar',\n    promptVersion: 'v1.0',\n    analyzedAt: new Date().toISOString()\n  }\n};"
+      },
+      "id": "extract-scoring",
+      "name": "Extract & Process Scoring",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "response",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Input": {
+      "main": [
+        [
+          {
+            "node": "Build Scoring Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Scoring Prompt": {
+      "main": [
+        [
+          {
+            "node": "Perplexity Scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Perplexity Scoring": {
+      "main": [
+        [
+          {
+            "node": "Extract & Process Scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Process Scoring": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}

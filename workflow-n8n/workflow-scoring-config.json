@@ -1,0 +1,20 @@
+{
+  "workflow_id": "DHNJWSCFI2UjTfvK",
+  "workflow_name": "Article Scoring - SEO/GEO (Perplexity)",
+  "webhook_url": "https://n8n.srv1144760.hstgr.cloud/webhook/score-article",
+  "scoring_version": "v1.0",
+  "created_at": "2025-11-24T08:31:55.599Z",
+  "usage": {
+    "endpoints": [
+      "POST /webhook/score-article",
+      "Integration avec éditeur TipTap",
+      "Integration avec workflow sectional"
+    ],
+    "parameters": {
+      "content": "HTML de l'article (requis)",
+      "config": "Configuration article (primaryKeyword, articleType, etc.)",
+      "userProfile": "Profil utilisateur (industry, market)",
+      "level": "Niveau d'analyse (algo_only, quick, full)"
+    }
+  }
+}
