@@ -12,6 +12,11 @@ import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
+import TiptapUnderline from '@tiptap/extension-underline';
+import TextAlign from '@tiptap/extension-text-align';
+import { Color } from '@tiptap/extension-color';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { FontFamily } from '@tiptap/extension-font-family';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -33,7 +38,16 @@ import {
   Settings,
   BarChart3,
   Code,
-  FileCode
+  FileCode,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  Type,
+  Underline,
+  Strikethrough,
+  Quote,
+  Upload
 } from 'lucide-react';
 import { ScorePanel } from './ScorePanel';
 import { ArticleConfigForm } from './ArticleConfigForm';
@@ -61,11 +75,24 @@ export function BetaEditorLayout({
   const [htmlSource, setHtmlSource] = useState('');
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteHtmlInput, setPasteHtmlInput] = useState('');
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkText, setLinkText] = useState('');
 
   // Configuration TipTap
   const editor = useEditor({
     extensions: [
       StarterKit,
+      TiptapUnderline,
+      TextStyle,
+      Color,
+      FontFamily,
+      TextAlign.configure({
+        types: ['heading', 'paragraph']
+      }),
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -167,6 +194,70 @@ export function BetaEditorLayout({
     }
   };
 
+  const openImageModal = () => {
+    setImageUrl('');
+    setImageFile(null);
+    setShowImageModal(true);
+  };
+
+  const handleInsertImage = async () => {
+    if (!editor) return;
+
+    try {
+      let finalUrl = imageUrl;
+
+      // Si un fichier est sélectionné, le convertir en base64
+      if (imageFile) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64String = reader.result as string;
+          editor.chain().focus().setImage({ src: base64String }).run();
+          setShowImageModal(false);
+          setImageUrl('');
+          setImageFile(null);
+        };
+        reader.readAsDataURL(imageFile);
+        return;
+      }
+
+      // Sinon utiliser l'URL
+      if (finalUrl) {
+        editor.chain().focus().setImage({ src: finalUrl }).run();
+        setShowImageModal(false);
+        setImageUrl('');
+      }
+    } catch (error) {
+      console.error('Error inserting image:', error);
+      alert('Erreur lors de l\'insertion de l\'image.');
+    }
+  };
+
+  const openLinkModal = () => {
+    const { from, to } = editor?.state.selection || {};
+    const text = editor?.state.doc.textBetween(from || 0, to || 0) || '';
+    setLinkText(text);
+    setLinkUrl('');
+    setShowLinkModal(true);
+  };
+
+  const handleInsertLink = () => {
+    if (!editor || !linkUrl.trim()) return;
+
+    try {
+      if (linkText) {
+        editor.chain().focus().insertContent(`<a href="${linkUrl}">${linkText}</a>`).run();
+      } else {
+        editor.chain().focus().setLink({ href: linkUrl }).run();
+      }
+      setShowLinkModal(false);
+      setLinkUrl('');
+      setLinkText('');
+    } catch (error) {
+      console.error('Error inserting link:', error);
+      alert('Erreur lors de l\'insertion du lien.');
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-120px)] flex flex-col">
       {/* Ruban supérieur - Tabs */}
@@ -228,12 +319,7 @@ export function BetaEditorLayout({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    const url = window.prompt('URL de l\'image');
-                    if (url && editor) {
-                      editor.chain().focus().setImage({ src: url }).run();
-                    }
-                  }}
+                  onClick={openImageModal}
                 >
                   <ImageIcon className="h-4 w-4 mr-2" />
                   Image
@@ -241,12 +327,7 @@ export function BetaEditorLayout({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    const url = window.prompt('URL du lien');
-                    if (url && editor) {
-                      editor.chain().focus().setLink({ href: url }).run();
-                    }
-                  }}
+                  onClick={openLinkModal}
                 >
                   <LinkIcon className="h-4 w-4 mr-2" />
                   Lien
@@ -261,11 +342,22 @@ export function BetaEditorLayout({
                   <TableIcon className="h-4 w-4 mr-2" />
                   Tableau
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+                  data-active={editor?.isActive('blockquote')}
+                  className="data-[active=true]:bg-gray-200"
+                >
+                  <Quote className="h-4 w-4 mr-2" />
+                  Citation
+                </Button>
               </div>
             </TabsContent>
 
             <TabsContent value="edition" className="m-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Formatage de base */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -284,7 +376,28 @@ export function BetaEditorLayout({
                 >
                   <Italic className="h-4 w-4" />
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().toggleUnderline().run()}
+                  data-active={editor?.isActive('underline')}
+                  className="data-[active=true]:bg-gray-200"
+                >
+                  <Underline className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().toggleStrike().run()}
+                  data-active={editor?.isActive('strike')}
+                  className="data-[active=true]:bg-gray-200"
+                >
+                  <Strikethrough className="h-4 w-4" />
+                </Button>
+
                 <div className="w-px h-6 bg-gray-300 mx-1" />
+
+                {/* Titres */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -312,7 +425,50 @@ export function BetaEditorLayout({
                 >
                   <Heading3 className="h-4 w-4" />
                 </Button>
+
                 <div className="w-px h-6 bg-gray-300 mx-1" />
+
+                {/* Alignement */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().setTextAlign('left').run()}
+                  data-active={editor?.isActive({ textAlign: 'left' })}
+                  className="data-[active=true]:bg-gray-200"
+                >
+                  <AlignLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().setTextAlign('center').run()}
+                  data-active={editor?.isActive({ textAlign: 'center' })}
+                  className="data-[active=true]:bg-gray-200"
+                >
+                  <AlignCenter className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().setTextAlign('right').run()}
+                  data-active={editor?.isActive({ textAlign: 'right' })}
+                  className="data-[active=true]:bg-gray-200"
+                >
+                  <AlignRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => editor?.chain().focus().setTextAlign('justify').run()}
+                  data-active={editor?.isActive({ textAlign: 'justify' })}
+                  className="data-[active=true]:bg-gray-200"
+                >
+                  <AlignJustify className="h-4 w-4" />
+                </Button>
+
+                <div className="w-px h-6 bg-gray-300 mx-1" />
+
+                {/* Listes */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -502,6 +658,173 @@ Exemple :
                   Injecter le HTML
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Insertion Image */}
+      {showImageModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div>
+                <h2 className="text-xl font-semibold">Insérer une image</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Choisissez un fichier local ou collez une URL
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowImageModal(false)}
+              >
+                ✕
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Upload fichier */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Fichier local
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                    className="flex-1 text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
+                  />
+                  {imageFile && (
+                    <Badge variant="secondary">
+                      {(imageFile.size / 1024).toFixed(1)} KB
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Séparateur */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 border-t"></div>
+                <span className="text-xs text-gray-500">OU</span>
+                <div className="flex-1 border-t"></div>
+              </div>
+
+              {/* URL */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  URL de l'image
+                </label>
+                <input
+                  type="url"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  disabled={!!imageFile}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowImageModal(false);
+                  setImageUrl('');
+                  setImageFile(null);
+                }}
+              >
+                Annuler
+              </Button>
+              <Button
+                variant="default"
+                onClick={handleInsertImage}
+                disabled={!imageUrl && !imageFile}
+              >
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Insérer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Insertion Lien */}
+      {showLinkModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-xl w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div>
+                <h2 className="text-xl font-semibold">Insérer un lien</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Créez un lien hypertexte
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowLinkModal(false)}
+              >
+                ✕
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Texte du lien
+                </label>
+                <input
+                  type="text"
+                  value={linkText}
+                  onChange={(e) => setLinkText(e.target.value)}
+                  placeholder="Cliquez ici"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  URL du lien <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="url"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowLinkModal(false);
+                  setLinkUrl('');
+                  setLinkText('');
+                }}
+              >
+                Annuler
+              </Button>
+              <Button
+                variant="default"
+                onClick={handleInsertLink}
+                disabled={!linkUrl.trim()}
+              >
+                <LinkIcon className="h-4 w-4 mr-2" />
+                Insérer
+              </Button>
             </div>
           </div>
         </div>
