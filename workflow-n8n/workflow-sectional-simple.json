@@ -1,0 +1,120 @@
+{
+  "name": "Article Generation - Sectional (Simple)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-article-sectional",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "generate-sectional"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "topic",
+              "name": "topic",
+              "value": "={{ $json.topic }}",
+              "type": "string"
+            },
+            {
+              "id": "outline",
+              "name": "outline",
+              "value": "={{ $json.outline }}",
+              "type": "string"
+            },
+            {
+              "id": "sections_array",
+              "name": "sections",
+              "value": "={{ $json.outline.split('|').map(s => s.trim()) }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-input",
+      "name": "Extract Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ✅ WORKFLOW SECTIONAL CRÉÉ\n\nCe workflow est un **proof of concept** simplifié de la génération par sections.\n\n### Architecture actuelle:\n1. **Webhook** → Reçoit topic + outline\n2. **Extract Input** → Parse les sections\n3. **Note d'information** (ce node!)\n\n### Pour compléter le workflow:\n\nTu dois ajouter manuellement les nodes suivants via l'interface n8n:\n\n#### STEP 1: Generate Outline\n- Type: **Code** (JavaScript)\n- Fonction: Construit le prompt pour GPT-5 demandant le plan détaillé\n- Output: `apiBody` avec le JSON Schema pour l'outline\n\n#### STEP 2: Call GPT-5 Outline\n- Type: **HTTP Request**\n- Method: POST\n- URL: https://api.openai.com/v1/chat/completions\n- Auth: OpenAI API credential\n- Body: `{{ $json.apiBody }}`\n\n#### STEP 3: Extract Outline\n- Type: **Code**\n- Fonction: Parse la réponse GPT-5, extrait le JSON outline\n\n#### STEP 4: Split Sections\n- Type: **Split In Batches**\n- Batch Size: 1\n- Input: `{{ $json.sections }}`\n\n#### STEP 5: Writer Section (dans la loop)\n- Type: **Code** → Build prompt pour la section\n- Type: **HTTP Request** → Call GPT-5.1 avec max_output_tokens=3500\n- Type: **Code** → Validate HTML (vérifie </section>)\n\n#### STEP 6: Reviewer Section\n- Type: **Code** → Build reviewer prompt avec tableau scoring\n- Type: **HTTP Request** → Call Claude Sonnet\n- Type: **Code** → Extract scores SEO/GEO\n\n#### STEP 7: Save Section\n- Type: **Supabase** Insert\n- Table: articles_content\n- Fields: job_id, section_index, section_title, content (JSON)\n\n#### STEP 8: Loop Back\n- Connecte la sauvegarde au node \"Split Sections\" (input 0)\n\n#### STEP 9: Response\n- Type: **Respond to Webhook**\n- Body: `{{ {success: true, sections: $json.totalSections} }}`\n\n---\n\n### 📝 Prompts à utiliser:\n\nLes prompts complets sont disponibles dans:\n- **Writer**: Voir le document fourni par l'utilisateur\n- **Reviewer**: Voir le prompt de scoring avec tableau pondéré\n\n### ⚙️ Paramètres critiques:\n\n**GPT-5.1 (Writer)**:\n```json\n{\n  \"model\": \"gpt-5.1\",\n  \"input\": [{\n    \"role\": \"user\",\n    \"content\": [{\"type\": \"input_text\", \"text\": \"...\"}]\n  }],\n  \"text\": {\n    \"format\": {\n      \"type\": \"json_schema\",\n      \"schema\": {...},\n      \"strict\": true\n    }\n  },\n  \"max_output_tokens\": 3500,\n  \"temperature\": 0.5\n}\n```\n\n**Claude Sonnet (Reviewer)**:\n```json\n{\n  \"model\": \"claude-sonnet-4-5-20250929\",\n  \"max_tokens\": 2000,\n  \"temperature\": 0.3,\n  \"messages\": [{\"role\": \"user\", \"content\": \"...\"}]\n}\n```\n\n---\n\n**Alternative plus rapide**: Je peux te créer un fichier JSON complet que tu importes directement dans n8n!\n",
+        "height": 820,
+        "width": 680
+      },
+      "id": "note-instructions",
+      "name": "📋 Instructions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        680,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  \"message\": \"Workflow sectional démarré\",\n  \"topic\": $json.topic,\n  \"sections_count\": $json.sections.length,\n  \"next_step\": \"Add the remaining nodes manually or import complete workflow JSON\"\n} }}",
+        "options": {}
+      },
+      "id": "response",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Input": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-11-24T04:39:41.276Z",
+  "versionId": "1"
+}

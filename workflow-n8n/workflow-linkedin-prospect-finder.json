@@ -1,0 +1,254 @@
+{
+  "name": "LinkedIn DAF/CDG Prospect Finder",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "⏰ Toutes les 12h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/curious_coder~linkedin-profile-scraper/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"searchUrls\": [\n    \"https://www.linkedin.com/search/results/people/?keywords=DAF%20transformation%20digitale&origin=GLOBAL_SEARCH_HEADER\",\n    \"https://www.linkedin.com/search/results/people/?keywords=Directeur%20Financier%20ETI&origin=GLOBAL_SEARCH_HEADER\",\n    \"https://www.linkedin.com/search/results/people/?keywords=Contr%C3%B4leur%20de%20gestion%20Power%20BI&origin=GLOBAL_SEARCH_HEADER\",\n    \"https://www.linkedin.com/search/results/people/?keywords=Head%20of%20FP%26A%20France&origin=GLOBAL_SEARCH_HEADER\",\n    \"https://www.linkedin.com/search/results/people/?keywords=CFO%20modernisation%20reporting&origin=GLOBAL_SEARCH_HEADER\"\n  ],\n  \"maxResults\": 50,\n  \"proxyConfiguration\": {\n    \"useApifyProxy\": true\n  }\n}",
+        "options": {}
+      },
+      "id": "apify-scraper",
+      "name": "🔍 Apify LinkedIn Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "apify-token",
+          "name": "Apify Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/actor-runs/{{ $json.data.id }}/dataset/items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "get-results",
+      "name": "📥 Get Dataset Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "apify-token",
+          "name": "Apify Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Scoring des prospects DAF/CDG\nconst prospects = [];\n\nfor (const item of $input.all()) {\n  const profile = item.json;\n  let score = 0;\n  let reasons = [];\n  \n  // Scoring par titre\n  const title = (profile.headline || '').toLowerCase();\n  if (title.includes('daf') || title.includes('directeur financier') || title.includes('cfo')) {\n    score += 4;\n    reasons.push('Titre DAF/CFO');\n  } else if (title.includes('contrôleur') || title.includes('cdg') || title.includes('fp&a')) {\n    score += 3;\n    reasons.push('Titre CDG/FP&A');\n  } else if (title.includes('finance') || title.includes('financier')) {\n    score += 2;\n    reasons.push('Secteur Finance');\n  }\n  \n  // Scoring par mots-clés transformation\n  if (title.includes('transformation') || title.includes('digital')) {\n    score += 2;\n    reasons.push('Sensibilisé transformation');\n  }\n  if (title.includes('data') || title.includes('bi') || title.includes('reporting')) {\n    score += 2;\n    reasons.push('Intérêt Data/BI');\n  }\n  \n  // Scoring par taille entreprise (si disponible)\n  const company = profile.company || '';\n  const connections = profile.connectionsCount || 0;\n  if (connections > 500) {\n    score += 1;\n    reasons.push('Réseau actif');\n  }\n  \n  // Scoring par localisation France\n  const location = (profile.location || '').toLowerCase();\n  if (location.includes('france') || location.includes('paris') || location.includes('lyon')) {\n    score += 1;\n    reasons.push('France');\n  }\n  \n  prospects.push({\n    json: {\n      name: profile.fullName || profile.name,\n      headline: profile.headline,\n      company: profile.company,\n      location: profile.location,\n      profileUrl: profile.url || profile.profileUrl,\n      connectionsCount: connections,\n      score: score,\n      scoreReasons: reasons.join(', '),\n      priority: score >= 7 ? 'HAUTE' : score >= 5 ? 'MOYENNE' : 'BASSE',\n      scrapedAt: new Date().toISOString()\n    }\n  });\n}\n\n// Trier par score décroissant\nprospects.sort((a, b) => b.json.score - a.json.score);\n\nreturn prospects;"
+      },
+      "id": "score-prospects",
+      "name": "📊 Score Prospects",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "score-filter",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-quality",
+      "name": "🎯 Filter Score >= 5",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Prospects_DAF_CDG",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Nom": "={{ $json.name }}",
+            "Titre": "={{ $json.headline }}",
+            "Entreprise": "={{ $json.company }}",
+            "Localisation": "={{ $json.location }}",
+            "URL LinkedIn": "={{ $json.profileUrl }}",
+            "Connexions": "={{ $json.connectionsCount }}",
+            "Score": "={{ $json.score }}",
+            "Raisons Score": "={{ $json.scoreReasons }}",
+            "Priorité": "={{ $json.priority }}",
+            "Date Collecte": "={{ $json.scrapedAt }}",
+            "Statut": "Nouveau",
+            "Notes": ""
+          }
+        },
+        "options": {}
+      },
+      "id": "google-sheets",
+      "name": "📋 Save to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "channel": "#prospects-linkedin",
+        "text": "=🎯 *{{ $json.length }} nouveaux prospects DAF/CDG trouvés*\n\n*Top 5 du jour :*\n{{ $json.slice(0, 5).map((p, i) => `${i+1}. *${p.name}* (Score ${p.score}/10)\n   └ ${p.headline}\n   └ ${p.company}\n   └ [Voir profil](${p.profileUrl})`).join('\\n\\n') }}\n\n📊 Priorités : {{ $json.filter(p => p.priority === 'HAUTE').length }} haute | {{ $json.filter(p => p.priority === 'MOYENNE').length }} moyenne\n\n👉 [Voir tous les prospects](LIEN_GOOGLE_SHEET)",
+        "otherOptions": {}
+      },
+      "id": "slack-notification",
+      "name": "💬 Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Tu es un expert en prospection B2B spécialisé dans le secteur Finance/Data. Tu génères des messages de premier contact LinkedIn personnalisés et non-vendeurs."
+            },
+            {
+              "role": "user",
+              "content": "=Génère un message de premier contact LinkedIn (max 300 caractères) pour ce prospect :\n\nNom: {{ $json.name }}\nTitre: {{ $json.headline }}\nEntreprise: {{ $json.company }}\n\nRègles :\n- Commencer par un compliment spécifique sur son profil/poste\n- Mentionner un point commun (Finance + Data)\n- NE PAS pitcher\n- Finir par une micro-question engageante\n- Ton professionnel mais chaleureux\n\nRetourne UNIQUEMENT le message, rien d'autre."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "generate-dm",
+      "name": "✍️ Generate First DM",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [1320, 0]
+    }
+  ],
+  "connections": {
+    "⏰ Toutes les 12h": {
+      "main": [
+        [
+          {
+            "node": "🔍 Apify LinkedIn Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Apify LinkedIn Scraper": {
+      "main": [
+        [
+          {
+            "node": "📥 Get Dataset Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Get Dataset Results": {
+      "main": [
+        [
+          {
+            "node": "📊 Score Prospects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 Score Prospects": {
+      "main": [
+        [
+          {
+            "node": "🎯 Filter Score >= 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎯 Filter Score >= 5": {
+      "main": [
+        [
+          {
+            "node": "📋 Save to Google Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "💬 Slack Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "✍️ Generate First DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Trouve et score automatiquement des DAF/CDG sur LinkedIn pour Data Unlimited"
+  }
+}

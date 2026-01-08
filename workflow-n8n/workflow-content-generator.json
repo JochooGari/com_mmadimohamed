@@ -1,0 +1,257 @@
+{
+  "name": "LinkedIn Content Generator Weekly",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "cron-monday",
+      "name": "⏰ Lundi 7h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Posts_Performants",
+          "mode": "list"
+        },
+        "options": {
+          "range": "A2:Z50"
+        }
+      },
+      "id": "get-top-posts",
+      "name": "📊 Get Top Posts (inspiration)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://news.google.com/rss/search?q=Power+BI+OR+data+analytics+OR+finance+transformation&hl=fr&gl=FR&ceid=FR:fr",
+        "options": {}
+      },
+      "id": "rss-news",
+      "name": "📰 RSS Tech Finance News",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [220, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combiner les sources d'inspiration\nconst topPosts = $('📊 Get Top Posts (inspiration)').all().map(i => ({\n  type: 'inspiration_post',\n  content: i.json.content || i.json.Contenu,\n  engagement: i.json.likes || i.json.Likes,\n  themes: i.json.themes || i.json.Themes\n}));\n\nconst news = $('📰 RSS Tech Finance News').all().slice(0, 10).map(i => ({\n  type: 'news',\n  title: i.json.title,\n  link: i.json.link,\n  pubDate: i.json.pubDate\n}));\n\nreturn [{\n  json: {\n    topPosts: topPosts.slice(0, 5),\n    recentNews: news,\n    generatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "merge-sources",
+      "name": "🔀 Merge Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 100]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Tu es un ghostwriter expert LinkedIn spécialisé dans le secteur Finance/Data. Tu écris pour Mohamed Mmadi, Data Business Analyst avec 5+ ans d'expérience en Finance et Marketing, fondateur de Data Unlimited.\n\nRÈGLES STRICTES:\n1. Hook en 2 lignes MAX - créer curiosité ou tension\n2. Phrases courtes (max 15 mots)\n3. Sauts de ligne pour aérer\n4. Max 1200 caractères par post\n5. JAMAIS de hashtags dans le corps\n6. JAMAIS de \"Bonjour LinkedIn\"\n7. Terminer par question engageante\n8. Ton: professionnel mais accessible, pédagogue, parfois contrarian\n\nCIBLES: DAF, CDG, Head of FP&A, CFO\nOFFRES: Data Unlimited (consulting premium), TJM 500-800€"
+            },
+            {
+              "role": "user",
+              "content": "=CONTEXTE SEMAINE:\n\n**Posts performants récents:**\n{{ JSON.stringify($json.topPosts, null, 2) }}\n\n**Actualités Tech Finance:**\n{{ JSON.stringify($json.recentNews, null, 2) }}\n\n---\n\nGÉNÈRE 4 POSTS pour la semaine avec ce format JSON:\n{\n  \"posts\": [\n    {\n      \"jour\": \"Lundi\",\n      \"heure\": \"12h30\",\n      \"pilier\": \"Power BI & Data Finance\",\n      \"type\": \"Éducatif\",\n      \"hook\": \"[2 lignes max]\",\n      \"corps\": \"[contenu principal]\",\n      \"cta\": \"[question finale engageante]\",\n      \"commentaires_auto\": [\n        \"[Commentaire 1: valeur additionnelle]\",\n        \"[Commentaire 2: teaser ressource]\",\n        \"[Commentaire 3: question engagement]\"\n      ],\n      \"suggestion_visuel\": \"[description photo/image]\"\n    },\n    {\n      \"jour\": \"Mardi\",\n      \"pilier\": \"Story/Transformation\",\n      \"type\": \"Story Client ou Personnel\",\n      ...\n    },\n    {\n      \"jour\": \"Jeudi\",\n      \"pilier\": \"Framework/Case Study\",\n      \"type\": \"Framework ou Case Study\",\n      ...\n    },\n    {\n      \"jour\": \"Vendredi\",\n      \"pilier\": \"Vision/Contrarian\",\n      \"type\": \"Contrarian ou Thought Leadership\",\n      ...\n    }\n  ]\n}\n\nInspire-toi des posts performants et de l'actualité pour créer du contenu original et engageant."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 4000
+        }
+      },
+      "id": "generate-content",
+      "name": "✍️ Generate Weekly Content",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [660, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parser et structurer les posts générés\nconst response = $input.first().json;\nlet posts = [];\n\ntry {\n  // Extraire le JSON de la réponse\n  const text = response.text || response.content || JSON.stringify(response);\n  const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n  \n  if (jsonMatch) {\n    const parsed = JSON.parse(jsonMatch[0]);\n    posts = parsed.posts || [];\n  }\n} catch (e) {\n  console.error('Error parsing:', e);\n}\n\n// Ajouter des métadonnées\nconst weekStart = new Date();\nconst dayOffset = { 'Lundi': 0, 'Mardi': 1, 'Mercredi': 2, 'Jeudi': 3, 'Vendredi': 4 };\n\nreturn posts.map((post, index) => {\n  const publishDate = new Date(weekStart);\n  publishDate.setDate(weekStart.getDate() + (dayOffset[post.jour] || index));\n  \n  return {\n    json: {\n      id: `post_${Date.now()}_${index}`,\n      jour: post.jour,\n      heure: post.heure || '12:30',\n      pilier: post.pilier,\n      type: post.type,\n      hook: post.hook,\n      corps: post.corps,\n      cta: post.cta,\n      postComplet: `${post.hook}\\n\\n${post.corps}\\n\\n${post.cta}`,\n      commentairesAuto: post.commentaires_auto || [],\n      suggestionVisuel: post.suggestion_visuel,\n      datePublication: publishDate.toISOString().split('T')[0],\n      statut: 'Draft',\n      createdAt: new Date().toISOString()\n    }\n  };\n});"
+      },
+      "id": "process-posts",
+      "name": "⚙️ Process Posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 100]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Content_Calendar",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $json.id }}",
+            "Date": "={{ $json.datePublication }}",
+            "Jour": "={{ $json.jour }}",
+            "Heure": "={{ $json.heure }}",
+            "Pilier": "={{ $json.pilier }}",
+            "Type": "={{ $json.type }}",
+            "Hook": "={{ $json.hook }}",
+            "Corps": "={{ $json.corps }}",
+            "CTA": "={{ $json.cta }}",
+            "Post Complet": "={{ $json.postComplet }}",
+            "Commentaire Auto 1": "={{ $json.commentairesAuto[0] }}",
+            "Commentaire Auto 2": "={{ $json.commentairesAuto[1] }}",
+            "Commentaire Auto 3": "={{ $json.commentairesAuto[2] }}",
+            "Suggestion Visuel": "={{ $json.suggestionVisuel }}",
+            "Statut": "={{ $json.statut }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-calendar",
+      "name": "📅 Save to Calendar",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "channel": "#content-linkedin",
+        "text": "=📝 *Contenu LinkedIn de la semaine généré !*\n\n{{ $input.all().map((item, i) => {\n  const p = item.json;\n  return `*${p.jour}* - ${p.pilier} (${p.type})\\n└ Hook: _\"${p.hook.substring(0, 80)}...\"_\\n└ 📅 ${p.datePublication} à ${p.heure}`;\n}).join('\\n\\n') }}\n\n✅ {{ $input.all().length }} posts créés et ajoutés au calendrier\n\n👉 [Voir et valider](LIEN_GOOGLE_SHEET)\n\n⚡ *Action:* Relire, personnaliser si nécessaire, et planifier sur Taplio/Shield",
+        "otherOptions": {}
+      },
+      "id": "slack-content",
+      "name": "💬 Slack Content Ready",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "subject": "=📝 Contenu LinkedIn Semaine du {{ new Date().toLocaleDateString('fr-FR') }}",
+        "emailType": "text",
+        "message": "=Bonjour Mohamed,\n\nVoici tes 4 posts LinkedIn de la semaine, générés automatiquement !\n\n{{ $input.all().map((item, i) => {\n  const p = item.json;\n  return `\\n---\\n\\n📅 ${p.jour} - ${p.pilier}\\n\\n${p.postComplet}\\n\\n💬 Auto-commentaires suggérés:\\n${p.commentairesAuto.map((c, j) => `${j+1}. ${c}`).join('\\n')}\\n\\n🖼️ Suggestion visuel: ${p.suggestionVisuel}`;\n}).join('\\n') }}\n\n---\n\n🔗 Voir le calendrier complet: LIEN_GOOGLE_SHEET\n\nBonne semaine !",
+        "toList": "ton-email@example.com"
+      },
+      "id": "email-digest",
+      "name": "📧 Email Weekly Digest",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1100, 400]
+    }
+  ],
+  "connections": {
+    "⏰ Lundi 7h": {
+      "main": [
+        [
+          {
+            "node": "📊 Get Top Posts (inspiration)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📰 RSS Tech Finance News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 Get Top Posts (inspiration)": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📰 RSS Tech Finance News": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Merge Sources": {
+      "main": [
+        [
+          {
+            "node": "✍️ Generate Weekly Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✍️ Generate Weekly Content": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Process Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Process Posts": {
+      "main": [
+        [
+          {
+            "node": "📅 Save to Calendar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "💬 Slack Content Ready",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📧 Email Weekly Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Génère automatiquement 4 posts LinkedIn par semaine basés sur les posts performants et l'actualité"
+  }
+}

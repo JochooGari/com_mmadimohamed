@@ -1,0 +1,324 @@
+{
+  "name": "LinkedIn Engagement Tracker v2 - Corrigé",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "⏰ Toutes les 4h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/supreme_coder~linkedin-post/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"urls\": [ \"https://www.linkedin.com/search/results/content/?keywords=DAF%20transformation%20digitale&datePosted=%22past-24h%22\", \"https://www.linkedin.com/search/results/content/?keywords=Power%20BI%20finance&datePosted=%22past-24h%22\", \"https://www.linkedin.com/search/results/content/?keywords=FP%26A%20automatisation&datePosted=%22past-24h%22\", \"https://www.linkedin.com/search/results/content/?keywords=CFO%20data%20driven&datePosted=%22past-24h%22\", \"https://www.linkedin.com/search/results/content/?keywords=reporting%20financier%20Excel&datePosted=%22past-24h%22\" ], \"limitPerSource\": 20, \"deepScrape\": true, \"rawData\": false } }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "apify-scrape",
+      "name": "🔍 Scrape LinkedIn Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "notes": "Endpoint run-sync-get-dataset-items attend la fin et retourne directement les données"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ $json }}",
+        "options": {}
+      },
+      "id": "split-items",
+      "name": "✂️ Split Items",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [440, 0],
+      "notes": "Sépare le tableau en items individuels"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pré-filtrage avant analyse IA pour économiser les tokens\nconst validPosts = [];\n\nfor (const item of $input.all()) {\n  const post = item.json;\n  \n  // Filtrer les posts avec engagement minimum\n  const likes = post.numLikes || 0;\n  const comments = post.numComments || 0;\n  \n  // Seuil minimum : 20 likes OU 5 commentaires\n  if (likes < 20 && comments < 5) {\n    continue;\n  }\n  \n  // Vérifier que le contenu existe\n  if (!post.text || post.text.length < 50) {\n    continue;\n  }\n  \n  // Exclure les reposts sans contenu original\n  if (post.isRepost && !post.text) {\n    continue;\n  }\n  \n  validPosts.push({\n    json: {\n      // Données du post - mapping correct Apify supreme_coder\n      postUrl: post.url || '',\n      authorName: post.authorName || '',\n      authorHeadline: post.authorHeadline || '',\n      authorProfileUrl: post.authorProfileUrl || '',\n      content: (post.text || '').substring(0, 800),\n      numLikes: likes,\n      numComments: comments,\n      numShares: post.numShares || 0,\n      postedAtISO: post.postedAtISO || '',\n      timeSincePosted: post.timeSincePosted || '',\n      type: post.type || 'text',\n      \n      // Données brutes pour enrichissement ultérieur\n      reactions: post.reactions || [],\n      comments: post.comments || [],\n      authorType: post.authorType || 'Person'\n    }\n  });\n}\n\n// Trier par engagement (likes + comments)\nvalidPosts.sort((a, b) => {\n  const engagementA = (a.json.numLikes || 0) + (a.json.numComments || 0) * 3;\n  const engagementB = (b.json.numLikes || 0) + (b.json.numComments || 0) * 3;\n  return engagementB - engagementA;\n});\n\n// Limiter à 30 posts max pour l'analyse IA\nreturn validPosts.slice(0, 30);"
+      },
+      "id": "pre-filter",
+      "name": "🎚️ Pré-filtrage (likes > 20)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "notes": "Filtre les posts avant IA pour économiser ~80% des coûts OpenAI"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "batch-for-ai",
+      "name": "🔄 Batch (1 par 1)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [880, 0],
+      "notes": "Envoie les posts un par un à l'IA"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0.3,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Tu es un expert en personal branding LinkedIn spécialisé Finance/Data. Analyse ce post pour identifier des opportunités d'engagement stratégique. Réponds UNIQUEMENT avec un JSON valide, sans texte avant ou après, sans backticks.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Analyse ce post LinkedIn:\\n\\n**Auteur:** \" + $json.authorName + \"\\n**Titre:** \" + $json.authorHeadline + \"\\n**Contenu:** \" + $json.content + \"\\n**Likes:** \" + $json.numLikes + \"\\n**Commentaires:** \" + $json.numComments + \"\\n\\n**Contexte Mohamed:**\\n- Data Business Analyst spécialisé Finance et Marketing\\n- Expertise: Power BI, Python, automatisation reporting, FP&A\\n- Cible: DAF, CDG, CFO, Head of FP&A de PME/ETI\\n- Offre: Data Unlimited (consulting data premium)\\n\\nRetourne ce JSON exact:\\n{\\n  \\\"score_pertinence\\\": 7,\\n  \\\"categorie\\\": \\\"METIER\\\",\\n  \\\"persona_auteur\\\": \\\"DAF\\\",\\n  \\\"themes\\\": [\\\"reporting\\\", \\\"automatisation\\\"],\\n  \\\"opportunite_lead\\\": true,\\n  \\\"raison_opportunite\\\": \\\"Auteur = DAF en ETI avec problème reporting\\\",\\n  \\\"suggestion_commentaire\\\": \\\"Commentaire pertinent de 2-3 phrases montrant expertise sans vendre\\\",\\n  \\\"angle_approche\\\": \\\"business_value\\\",\\n  \\\"action\\\": \\\"commenter\\\"\\n}\\n\\nValeurs possibles:\\n- score_pertinence: 1-10\\n- categorie: METIER, TECH, THOUGHT_LEADERSHIP, AUTRE\\n- persona_auteur: DAF, CDG, CFO, FP&A, Data Analyst, Consultant, Autre\\n- angle_approche: technique, business_value, storytelling, contrarian\\n- action: commenter, connecter, DM_apres_commentaire, ignorer\"\n    }\n  ]\n} }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "openai-analyze",
+      "name": "🧠 Analyse IA (GPT-4o-mini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "VOTRE_CREDENTIAL_OPENAI",
+          "name": "OpenAI API Key"
+        }
+      },
+      "notes": "GPT-4o-mini = 20x moins cher que GPT-4-turbo"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traitement de la réponse IA + enrichissement\nconst results = [];\n\nfor (const item of $input.all()) {\n  try {\n    // Récupérer les données originales du post (du node précédent via le batch)\n    const originalPost = $('🎚️ Pré-filtrage (likes > 20)').item(item.index)?.json || {};\n    \n    // Parser la réponse OpenAI\n    let analysis = {\n      score_pertinence: 5,\n      categorie: 'AUTRE',\n      persona_auteur: 'Autre',\n      themes: [],\n      opportunite_lead: false,\n      raison_opportunite: '',\n      suggestion_commentaire: '',\n      angle_approche: 'business_value',\n      action: 'ignorer'\n    };\n    \n    try {\n      // Extraire le contenu de la réponse OpenAI\n      let aiContent = item.json?.choices?.[0]?.message?.content || '';\n      \n      // Si c'est déjà un objet\n      if (typeof aiContent === 'object') {\n        analysis = { ...analysis, ...aiContent };\n      } else {\n        // Nettoyer et parser le JSON\n        aiContent = String(aiContent).trim();\n        // Enlever les backticks markdown si présents\n        aiContent = aiContent.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/\\s*```$/i, '');\n        \n        const jsonMatch = aiContent.match(/\\{[\\s\\S]*\\}/);\n        if (jsonMatch) {\n          analysis = { ...analysis, ...JSON.parse(jsonMatch[0]) };\n        }\n      }\n    } catch (parseError) {\n      console.error('Erreur parsing IA:', parseError.message);\n    }\n    \n    // Extraire les leads potentiels des réactions\n    const financeLeads = (originalPost.reactions || [])\n      .filter(r => {\n        const job = (r.profile?.occupation || '').toLowerCase();\n        return job.includes('finance') || \n               job.includes('cfo') || \n               job.includes('daf') ||\n               job.includes('fp&a') ||\n               job.includes('controller') ||\n               job.includes('contrôleur') ||\n               job.includes('trésor');\n      })\n      .slice(0, 5)\n      .map(r => `${r.profile?.firstName || ''} ${r.profile?.lastName || ''} - ${r.profile?.occupation || ''}`)\n      .join(' | ');\n    \n    results.push({\n      json: {\n        // Données du post\n        postUrl: originalPost.postUrl || item.json.postUrl || '',\n        authorName: originalPost.authorName || '',\n        authorHeadline: originalPost.authorHeadline || '',\n        authorProfileUrl: originalPost.authorProfileUrl || '',\n        content: (originalPost.content || '').substring(0, 300),\n        numLikes: originalPost.numLikes || 0,\n        numComments: originalPost.numComments || 0,\n        postedAt: originalPost.postedAtISO || '',\n        timeSince: originalPost.timeSincePosted || '',\n        \n        // Analyse IA\n        score: Number(analysis.score_pertinence) || 5,\n        categorie: analysis.categorie || 'AUTRE',\n        persona: analysis.persona_auteur || 'Autre',\n        themes: Array.isArray(analysis.themes) ? analysis.themes.join(', ') : String(analysis.themes || ''),\n        opportuniteLead: Boolean(analysis.opportunite_lead),\n        raisonOpportunite: analysis.raison_opportunite || '',\n        commentaireSuggere: analysis.suggestion_commentaire || '',\n        angle: analysis.angle_approche || 'business_value',\n        actionRecommandee: analysis.action || 'ignorer',\n        \n        // Leads extraits des réactions\n        leadsReactions: financeLeads,\n        \n        // Meta\n        analyzedAt: new Date().toISOString(),\n        statut: 'À traiter'\n      }\n    });\n  } catch (e) {\n    console.error('Erreur traitement item:', e.message);\n  }\n}\n\n// Trier : opportunités leads en premier, puis par score\nresults.sort((a, b) => {\n  // Leads en premier\n  if (a.json.opportuniteLead !== b.json.opportuniteLead) {\n    return a.json.opportuniteLead ? -1 : 1;\n  }\n  // Puis par score décroissant\n  return (b.json.score || 0) - (a.json.score || 0);\n});\n\nreturn results;"
+      },
+      "id": "process-analysis",
+      "name": "⚙️ Process & Enrichissement",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 0],
+      "notes": "Parse IA + extrait leads des réactions + tri corrigé"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "score-filter",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 6,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-high-score",
+      "name": "🎯 Filter Score >= 6",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1540, 0],
+      "notes": "Score 6+ = pertinent pour engagement"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "VOTRE_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Posts_A_Commenter",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date Analyse": "={{ $json.analyzedAt }}",
+            "Statut": "={{ $json.statut }}",
+            "Score": "={{ $json.score }}",
+            "Opportunité Lead": "={{ $json.opportuniteLead ? '🎯 OUI' : 'Non' }}",
+            "Auteur": "={{ $json.authorName }}",
+            "Titre Auteur": "={{ $json.authorHeadline }}",
+            "Profil Auteur": "={{ $json.authorProfileUrl }}",
+            "URL Post": "={{ $json.postUrl }}",
+            "Extrait Contenu": "={{ $json.content }}",
+            "Likes": "={{ $json.numLikes }}",
+            "Commentaires": "={{ $json.numComments }}",
+            "Catégorie": "={{ $json.categorie }}",
+            "Persona": "={{ $json.persona }}",
+            "Thèmes": "={{ $json.themes }}",
+            "Raison Opportunité": "={{ $json.raisonOpportunite }}",
+            "Commentaire Suggéré": "={{ $json.commentaireSuggere }}",
+            "Angle": "={{ $json.angle }}",
+            "Action": "={{ $json.actionRecommandee }}",
+            "Leads dans Réactions": "={{ $json.leadsReactions }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-posts",
+      "name": "📋 Save to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1760, 0],
+      "notes": "Remplacer VOTRE_GOOGLE_SHEET_ID par l'ID réel"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "VOTRE_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads_Potentiels",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.analyzedAt }}",
+            "Source Post": "={{ $json.postUrl }}",
+            "Auteur Post": "={{ $json.authorName }}",
+            "Leads Identifiés": "={{ $json.leadsReactions }}",
+            "Statut Contact": "À contacter"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-leads",
+      "name": "📊 Save Leads Séparément",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1760, 200],
+      "notes": "Onglet séparé pour les leads extraits des réactions"
+    }
+  ],
+  "connections": {
+    "⏰ Toutes les 4h": {
+      "main": [
+        [
+          {
+            "node": "🔍 Scrape LinkedIn Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Scrape LinkedIn Posts": {
+      "main": [
+        [
+          {
+            "node": "✂️ Split Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✂️ Split Items": {
+      "main": [
+        [
+          {
+            "node": "🎚️ Pré-filtrage (likes > 20)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎚️ Pré-filtrage (likes > 20)": {
+      "main": [
+        [
+          {
+            "node": "🔄 Batch (1 par 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Batch (1 par 1)": {
+      "main": [
+        [
+          {
+            "node": "🧠 Analyse IA (GPT-4o-mini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Analyse IA (GPT-4o-mini)": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Process & Enrichissement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Process & Enrichissement": {
+      "main": [
+        [
+          {
+            "node": "🎯 Filter Score >= 6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎯 Filter Score >= 6": {
+      "main": [
+        [
+          {
+            "node": "📋 Save to Google Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📊 Save Leads Séparément",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Veille automatique LinkedIn v2 - Corrigé avec mapping Apify supreme_coder, pré-filtrage, extraction leads des réactions"
+  }
+}

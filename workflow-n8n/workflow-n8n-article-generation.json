@@ -1,0 +1,350 @@
+{
+  "name": "Article GEO Generation - Full Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "start-article",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook - Start Article",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "start-article-workflow"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "topic",
+              "value": "={{ $json.body.topic }}"
+            },
+            {
+              "name": "outline",
+              "value": "={{ $json.body.outline }}"
+            },
+            {
+              "name": "jobId",
+              "value": "job_{{ $now.toMillis() }}_{{ $randomString(6) }}"
+            }
+          ],
+          "number": [
+            {
+              "name": "minScore",
+              "value": "={{ $json.body.minScore || 95 }}"
+            },
+            {
+              "name": "maxIterations",
+              "value": "={{ $json.body.maxIterations || 3 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Create Job Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "url": "=https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-sonnet-4-5-20250929"
+            },
+            {
+              "name": "max_tokens",
+              "value": "2000"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"user\", \"content\": \"Recherche approfondie sur le sujet: {{ $json.topic }}. Fournis 10 points clés en français pour un article optimisé SEO/GEO.\"}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "STEP 1 - Research (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract research from Claude response\nconst response = $input.item.json;\nconst researchText = response.content?.[0]?.text || '';\n\nreturn {\n  jobId: $node['Create Job Context'].json.jobId,\n  topic: $node['Create Job Context'].json.topic,\n  outline: $node['Create Job Context'].json.outline,\n  research: researchText,\n  step: 'research_complete'\n};"
+      },
+      "name": "Process Research",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "url": "=https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "gpt-4o"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"system\", \"content\": \"Tu es un expert en rédaction SEO/GEO. Génère UNIQUEMENT du JSON valide.\"}, {\"role\": \"user\", \"content\": \"Rédige une introduction captivante de 400 mots sur: {{ $json.topic }}\\n\\nRecherche: {{ $json.research }}\\n\\nRéponds en JSON: {\\\"html\\\": \\\"<contenu HTML>\\\"}\"}]"
+            },
+            {
+              "name": "response_format",
+              "value": "={\"type\": \"json_object\"}"
+            },
+            {
+              "name": "max_tokens",
+              "value": "2500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "STEP 2 - Draft Introduction (GPT-4)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse GPT response\nconst response = $input.item.json;\nconst content = JSON.parse(response.choices?.[0]?.message?.content || '{}');\n\nreturn {\n  jobId: $node['Process Research'].json.jobId,\n  topic: $node['Process Research'].json.topic,\n  sections: [\n    {\n      id: 'introduction',\n      title: 'Introduction',\n      html: content.html || '',\n      index: 0\n    }\n  ],\n  step: 'draft_intro_complete'\n};"
+      },
+      "name": "Process Introduction",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "url": "=https://xroduivvgnviqjdvehuw.supabase.co/rest/v1/articles_content",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "job_id",
+              "value": "={{ $json.jobId }}"
+            },
+            {
+              "name": "section_index",
+              "value": "={{ $json.sections[0].index }}"
+            },
+            {
+              "name": "section_id",
+              "value": "={{ $json.sections[0].id }}"
+            },
+            {
+              "name": "section_title",
+              "value": "={{ $json.sections[0].title }}"
+            },
+            {
+              "name": "content",
+              "value": "={{ $json.sections[0] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Save to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "url": "=https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-sonnet-4-5-20250929"
+            },
+            {
+              "name": "max_tokens",
+              "value": "1500"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"user\", \"content\": \"Review et améliore ce contenu pour atteindre 95%+ SEO/GEO:\\n\\n{{ $node['Process Introduction'].json.sections[0].html }}\\n\\nRéponds en JSON: {\\\"improved_html\\\": \\\"...\\\", \\\"notes\\\": [\\\"...\\\"]} en français.\"}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "STEP 3 - Review (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse review response\nconst response = $input.item.json;\nconst reviewText = response.content?.[0]?.text || '{}';\nlet review;\n\ntry {\n  review = JSON.parse(reviewText);\n} catch (e) {\n  // Extract JSON from markdown code blocks\n  const match = reviewText.match(/```json\\n([\\s\\S]*?)\\n```/);\n  review = match ? JSON.parse(match[1]) : { improved_html: reviewText, notes: [] };\n}\n\nreturn {\n  jobId: $node['Save to Supabase'].json.jobId,\n  improved_html: review.improved_html,\n  notes: review.notes || [],\n  step: 'review_complete'\n};"
+      },
+      "name": "Process Review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": true,\n  \"jobId\": \"{{ $node['Process Review'].json.jobId }}\",\n  \"status\": \"completed\",\n  \"step\": \"{{ $node['Process Review'].json.step }}\",\n  \"notes\": {{ $node['Process Review'].json.notes }},\n  \"message\": \"Article section generated and reviewed successfully\"\n}"
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2050, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Start Article": {
+      "main": [
+        [
+          {
+            "node": "Create Job Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Job Context": {
+      "main": [
+        [
+          {
+            "node": "STEP 1 - Research (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STEP 1 - Research (Claude)": {
+      "main": [
+        [
+          {
+            "node": "Process Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Research": {
+      "main": [
+        [
+          {
+            "node": "STEP 2 - Draft Introduction (GPT-4)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STEP 2 - Draft Introduction (GPT-4)": {
+      "main": [
+        [
+          {
+            "node": "Process Introduction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Introduction": {
+      "main": [
+        [
+          {
+            "node": "Save to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Supabase": {
+      "main": [
+        [
+          {
+            "node": "STEP 3 - Review (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STEP 3 - Review (Claude)": {
+      "main": [
+        [
+          {
+            "node": "Process Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Review": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

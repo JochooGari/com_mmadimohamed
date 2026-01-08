@@ -16,7 +16,18 @@
       "Bash(cat:*)",
       "Bash(npx supabase:*)",
       "Read(//c/Users/power/**)",
-      "Bash(git remote add:*)"
+      "Bash(git remote add:*)",
+      "Bash(node save-article.js:*)",
+      "Bash(git commit:*)",
+      "Bash(node download-from-supabase.js:*)",
+      "Bash(node test-supabase-storage.js:*)",
+      "Bash(node check-storage-files.js:*)",
+      "Bash(node test-sectional-workflow.js:*)",
+      "Bash(timeout 10 bash:*)",
+      "Bash(node count-article-words.js:*)",
+      "Bash(node analyze-job.js:*)",
+      "Bash(node:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

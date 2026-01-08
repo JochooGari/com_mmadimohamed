@@ -1,0 +1,137 @@
+{
+  "meta": {
+    "instanceId": "local"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "start-article-fixed",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-fixed",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "start-article-fixed"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "topic",
+              "value": "={{ $json.body.topic }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "outline",
+              "value": "={{ $json.body.outline }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "jobId",
+              "value": "=job_{{ $now.toMillis() }}_{{ $randomString(6) }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "set-variables",
+      "name": "Set Variables",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build JSON body for Anthropic API\nconst topic = $input.all()[0].json.topic;\n\nconst requestBody = {\n  model: \"claude-sonnet-4-5-20250929\",\n  max_tokens: 2000,\n  messages: [\n    {\n      role: \"user\",\n      content: `Recherche approfondie sur le sujet: ${topic}. Fournis 10 points clés en français pour un article optimisé SEO/GEO. Chaque point doit contenir des données factuelles et des insights pertinents.`\n    }\n  ]\n};\n\nreturn {\n  json: {\n    topic: topic,\n    apiBody: JSON.stringify(requestBody)\n  }\n};"
+      },
+      "id": "function-build-json",
+      "name": "Build JSON Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.apiBody }}"
+      },
+      "id": "http-claude",
+      "name": "Claude Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract research from Claude response\nconst response = $input.all()[0].json;\nconst researchText = response.content?.[0]?.text || 'No research generated';\nconst topic = $node['Set Variables'].json.topic;\nconst jobId = $node['Set Variables'].json.jobId;\n\nreturn {\n  json: {\n    ok: true,\n    jobId: jobId,\n    topic: topic,\n    research: researchText,\n    step: 'research_complete'\n  }\n};"
+      },
+      "id": "function-process",
+      "name": "Process Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{"node": "Set Variables", "type": "main", "index": 0}]]
+    },
+    "Set Variables": {
+      "main": [[{"node": "Build JSON Body", "type": "main", "index": 0}]]
+    },
+    "Build JSON Body": {
+      "main": [[{"node": "Claude Research", "type": "main", "index": 0}]]
+    },
+    "Claude Research": {
+      "main": [[{"node": "Process Response", "type": "main", "index": 0}]]
+    },
+    "Process Response": {
+      "main": [[{"node": "Respond", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-11-22T19:00:00.000Z"
+}

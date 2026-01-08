@@ -1,0 +1,190 @@
+{
+  "meta": {
+    "instanceId": "local"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-article",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 400],
+      "webhookId": "generate-article"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "topic",
+              "value": "={{ $json.body.topic }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "outline",
+              "value": "={{ $json.body.outline }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "jobId",
+              "value": "=job_{{ $now.toMillis() }}_{{ $randomString(6) }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "set-1",
+      "name": "Set Variables",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build JSON for Claude Research\nconst topic = $input.all()[0].json.topic;\n\nreturn {\n  json: {\n    topic: topic,\n    apiBody: JSON.stringify({\n      model: \"claude-sonnet-4-5-20250929\",\n      max_tokens: 2000,\n      messages: [{\n        role: \"user\",\n        content: `Recherche approfondie sur: ${topic}. Fournis 10 points clés GEO/SEO en français avec données factuelles.`\n      }]\n    })\n  }\n};"
+      },
+      "id": "func-1",
+      "name": "Build Research Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.apiBody }}"
+      },
+      "id": "http-1",
+      "name": "Claude Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract research\nconst response = $input.all()[0].json;\nconst research = response.content?.[0]?.text || '';\nconst topic = $node['Set Variables'].json.topic;\nconst jobId = $node['Set Variables'].json.jobId;\n\nreturn {\n  json: {\n    jobId,\n    topic,\n    research\n  }\n};"
+      },
+      "id": "func-2",
+      "name": "Extract Research",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build JSON for GPT-4 Draft\nconst data = $input.all()[0].json;\n\nreturn {\n  json: {\n    ...data,\n    apiBody: JSON.stringify({\n      model: \"gpt-4o\",\n      messages: [\n        {\n          role: \"system\",\n          content: \"Tu es expert SEO/GEO. Génère UNIQUEMENT du JSON valide avec structure: {\\\"html\\\": \\\"<contenu>\\\"}\"\n        },\n        {\n          role: \"user\",\n          content: `Rédige introduction 400 mots sur: ${data.topic}\\n\\nRecherche:\\n${data.research}\\n\\nJSON uniquement: {\"html\": \"<h1>...</h1><p>...</p>\"}`\n        }\n      ],\n      response_format: { type: \"json_object\" },\n      max_tokens: 2500,\n      temperature: 0.7\n    })\n  }\n};"
+      },
+      "id": "func-3",
+      "name": "Build Draft Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.apiBody }}"
+      },
+      "id": "http-2",
+      "name": "GPT-4 Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract draft\nconst response = $input.all()[0].json;\nconst prev = $node['Extract Research'].json;\nlet content;\n\ntry {\n  content = JSON.parse(response.choices?.[0]?.message?.content || '{}');\n} catch (e) {\n  content = { html: response.choices?.[0]?.message?.content || '' };\n}\n\nreturn {\n  json: {\n    jobId: prev.jobId,\n    topic: prev.topic,\n    section: {\n      id: 'introduction',\n      title: 'Introduction',\n      html: content.html || '',\n      index: 0\n    }\n  }\n};"
+      },
+      "id": "func-4",
+      "name": "Extract Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xroduivvgnviqjdvehuw.supabase.co/rest/v1/articles_content",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "apikey", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhyb2R1aXZ2Z252aXFqZHZlaHV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDg1Njg5NywiZXhwIjoyMDY2NDMyODk3fQ.lJe0rcdAJYdS4VjcR5IV_kqA9lEUJoWq8VKsSD5EUV0"},
+            {"name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhyb2R1aXZ2Z252aXFqZHZlaHV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDg1Njg5NywiZXhwIjoyMDY2NDMyODk3fQ.lJe0rcdAJYdS4VjcR5IV_kqA9lEUJoWq8VKsSD5EUV0"},
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Prefer", "value": "return=representation"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ job_id: $json.jobId, section_index: $json.section.index, section_id: $json.section.id, section_title: $json.section.title, content: $json.section }) }}"
+      },
+      "id": "http-3",
+      "name": "Save to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, jobId: $node['Extract Draft'].json.jobId, topic: $node['Extract Draft'].json.topic, status: 'completed', message: 'Article section generated successfully' } }}"
+      },
+      "id": "respond-1",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2220, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {"main": [[{"node": "Set Variables", "type": "main", "index": 0}]]},
+    "Set Variables": {"main": [[{"node": "Build Research Body", "type": "main", "index": 0}]]},
+    "Build Research Body": {"main": [[{"node": "Claude Research", "type": "main", "index": 0}]]},
+    "Claude Research": {"main": [[{"node": "Extract Research", "type": "main", "index": 0}]]},
+    "Extract Research": {"main": [[{"node": "Build Draft Body", "type": "main", "index": 0}]]},
+    "Build Draft Body": {"main": [[{"node": "GPT-4 Draft", "type": "main", "index": 0}]]},
+    "GPT-4 Draft": {"main": [[{"node": "Extract Draft", "type": "main", "index": 0}]]},
+    "Extract Draft": {"main": [[{"node": "Save to Supabase", "type": "main", "index": 0}]]},
+    "Save to Supabase": {"main": [[{"node": "Respond", "type": "main", "index": 0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder": "v1"},
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-11-22T19:05:00.000Z"
+}

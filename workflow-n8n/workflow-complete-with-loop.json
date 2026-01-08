@@ -1,0 +1,384 @@
+{
+  "meta": {
+    "instanceId": "local"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-article-complete",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-main",
+      "name": "Webhook Start",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 500],
+      "webhookId": "generate-article-complete"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "1", "name": "topic", "value": "={{ $json.body.topic }}", "type": "string"},
+            {"id": "2", "name": "outline", "value": "={{ $json.body.outline }}", "type": "string"},
+            {"id": "3", "name": "jobId", "value": "=job_{{ $now.toMillis() }}_{{ $randomString(6) }}", "type": "string"},
+            {"id": "4", "name": "minScore", "value": "={{ $json.body.minScore || 95 }}", "type": "number"},
+            {"id": "5", "name": "maxIterations", "value": "={{ $json.body.maxIterations || 3 }}", "type": "number"},
+            {"id": "6", "name": "currentIteration", "value": "0", "type": "number"},
+            {"id": "7", "name": "currentScore", "value": "0", "type": "number"}
+          ]
+        }
+      },
+      "id": "init-vars",
+      "name": "Initialize Variables",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://xroduivvgnviqjdvehuw.supabase.co/rest/v1/articles?select=id,title,slug,excerpt&published=eq.true&order=created_at.desc&limit=8",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "apikey", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhyb2R1aXZ2Z252aXFqZHZlaHV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDg1Njg5NywiZXhwIjoyMDY2NDMyODk3fQ.lJe0rcdAJYdS4VjcR5IV_kqA9lEUJoWq8VKsSD5EUV0"},
+            {"name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhyb2R1aXZ2Z252aXFqZHZlaHV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDg1Njg5NywiZXhwIjoyMDY2NDMyODk3fQ.lJe0rcdAJYdS4VjcR5IV_kqA9lEUJoWq8VKsSD5EUV0"}
+          ]
+        },
+        "sendBody": false
+      },
+      "id": "http-internal-links",
+      "name": "Get Internal Articles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract internal articles for linking\nconst response = $input.all()[0].json;\nconst prev = $node['Initialize Variables'].json;\n\n// Response is an array from Supabase GET request\nconst articles = Array.isArray(response) ? response : [];\n\nconst internalLinks = articles.slice(0, 8).map(a => ({\n  title: a.title || '',\n  slug: a.slug || '',\n  excerpt: a.excerpt || ''\n}));\n\nreturn {\n  json: {\n    ...prev,\n    internalArticles: internalLinks,\n    internalLinksText: internalLinks.length > 0 \n      ? internalLinks.map(a => `- [${a.title}](/articles/${a.slug})`).join('\\n')\n      : 'Aucun article interne disponible'\n  }\n};"
+      },
+      "id": "func-extract-links",
+      "name": "Extract Internal Links",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Research request body\nconst data = $input.all()[0].json;\n\nreturn {\n  json: {\n    ...data,\n    apiBody: JSON.stringify({\n      model: \"claude-sonnet-4-5-20250929\",\n      max_tokens: 2000,\n      messages: [{\n        role: \"user\",\n        content: `Recherche approfondie sur: ${data.topic}\\n\\nFournis 10 points clés détaillés en français pour un article optimisé SEO/GEO. Inclus des données factuelles, statistiques 2024-2025, et insights pertinents.`\n      }]\n    })\n  }\n};"
+      },
+      "id": "func-build-research",
+      "name": "Build Research Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.apiBody }}"
+      },
+      "id": "http-research",
+      "name": "STEP 1 - Research (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract research\nconst response = $input.all()[0].json;\nconst prev = $node['Extract Internal Links'].json;\nconst research = response.content?.[0]?.text || '';\n\nreturn {\n  json: {\n    ...prev,\n    research: research\n  }\n};"
+      },
+      "id": "func-extract-research",
+      "name": "Extract Research",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build GPT-5.1 Draft request\nconst data = $input.all()[0].json;\n\nconst systemPrompt = `Tu es un expert en rédaction SEO/GEO. Tu génères UNIQUEMENT du JSON valide strictement formaté.\\n\\nIMPORTANT: Le JSON doit contenir une clé 'html' avec le contenu HTML complet de l'article.\\n\\nRègle: Le HTML doit être échappé correctement pour JSON.`;\n\nconst userPrompt = `Rédige un article complet optimisé SEO/GEO de 2500+ mots sur: ${data.topic}\\n\\nPlan suggéré:\\n${data.outline}\\n\\nRecherche disponible:\\n${data.research}\\n\\nArticles internes pour liens (intègre 3-5 liens contextuels):\\n${data.internalLinksText}\\n\\nRéponds UNIQUEMENT en JSON avec cette structure:\\n{\\n  \\\"html\\\": \\\"<article><h1>...</h1><p>...</p></article>\\\"\\n}\\n\\nCritères:\\n- Structure H1 > H2 > H3\\n- Paragraphes riches (150+ mots)\\n- Listes, exemples concrets\\n- Intègre 3-5 liens internes contextuels\\n- Ton professionnel et engageant`;\n\nreturn {\n  json: {\n    ...data,\n    apiBody: JSON.stringify({\n      model: \"gpt-5-pro-preview\",\n      input: [{\n        role: \"user\",\n        content: [{\n          type: \"input_text\",\n          text: `${systemPrompt}\\n\\n${userPrompt}`\n        }]\n      }],\n      reasoning: { effort: \"low\" },\n      max_output_tokens: 8000,\n      text: {\n        format: {\n          type: \"json_schema\",\n          name: \"article_response\",\n          schema: {\n            type: \"object\",\n            properties: {\n              html: { type: \"string\" }\n            },\n            required: [\"html\"],\n            additionalProperties: false\n          },\n          strict: true\n        }\n      }\n    })\n  }\n};"
+      },
+      "id": "func-build-draft",
+      "name": "Build Draft Body (GPT-5.1)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.apiBody }}"
+      },
+      "id": "http-draft",
+      "name": "STEP 2 - Draft (GPT-5.1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract draft HTML\nconst response = $input.all()[0].json;\nconst prev = $node['Extract Research'].json;\n\nlet articleHTML = '';\n\ntry {\n  // GPT-5 Responses API format\n  const outputText = response.output?.[0]?.content?.[0]?.text || response.choices?.[0]?.message?.content || '{}';\n  const parsed = JSON.parse(outputText);\n  articleHTML = parsed.html || '';\n} catch (e) {\n  articleHTML = '<p>Erreur parsing JSON</p>';\n}\n\nreturn {\n  json: {\n    ...prev,\n    articleHTML: articleHTML,\n    draftVersion: 1\n  }\n};"
+      },
+      "id": "func-extract-draft",
+      "name": "Extract Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Review request\nconst data = $input.all()[0].json;\n\nreturn {\n  json: {\n    ...data,\n    apiBody: JSON.stringify({\n      model: \"claude-sonnet-4-5-20250929\",\n      max_tokens: 3000,\n      messages: [{\n        role: \"user\",\n        content: `Tu es expert SEO/GEO. Review cet article et améliore-le pour atteindre 95%+ score.\\n\\nARTICLE ACTUEL:\\n${data.articleHTML}\\n\\nCritères d'amélioration:\\n- Structure H1>H2>H3 optimale\\n- Densité mots-clés 2-3%\\n- Liens internes contextuels\\n- Paragraphes riches\\n- Call-to-actions\\n\\nRéponds en JSON:\\n{\\n  \\\"improvedHTML\\\": \\\"<article>...</article>\\\",\\n  \\\"notes\\\": [\\\"amélioration 1\\\", \\\"amélioration 2\\\"]\\n}`\n      }]\n    })\n  }\n};"
+      },
+      "id": "func-build-review",
+      "name": "Build Review Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.apiBody }}"
+      },
+      "id": "http-review",
+      "name": "STEP 3 - Review (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract review\nconst response = $input.all()[0].json;\nconst prev = $node['Extract Draft'].json;\n\nconst reviewText = response.content?.[0]?.text || '{}';\nlet review = { improvedHTML: '', notes: [] };\n\ntry {\n  review = JSON.parse(reviewText);\n} catch (e) {\n  const match = reviewText.match(/```json\\\\s*([\\\\s\\\\S]*?)\\\\s*```/);\n  if (match) {\n    try { review = JSON.parse(match[1]); } catch {}\n  } else {\n    review = { improvedHTML: reviewText, notes: [] };\n  }\n}\n\nreturn {\n  json: {\n    ...prev,\n    articleHTML: review.improvedHTML || prev.articleHTML,\n    reviewNotes: review.notes || []\n  }\n};"
+      },
+      "id": "func-extract-review",
+      "name": "Extract Review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Score request (Perplexity)\nconst data = $input.all()[0].json;\n\nconst scorePrompt = `Tu es un expert scoring SEO/GEO. Évalue cet article sur 100 points.\\n\\nARTICLE:\\n${data.articleHTML.substring(0, 3000)}...\\n\\nCritères d'évaluation:\\n1. Structure (H1-H6, hiérarchie)\\n2. Contenu (richesse, pertinence, longueur)\\n3. SEO (mots-clés, meta, liens)\\n4. GEO (localisation, intent)\\n5. Engagement (CTA, listes, exemples)\\n\\nRéponds en JSON:\\n{\\n  \\\"scores\\\": {\\\"seo\\\": 0-100, \\\"geo\\\": 0-100},\\n  \\\"breakdown\\\": {\\\"structure\\\": 0-100, \\\"content\\\": 0-100, \\\"keywords\\\": 0-100, \\\"links\\\": 0-100, \\\"engagement\\\": 0-100},\\n  \\\"strengths\\\": [\\\"...\\\"],\\n  \\\"weaknesses\\\": [\\\"...\\\"],\\n  \\\"fixes\\\": [\\\"...\\\"]\\n}`;\n\nreturn {\n  json: {\n    ...data,\n    apiBody: JSON.stringify({\n      model: \"sonar\",\n      messages: [{\n        role: \"system\",\n        content: \"Tu es un expert scoring SEO/GEO. Réponds UNIQUEMENT en JSON valide.\"\n      }, {\n        role: \"user\",\n        content: scorePrompt\n      }],\n      temperature: 0.2,\n      max_tokens: 1500\n    })\n  }\n};"
+      },
+      "id": "func-build-score",
+      "name": "Build Score Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.apiBody }}"
+      },
+      "id": "http-score",
+      "name": "STEP 4 - Score (Perplexity)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3320, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract score and decide next step\nconst response = $input.all()[0].json;\nconst prev = $node['Extract Review'].json;\n\nlet scoreData = { scores: { seo: 0, geo: 0 }, breakdown: {}, strengths: [], weaknesses: [], fixes: [] };\n\ntry {\n  const scoreText = response.choices?.[0]?.message?.content || '{}';\n  scoreData = JSON.parse(scoreText);\n} catch (e) {\n  const match = (response.choices?.[0]?.message?.content || '').match(/```json\\\\s*([\\\\s\\\\S]*?)\\\\s*```/);\n  if (match) {\n    try { scoreData = JSON.parse(match[1]); } catch {}\n  }\n}\n\nconst avgScore = (scoreData.scores.seo + scoreData.scores.geo) / 2;\nconst iteration = prev.currentIteration + 1;\nconst shouldRewrite = avgScore < prev.minScore && iteration < prev.maxIterations;\n\nreturn {\n  json: {\n    ...prev,\n    currentScore: avgScore,\n    currentIteration: iteration,\n    scoreBreakdown: scoreData,\n    shouldRewrite: shouldRewrite,\n    status: shouldRewrite ? 'needs_rewrite' : 'ready_to_save'\n  }\n};"
+      },
+      "id": "func-extract-score",
+      "name": "Extract Score & Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3540, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition1",
+              "leftValue": "={{ $json.shouldRewrite }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-needs-rewrite",
+      "name": "IF Score < 95%",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3760, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Rewrite request (GPT-5.1)\nconst data = $input.all()[0].json;\n\nconst systemPrompt = `Tu es expert SEO/GEO. Réécris l'article pour corriger les faiblesses identifiées. UNIQUEMENT JSON valide.`;\n\nconst userPrompt = `Réécris cet article pour atteindre 95%+ SEO/GEO.\\n\\nARTICLE ACTUEL:\\n${data.articleHTML}\\n\\nSCORES ACTUELS:\\nSEO: ${data.scoreBreakdown.scores.seo}/100\\nGEO: ${data.scoreBreakdown.scores.geo}/100\\n\\nFAIBLESSES À CORRIGER:\\n${data.scoreBreakdown.weaknesses.join('\\\\n')}\\n\\nCORRECTIONS SUGGÉRÉES:\\n${data.scoreBreakdown.fixes.join('\\\\n')}\\n\\nRéponds en JSON: {\\\"html\\\": \\\"<article>...</article>\\\"}`;\n\nreturn {\n  json: {\n    ...data,\n    apiBody: JSON.stringify({\n      model: \"gpt-5-pro-preview\",\n      input: [{\n        role: \"user\",\n        content: [{\n          type: \"input_text\",\n          text: `${systemPrompt}\\n\\n${userPrompt}`\n        }]\n      }],\n      reasoning: { effort: \"medium\" },\n      max_output_tokens: 8000,\n      text: {\n        format: {\n          type: \"json_schema\",\n          name: \"rewrite_response\",\n          schema: {\n            type: \"object\",\n            properties: {\n              html: { type: \"string\" }\n            },\n            required: [\"html\"],\n            additionalProperties: false\n          },\n          strict: true\n        }\n      }\n    })\n  }\n};"
+      },
+      "id": "func-build-rewrite",
+      "name": "Build Rewrite Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3980, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.apiBody }}"
+      },
+      "id": "http-rewrite",
+      "name": "STEP 5 - Rewrite (GPT-5.1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4200, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract rewrite and loop back\nconst response = $input.all()[0].json;\nconst prev = $node['Extract Score & Decide'].json;\n\nlet rewrittenHTML = '';\n\ntry {\n  const outputText = response.output?.[0]?.content?.[0]?.text || '{}';\n  const parsed = JSON.parse(outputText);\n  rewrittenHTML = parsed.html || '';\n} catch (e) {\n  rewrittenHTML = prev.articleHTML;\n}\n\nreturn {\n  json: {\n    ...prev,\n    articleHTML: rewrittenHTML,\n    shouldRewrite: false // Force exit to re-score\n  }\n};"
+      },
+      "id": "func-extract-rewrite",
+      "name": "Extract Rewrite",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4420, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xroduivvgnviqjdvehuw.supabase.co/rest/v1/articles_content",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "apikey", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhyb2R1aXZ2Z252aXFqZHZlaHV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDg1Njg5NywiZXhwIjoyMDY2NDMyODk3fQ.lJe0rcdAJYdS4VjcR5IV_kqA9lEUJoWq8VKsSD5EUV0"},
+            {"name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhyb2R1aXZ2Z252aXFqZHZlaHV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDg1Njg5NywiZXhwIjoyMDY2NDMyODk3fQ.lJe0rcdAJYdS4VjcR5IV_kqA9lEUJoWq8VKsSD5EUV0"},
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Prefer", "value": "return=representation"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ job_id: $json.jobId, section_index: 0, section_id: 'complete', section_title: 'Article Complet', content: { html: $json.articleHTML, score: $json.currentScore, iterations: $json.currentIteration } }) }}"
+      },
+      "id": "http-save",
+      "name": "STEP 6 - Save to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3980, 620]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, jobId: $json.jobId, topic: $json.topic, finalScore: $json.currentScore, iterations: $json.currentIteration, status: 'completed', message: 'Article generated and saved successfully' } }}"
+      },
+      "id": "respond-final",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [4200, 620]
+    }
+  ],
+  "connections": {
+    "Webhook Start": {"main": [[{"node": "Initialize Variables", "type": "main", "index": 0}]]},
+    "Initialize Variables": {"main": [[{"node": "Get Internal Articles", "type": "main", "index": 0}]]},
+    "Get Internal Articles": {"main": [[{"node": "Extract Internal Links", "type": "main", "index": 0}]]},
+    "Extract Internal Links": {"main": [[{"node": "Build Research Body", "type": "main", "index": 0}]]},
+    "Build Research Body": {"main": [[{"node": "STEP 1 - Research (Claude)", "type": "main", "index": 0}]]},
+    "STEP 1 - Research (Claude)": {"main": [[{"node": "Extract Research", "type": "main", "index": 0}]]},
+    "Extract Research": {"main": [[{"node": "Build Draft Body (GPT-5.1)", "type": "main", "index": 0}]]},
+    "Build Draft Body (GPT-5.1)": {"main": [[{"node": "STEP 2 - Draft (GPT-5.1)", "type": "main", "index": 0}]]},
+    "STEP 2 - Draft (GPT-5.1)": {"main": [[{"node": "Extract Draft", "type": "main", "index": 0}]]},
+    "Extract Draft": {"main": [[{"node": "Build Review Body", "type": "main", "index": 0}]]},
+    "Build Review Body": {"main": [[{"node": "STEP 3 - Review (Claude)", "type": "main", "index": 0}]]},
+    "STEP 3 - Review (Claude)": {"main": [[{"node": "Extract Review", "type": "main", "index": 0}]]},
+    "Extract Review": {"main": [[{"node": "Build Score Body", "type": "main", "index": 0}]]},
+    "Build Score Body": {"main": [[{"node": "STEP 4 - Score (Perplexity)", "type": "main", "index": 0}]]},
+    "STEP 4 - Score (Perplexity)": {"main": [[{"node": "Extract Score & Decide", "type": "main", "index": 0}]]},
+    "Extract Score & Decide": {"main": [[{"node": "IF Score < 95%", "type": "main", "index": 0}]]},
+    "IF Score < 95%": {
+      "main": [
+        [{"node": "Build Rewrite Body", "type": "main", "index": 0}],
+        [{"node": "STEP 6 - Save to Supabase", "type": "main", "index": 0}]
+      ]
+    },
+    "Build Rewrite Body": {"main": [[{"node": "STEP 5 - Rewrite (GPT-5.1)", "type": "main", "index": 0}]]},
+    "STEP 5 - Rewrite (GPT-5.1)": {"main": [[{"node": "Extract Rewrite", "type": "main", "index": 0}]]},
+    "Extract Rewrite": {"main": [[{"node": "Build Review Body", "type": "main", "index": 0}]]},
+    "STEP 6 - Save to Supabase": {"main": [[{"node": "Respond Success", "type": "main", "index": 0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder": "v1"},
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-11-22T20:00:00.000Z"
+}

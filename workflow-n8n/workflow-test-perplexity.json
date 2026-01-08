@@ -1,0 +1,125 @@
+{
+  "name": "Test Perplexity API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test-perplexity",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-test",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "test-perplexity"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "articleHTML",
+              "value": "<article><h1>Test Article SEO/GEO</h1><p>Ceci est un article de test pour évaluer le scoring Perplexity. Il contient plusieurs paragraphes avec du contenu structuré.</p><h2>Section 1: Introduction</h2><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cette section introduit le sujet principal de l'article avec des mots-clés pertinents.</p><h2>Section 2: Développement</h2><p>Nous développons ici les concepts clés avec des exemples concrets et des données factuelles pour enrichir le contenu.</p><ul><li>Point clé 1: Optimisation SEO</li><li>Point clé 2: Structure H1-H6</li><li>Point clé 3: Mots-clés stratégiques</li></ul><h2>Conclusion</h2><p>En conclusion, cet article présente les éléments essentiels pour un bon référencement naturel.</p></article>",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "set-test-data",
+      "name": "Set Test Article",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Perplexity Score request\nconst articleHTML = $json.articleHTML;\n\nconst scorePrompt = `Tu es un expert scoring SEO/GEO. Évalue cet article sur 100 points.\n\nARTICLE:\n${articleHTML}\n\nCritères d'évaluation:\n1. Structure (H1-H6, hiérarchie)\n2. Contenu (richesse, pertinence, longueur)\n3. SEO (mots-clés, meta, liens)\n4. GEO (localisation, intent)\n5. Engagement (CTA, listes, exemples)\n\nRéponds en JSON:\n{\n  \"scores\": {\"seo\": 0-100, \"geo\": 0-100},\n  \"breakdown\": {\"structure\": 0-100, \"content\": 0-100, \"keywords\": 0-100, \"links\": 0-100, \"engagement\": 0-100},\n  \"strengths\": [\"...\"],\n  \"weaknesses\": [\"...\"],\n  \"fixes\": [\"...\"]\n}`;\n\nreturn {\n  json: {\n    apiBody: JSON.stringify({\n      model: \"sonar\",\n      messages: [\n        {\n          role: \"system\",\n          content: \"Tu es un expert scoring SEO/GEO. Réponds UNIQUEMENT en JSON valide.\"\n        },\n        {\n          role: \"user\",\n          content: scorePrompt\n        }\n      ],\n      temperature: 0.2,\n      max_tokens: 1500\n    })\n  }\n};"
+      },
+      "id": "build-score-body",
+      "name": "Build Score Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.perplexity.ai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.apiBody }}",
+        "options": {}
+      },
+      "id": "perplexity-request",
+      "name": "Perplexity Score",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and display score\nconst response = $input.all()[0].json;\n\nlet scoreData = { scores: { seo: 0, geo: 0 }, breakdown: {}, strengths: [], weaknesses: [], fixes: [] };\n\ntry {\n  const scoreText = response.choices?.[0]?.message?.content || '{}';\n  scoreData = JSON.parse(scoreText);\n} catch (e) {\n  const match = (response.choices?.[0]?.message?.content || '').match(/```json\\s*([\\s\\S]*?)\\s*```/);\n  if (match) {\n    try { scoreData = JSON.parse(match[1]); } catch {}\n  }\n}\n\nconst avgScore = (scoreData.scores.seo + scoreData.scores.geo) / 2;\n\nreturn {\n  json: {\n    success: true,\n    avgScore: avgScore,\n    seoScore: scoreData.scores.seo,\n    geoScore: scoreData.scores.geo,\n    breakdown: scoreData.breakdown,\n    strengths: scoreData.strengths,\n    weaknesses: scoreData.weaknesses,\n    fixes: scoreData.fixes,\n    rawResponse: response\n  }\n};"
+      },
+      "id": "extract-score",
+      "name": "Extract Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set Test Article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Test Article": {
+      "main": [
+        [
+          {
+            "node": "Build Score Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Score Request": {
+      "main": [
+        [
+          {
+            "node": "Perplexity Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Perplexity Score": {
+      "main": [
+        [
+          {
+            "node": "Extract Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

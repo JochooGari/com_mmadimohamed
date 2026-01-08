@@ -1,0 +1,252 @@
+{
+  "name": "LinkedIn Engagement Tracker & Sniper DM",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "⏰ Toutes les 4h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/curious_coder~linkedin-post-search-scraper/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"searchQueries\": [\n    \"DAF transformation digitale reporting\",\n    \"contrôleur de gestion automatisation Excel\",\n    \"Power BI finance entreprise\",\n    \"FP&A analytics dashboard\",\n    \"reporting financier Python automation\",\n    \"CFO data driven decision\",\n    \"clôture comptable automatisée\",\n    \"business intelligence finance ETI\",\n    \"modernisation reporting DAF\",\n    \"tableau de bord financier temps réel\"\n  ],\n  \"maxResults\": 100,\n  \"sortBy\": \"date\",\n  \"minLikes\": 10,\n  \"proxyConfiguration\": {\n    \"useApifyProxy\": true\n  }\n}",
+        "options": {}
+      },
+      "id": "apify-posts",
+      "name": "🔍 Scrape LinkedIn Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/actor-runs/{{ $json.data.id }}/dataset/items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "get-posts",
+      "name": "📥 Get Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Tu es un expert en personal branding LinkedIn spécialisé dans le secteur Finance/Data. Tu analyses des posts pour identifier des opportunités d'engagement stratégique."
+            },
+            {
+              "role": "user",
+              "content": "=Analyse ce post LinkedIn et retourne UNIQUEMENT un JSON valide :\n\n**Auteur:** {{ $json.author }}\n**Titre:** {{ $json.authorHeadline }}\n**Contenu:** {{ $json.content }}\n**Likes:** {{ $json.likes }}\n**Commentaires:** {{ $json.comments }}\n\n**Contexte du profil Mohamed:**\n- Data Business Analyst spécialisé Finance et Marketing\n- Expertise: Power BI, Python, automatisation reporting\n- Cible: DAF, CDG, CFO de PME/ETI\n- Offre: Data Unlimited (consulting data premium)\n\nRetourne ce JSON:\n{\n  \"score_pertinence\": [1-10],\n  \"categorie\": [\"METIER\" ou \"TECH\" ou \"THOUGHT_LEADERSHIP\"],\n  \"persona_auteur\": [\"DAF\", \"CDG\", \"CFO\", \"FP&A\", \"Data Analyst\", \"Consultant\", \"Autre\"],\n  \"themes\": [liste des thèmes],\n  \"opportunite_lead\": [true/false],\n  \"raison_opportunite\": \"[explication courte]\",\n  \"suggestion_commentaire\": \"[commentaire de 2-3 phrases montrant expertise sans être vendeur]\",\n  \"angle_approche\": [\"technique\", \"business_value\", \"storytelling\", \"contrarian\"],\n  \"action\": [\"commenter\", \"connecter\", \"DM_apres_commentaire\", \"ignorer\"]\n}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "analyze-post",
+      "name": "🧠 Analyze Post with AI",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI response et enrichir les données\nconst results = [];\n\nfor (const item of $input.all()) {\n  try {\n    const originalPost = item.json.originalPost || item.json;\n    const aiResponse = item.json.response || item.json.text || item.json.content;\n    \n    // Parser la réponse JSON de l'IA\n    let analysis;\n    try {\n      // Extraire le JSON de la réponse\n      const jsonMatch = aiResponse.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) {\n        analysis = JSON.parse(jsonMatch[0]);\n      } else {\n        analysis = JSON.parse(aiResponse);\n      }\n    } catch (e) {\n      analysis = {\n        score_pertinence: 5,\n        categorie: 'AUTRE',\n        action: 'ignorer',\n        suggestion_commentaire: 'Erreur analyse'\n      };\n    }\n    \n    results.push({\n      json: {\n        // Données du post\n        postUrl: originalPost.url || originalPost.postUrl,\n        author: originalPost.author,\n        authorHeadline: originalPost.authorHeadline,\n        content: (originalPost.content || '').substring(0, 500),\n        likes: originalPost.likes,\n        comments: originalPost.comments,\n        postedAt: originalPost.postedAt,\n        \n        // Analyse IA\n        score: analysis.score_pertinence,\n        categorie: analysis.categorie,\n        persona: analysis.persona_auteur,\n        themes: (analysis.themes || []).join(', '),\n        opportuniteLead: analysis.opportunite_lead,\n        raisonOpportunite: analysis.raison_opportunite,\n        commentaireSuggere: analysis.suggestion_commentaire,\n        angle: analysis.angle_approche,\n        actionRecommandee: analysis.action,\n        \n        // Meta\n        analyzedAt: new Date().toISOString()\n      }\n    });\n  } catch (e) {\n    console.error('Error processing item:', e);\n  }\n}\n\n// Trier par score et opportunité lead\nresults.sort((a, b) => {\n  if (b.json.opportuniteLead !== a.json.opportuniteLead) {\n    return b.json.opportuniteLead ? 1 : -1;\n  }\n  return b.json.score - a.json.score;\n});\n\nreturn results;"
+      },
+      "id": "process-analysis",
+      "name": "⚙️ Process Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "score-filter",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-high-score",
+      "name": "🎯 Filter Score >= 7",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Posts_A_Commenter",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "URL Post": "={{ $json.postUrl }}",
+            "Auteur": "={{ $json.author }}",
+            "Titre Auteur": "={{ $json.authorHeadline }}",
+            "Extrait": "={{ $json.content }}",
+            "Likes": "={{ $json.likes }}",
+            "Commentaires": "={{ $json.comments }}",
+            "Score": "={{ $json.score }}",
+            "Catégorie": "={{ $json.categorie }}",
+            "Persona": "={{ $json.persona }}",
+            "Thèmes": "={{ $json.themes }}",
+            "Opportunité Lead": "={{ $json.opportuniteLead }}",
+            "Raison": "={{ $json.raisonOpportunite }}",
+            "Commentaire Suggéré": "={{ $json.commentaireSuggere }}",
+            "Action": "={{ $json.actionRecommandee }}",
+            "Statut": "À traiter",
+            "Date": "={{ $json.analyzedAt }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-posts",
+      "name": "📋 Save to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "channel": "#veille-linkedin",
+        "text": "=🔥 *{{ $input.all().length }} posts à fort potentiel détectés*\n\n{{ $input.all().slice(0, 5).map((item, i) => {\n  const p = item.json;\n  return `*${i+1}. ${p.author}* (Score ${p.score}/10) ${p.opportuniteLead ? '🎯 LEAD' : ''}\n└ ${p.authorHeadline}\n└ _${p.categorie}_ | Thèmes: ${p.themes}\n└ 💬 Suggestion: \"${p.commentaireSuggere.substring(0, 100)}...\"\n└ [Voir post](${p.postUrl})`;\n}).join('\\n\\n') }}\n\n📊 Opportunités leads: {{ $input.all().filter(i => i.json.opportuniteLead).length }}\n\n👉 [Voir tous les posts](LIEN_GOOGLE_SHEET)",
+        "otherOptions": {}
+      },
+      "id": "slack-alert",
+      "name": "💬 Slack Veille",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1320, 200]
+    }
+  ],
+  "connections": {
+    "⏰ Toutes les 4h": {
+      "main": [
+        [
+          {
+            "node": "🔍 Scrape LinkedIn Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Scrape LinkedIn Posts": {
+      "main": [
+        [
+          {
+            "node": "📥 Get Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Get Posts": {
+      "main": [
+        [
+          {
+            "node": "🧠 Analyze Post with AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Analyze Post with AI": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Process Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Process Analysis": {
+      "main": [
+        [
+          {
+            "node": "🎯 Filter Score >= 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎯 Filter Score >= 7": {
+      "main": [
+        [
+          {
+            "node": "📋 Save to Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "💬 Slack Veille",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Veille automatique des posts LinkedIn pertinents avec suggestions de commentaires et détection d'opportunités leads"
+  }
+}

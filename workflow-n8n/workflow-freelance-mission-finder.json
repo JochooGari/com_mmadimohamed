@@ -1,0 +1,312 @@
+{
+  "name": "Freelance Mission Finder Multi-Platform",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-daily",
+      "name": "⏰ Tous les jours 8h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/bebity~linkedin-jobs-scraper/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"searchQueries\": [\n    \"Data Analyst Finance freelance France\",\n    \"Business Analyst contrôle gestion mission\",\n    \"Power BI consultant freelance\",\n    \"Reporting financier consultant\",\n    \"FP&A analyst mission France\",\n    \"Data consultant transformation finance\"\n  ],\n  \"location\": \"France\",\n  \"maxResults\": 50,\n  \"datePosted\": \"past-week\",\n  \"experienceLevel\": [\"mid-senior-level\", \"senior\"],\n  \"jobType\": [\"contract\", \"temporary\"],\n  \"remote\": true\n}",
+        "options": {}
+      },
+      "id": "linkedin-jobs",
+      "name": "🔍 LinkedIn Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/dtrungtin~malt-scraper/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"searchUrl\": \"https://www.malt.fr/s?q=data+analyst+finance&loc=France\",\n  \"maxResults\": 30\n}",
+        "options": {}
+      },
+      "id": "malt-jobs",
+      "name": "🔍 Malt Missions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/bebity~indeed-scraper/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"country\": \"FR\",\n  \"queries\": [\n    \"Data Analyst Finance freelance\",\n    \"Business Intelligence consultant\",\n    \"Power BI mission\",\n    \"Contrôleur gestion data\"\n  ],\n  \"maxResults\": 30,\n  \"datePosted\": \"7\"\n}",
+        "options": {}
+      },
+      "id": "indeed-jobs",
+      "name": "🔍 Indeed Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collecter et normaliser les résultats de toutes les plateformes\nconst allJobs = [];\n\n// LinkedIn Jobs\ntry {\n  const linkedinItems = $('🔍 LinkedIn Jobs').all();\n  for (const item of linkedinItems) {\n    if (item.json && item.json.title) {\n      allJobs.push({\n        platform: 'LinkedIn',\n        title: item.json.title,\n        company: item.json.company || item.json.companyName,\n        location: item.json.location,\n        description: item.json.description || '',\n        salary: item.json.salary || item.json.salaryRange || 'Non précisé',\n        jobType: item.json.jobType || item.json.employmentType,\n        remote: item.json.remote || (item.json.location || '').toLowerCase().includes('remote'),\n        url: item.json.url || item.json.jobUrl,\n        postedAt: item.json.postedAt || item.json.datePosted\n      });\n    }\n  }\n} catch (e) { console.error('LinkedIn error:', e); }\n\n// Malt\ntry {\n  const maltItems = $('🔍 Malt Missions').all();\n  for (const item of maltItems) {\n    if (item.json && item.json.title) {\n      allJobs.push({\n        platform: 'Malt',\n        title: item.json.title,\n        company: item.json.company || 'Client Malt',\n        location: item.json.location || 'France',\n        description: item.json.description || '',\n        salary: item.json.budget || item.json.rate || 'Non précisé',\n        jobType: 'Freelance',\n        remote: item.json.remote || true,\n        url: item.json.url,\n        postedAt: item.json.postedAt\n      });\n    }\n  }\n} catch (e) { console.error('Malt error:', e); }\n\n// Indeed\ntry {\n  const indeedItems = $('🔍 Indeed Jobs').all();\n  for (const item of indeedItems) {\n    if (item.json && item.json.title) {\n      allJobs.push({\n        platform: 'Indeed',\n        title: item.json.title,\n        company: item.json.company,\n        location: item.json.location,\n        description: item.json.description || item.json.snippet || '',\n        salary: item.json.salary || 'Non précisé',\n        jobType: item.json.jobType || 'Non précisé',\n        remote: (item.json.location || '').toLowerCase().includes('remote') || \n                (item.json.location || '').toLowerCase().includes('télétravail'),\n        url: item.json.url,\n        postedAt: item.json.postedAt || item.json.datePosted\n      });\n    }\n  }\n} catch (e) { console.error('Indeed error:', e); }\n\nreturn allJobs.map(job => ({ json: job }));"
+      },
+      "id": "merge-jobs",
+      "name": "🔀 Merge All Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 100]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Tu es un expert en matching missions freelance pour Data Analyst Finance. Tu scores les offres selon leur pertinence pour le profil suivant:\n\nPROFIL:\n- 5+ ans d'expérience Data/Finance\n- Expert Power BI, Python, SQL, DAX\n- Connaissance métier: Contrôle de gestion, FP&A, Reporting financier\n- Cherche missions freelance, TJM 500-800€\n- Préférence: Remote ou Paris/IDF"
+            },
+            {
+              "role": "user",
+              "content": "=Analyse cette offre et retourne UNIQUEMENT un JSON valide:\n\n**Titre:** {{ $json.title }}\n**Entreprise:** {{ $json.company }}\n**Plateforme:** {{ $json.platform }}\n**Description:** {{ $json.description.substring(0, 1000) }}\n**Type:** {{ $json.jobType }}\n**Localisation:** {{ $json.location }}\n**Salaire/TJM:** {{ $json.salary }}\n**Remote:** {{ $json.remote }}\n\nCRITÈRES DE SCORING:\n+3 : Mots-clés \"Power BI\", \"Python\", \"Data Analyst\", \"Business Intelligence\"\n+2 : Mots-clés \"Finance\", \"Contrôle de gestion\", \"DAF\", \"FP&A\", \"Reporting\"\n+2 : Remote ou Hybride\n+1 : Freelance/Mission/Consultant\n+1 : TJM > 500€\n+1 : Durée 3-6 mois\n-2 : CDI uniquement\n-1 : Junior ou Stage\n-1 : Compétences non-match\n\nRetourne ce JSON:\n{\n  \"score\": [1-10],\n  \"raison\": \"[2-3 phrases]\",\n  \"matchCompetences\": [\"liste des compétences matchées\"],\n  \"redFlags\": [\"points négatifs si applicable\"],\n  \"coverLetter\": \"[Lettre motivation 150 mots max, personnalisée]\",\n  \"priorite\": [\"HAUTE\", \"MOYENNE\", \"BASSE\"]\n}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "score-jobs",
+      "name": "🧠 Score Jobs with AI",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [720, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parser les résultats du scoring\nconst results = [];\n\nfor (const item of $input.all()) {\n  try {\n    const originalJob = item.json.originalJob || {};\n    const aiResponse = item.json.text || item.json.content || JSON.stringify(item.json);\n    \n    let analysis;\n    try {\n      const jsonMatch = aiResponse.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) {\n        analysis = JSON.parse(jsonMatch[0]);\n      } else {\n        analysis = { score: 5, priorite: 'MOYENNE', raison: 'Analyse par défaut' };\n      }\n    } catch (e) {\n      analysis = { score: 5, priorite: 'MOYENNE', raison: 'Erreur parsing' };\n    }\n    \n    results.push({\n      json: {\n        // Job info\n        platform: originalJob.platform,\n        title: originalJob.title,\n        company: originalJob.company,\n        location: originalJob.location,\n        salary: originalJob.salary,\n        jobType: originalJob.jobType,\n        remote: originalJob.remote,\n        url: originalJob.url,\n        \n        // Scoring\n        score: analysis.score,\n        priorite: analysis.priorite,\n        raison: analysis.raison,\n        matchCompetences: (analysis.matchCompetences || []).join(', '),\n        redFlags: (analysis.redFlags || []).join(', '),\n        coverLetter: analysis.coverLetter,\n        \n        // Meta\n        analyzedAt: new Date().toISOString()\n      }\n    });\n  } catch (e) {\n    console.error('Error:', e);\n  }\n}\n\n// Trier par score\nresults.sort((a, b) => b.json.score - a.json.score);\n\nreturn results;"
+      },
+      "id": "process-scores",
+      "name": "⚙️ Process Scores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "high-score",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-high",
+      "name": "🎯 Filter Score >= 7",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1160, 100]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Missions_Freelance",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Plateforme": "={{ $json.platform }}",
+            "Titre": "={{ $json.title }}",
+            "Entreprise": "={{ $json.company }}",
+            "Localisation": "={{ $json.location }}",
+            "TJM/Budget": "={{ $json.salary }}",
+            "Type": "={{ $json.jobType }}",
+            "Remote": "={{ $json.remote }}",
+            "URL": "={{ $json.url }}",
+            "Score": "={{ $json.score }}",
+            "Priorité": "={{ $json.priorite }}",
+            "Raison": "={{ $json.raison }}",
+            "Compétences Match": "={{ $json.matchCompetences }}",
+            "Red Flags": "={{ $json.redFlags }}",
+            "Cover Letter": "={{ $json.coverLetter }}",
+            "Statut": "Nouveau",
+            "Date": "={{ $json.analyzedAt }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-missions",
+      "name": "📋 Save Missions",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1380, 0]
+    },
+    {
+      "parameters": {
+        "channel": "#missions-freelance",
+        "text": "=🎯 *{{ $input.all().length }} nouvelles missions trouvées (Score >= 7)*\n\n{{ $input.all().slice(0, 5).map((item, i) => {\n  const m = item.json;\n  return `*${i+1}. ${m.title}* (Score ${m.score}/10) ${m.priorite === 'HAUTE' ? '🔥' : ''}\n└ 🏢 ${m.company} | 📍 ${m.location} ${m.remote ? '🏠' : ''}\n└ 💰 ${m.salary} | 📋 ${m.platform}\n└ ✅ Match: ${m.matchCompetences}\n└ [Voir offre](${m.url})`;\n}).join('\\n\\n') }}\n\n📊 Priorités: {{ $input.all().filter(i => i.json.priorite === 'HAUTE').length }} haute | {{ $input.all().filter(i => i.json.priorite === 'MOYENNE').length }} moyenne\n\n👉 [Dashboard missions](LIEN_GOOGLE_SHEET)",
+        "otherOptions": {}
+      },
+      "id": "slack-missions",
+      "name": "💬 Slack Missions",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1380, 200]
+    }
+  ],
+  "connections": {
+    "⏰ Tous les jours 8h": {
+      "main": [
+        [
+          {
+            "node": "🔍 LinkedIn Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🔍 Malt Missions",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🔍 Indeed Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 LinkedIn Jobs": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Malt Missions": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Indeed Jobs": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Merge All Jobs": {
+      "main": [
+        [
+          {
+            "node": "🧠 Score Jobs with AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Score Jobs with AI": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Process Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Process Scores": {
+      "main": [
+        [
+          {
+            "node": "🎯 Filter Score >= 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎯 Filter Score >= 7": {
+      "main": [
+        [
+          {
+            "node": "📋 Save Missions",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "💬 Slack Missions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Scrape et score automatiquement les missions freelance sur LinkedIn, Malt et Indeed"
+  }
+}
