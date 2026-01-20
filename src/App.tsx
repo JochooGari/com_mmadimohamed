@@ -25,6 +25,8 @@ import AdminArticles from './pages/AdminArticles';
 import AdminResources from './pages/AdminResources';
 import AdminSettings from './pages/AdminSettings';
 import LinkedInAgentPage from './pages/LinkedInAgentPage';
+import AdminLinkedInDashboard from './pages/AdminLinkedInDashboard';
+import AdminLinkedInPosts from './pages/AdminLinkedInPosts';
 import GEOAgentPage from './pages/GEOAgentPage';
 import WorkflowPage from './pages/WorkflowPage';
 import MCPDashboard from './pages/MCPDashboard';
@@ -62,6 +64,8 @@ function App() {
           <Route path="resources" element={<AdminResources />} />
           <Route path="agents" element={<AdminAgents />} />
           <Route path="linkedin-agent" element={<LinkedInAgentPage />} />
+          <Route path="linkedin/dashboard" element={<AdminLinkedInDashboard />} />
+          <Route path="linkedin/posts" element={<AdminLinkedInPosts />} />
           <Route path="geo-agent" element={<GEOAgentPage />} />
           <Route path="approvals" element={<AdminApprovals />} />
           <Route path="seo" element={<AdminDashboard />} />

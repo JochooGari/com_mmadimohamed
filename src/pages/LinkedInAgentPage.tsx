@@ -709,6 +709,14 @@ export default function LinkedInAgentPage() {
             <Eye className="h-4 w-4" />
             Mode Co-pilot
           </Button>
+          <Button
+            variant="outline"
+            className="flex items-center gap-2 border-blue-500 text-blue-600 hover:bg-blue-50"
+            onClick={() => window.open('/admin/linkedin/dashboard', '_blank')}
+          >
+            <Target className="h-4 w-4" />
+            Nouvelle Interface
+          </Button>
           <Button className="flex items-center gap-2">
             <Zap className="h-4 w-4" />
             Mode Auto-pilot
