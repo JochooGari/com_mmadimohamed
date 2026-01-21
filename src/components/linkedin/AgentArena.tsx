@@ -21,10 +21,12 @@ interface AgentArenaProps {
   onSkip: () => void;
 }
 
+type AgentName = 'claude' | 'gpt4o' | 'gemini';
+
 export function AgentArena({ post, onApprove, onSkip }: AgentArenaProps) {
   const [editMode, setEditMode] = useState(false);
   const [editedComment, setEditedComment] = useState(post.suggested_comment || '');
-  const [selectedTab, setSelectedTab] = useState(post.selected_agent || 'claude');
+  const [selectedTab, setSelectedTab] = useState<AgentName>((post.selected_agent as AgentName) || 'claude');
 
   const agents = post.agents_responses || {};
 
@@ -42,7 +44,7 @@ export function AgentArena({ post, onApprove, onSkip }: AgentArenaProps) {
   };
 
   const handleSelectAgent = (agentName: string) => {
-    setSelectedTab(agentName);
+    setSelectedTab(agentName as AgentName);
     const agentData = getAgentData(agentName);
     if (agentData) {
       setEditedComment(agentData.suggested_comment);
