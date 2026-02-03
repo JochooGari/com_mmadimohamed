@@ -1,4 +1,20 @@
 {
+  "_documentation": {
+    "supabaseProjects": {
+      "xroduivvgnviqjdvehuw": {
+        "name": "mmadimohamed.fr",
+        "description": "Site web personnel - Portfolio & Blog",
+        "url": "https://xroduivvgnviqjdvehuw.supabase.co",
+        "usage": "LinkedIn Multi-Agent, Articles, Blog posts"
+      },
+      "dgjesxdtvimdxdtvwmug": {
+        "name": "YoutubeTranscriptExtract",
+        "description": "SAAS - YouTube Transcript Extraction",
+        "url": "https://dgjesxdtvimdxdtvwmug.supabase.co",
+        "usage": "YouTube transcription service"
+      }
+    }
+  },
   "mcpServers": {
     "magicpath-n8n-vercel": {
       "command": "mcp-vercel-connector",
