@@ -49,6 +49,7 @@ import Connectors from '@/components/Connectors';
 import mammoth from 'mammoth';
 import { BrowserFileStorage } from '@/lib/browserStorage';
 import { WebFileStorage } from '@/lib/webStorage';
+import LinkedInCommandCenter from '@/components/linkedin/LinkedInCommandCenter';
 
 interface LinkedInCampaign {
   id: string;
@@ -89,7 +90,7 @@ interface ContentSource {
 }
 
 export default function LinkedInAgentPage() {
-  const [activeTab, setActiveTab] = useState('knowledge');
+  const [activeTab, setActiveTab] = useState('command');
   const [campaigns, setCampaigns] = useState<LinkedInCampaign[]>([
     {
       id: '1',
@@ -725,7 +726,11 @@ export default function LinkedInAgentPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-11">
+        <TabsList className="grid w-full grid-cols-12">
+          <TabsTrigger value="command" className="flex items-center gap-2 bg-teal-500/10 text-teal-600 data-[state=active]:bg-teal-500 data-[state=active]:text-white">
+            <Target className="h-4 w-4" />
+            Command
+          </TabsTrigger>
           <TabsTrigger value="knowledge" className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
             Connaissance
@@ -772,6 +777,11 @@ export default function LinkedInAgentPage() {
             Config
           </TabsTrigger>
         </TabsList>
+
+        {/* Onglet Command Center - Nouveau design Stitch */}
+        <TabsContent value="command" className="min-h-[calc(100vh-200px)]">
+          <LinkedInCommandCenter />
+        </TabsContent>
 
         {/* Onglet Connaissance */}
         <TabsContent value="knowledge">
