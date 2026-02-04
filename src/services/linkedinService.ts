@@ -260,7 +260,6 @@ class LinkedInService {
    */
   async triggerScraping(): Promise<void> {
     try {
-      // TODO: Replace with actual n8n webhook URL
       const webhookUrl = import.meta.env.VITE_N8N_SCRAPING_WEBHOOK;
 
       if (!webhookUrl) {
@@ -284,6 +283,40 @@ class LinkedInService {
       }
     } catch (error) {
       console.error('Failed to trigger scraping:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger re-analysis workflow (via n8n webhook)
+   * Analyzes posts and proposes comments
+   */
+  async triggerReAnalysis(): Promise<void> {
+    try {
+      const webhookUrl = import.meta.env.VITE_N8N_ANALYSIS_WEBHOOK;
+
+      if (!webhookUrl) {
+        console.warn('Analysis webhook URL not configured');
+        return;
+      }
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          trigger: 'manual',
+          action: 're-analyze',
+          timestamp: new Date().toISOString()
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to trigger re-analysis');
+      }
+    } catch (error) {
+      console.error('Failed to trigger re-analysis:', error);
       throw error;
     }
   }

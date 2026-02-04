@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { tryGetSupabaseClient, isSupabaseConfigured } from '@/lib/supabase';
+import { linkedinService } from '@/services/linkedinService';
 
 // Types pour le Command Center
 interface LeadOpportunity {
@@ -128,10 +129,49 @@ const ProgressBar: React.FC<{
   </div>
 );
 
+// Composant Lead List Row pour la vue liste
+const LeadListRow: React.FC<{
+  lead: LeadOpportunity;
+  onProcess: (id: string) => void;
+}> = ({ lead, onProcess }) => (
+  <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+    <td className="py-3 px-4">
+      <div className="flex items-center gap-3">
+        <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${lead.gradientFrom} ${lead.gradientTo} text-white flex items-center justify-center text-xs font-bold`}>
+          {lead.initials}
+        </div>
+        <span className="font-medium text-gray-900 dark:text-white">{lead.name}</span>
+      </div>
+    </td>
+    <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400">{lead.title} @ {lead.company}</td>
+    <td className="py-3 px-4">
+      <span className={`px-2 py-1 rounded text-xs font-bold ${
+        lead.score >= 8.5
+          ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+          : lead.score >= 7.5
+          ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400'
+          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+      }`}>
+        {lead.score.toFixed(1)}
+      </span>
+    </td>
+    <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">{lead.description}</td>
+    <td className="py-3 px-4">
+      <button
+        onClick={() => onProcess(lead.id)}
+        className="px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white text-xs font-medium rounded-lg transition-colors"
+      >
+        Process
+      </button>
+    </td>
+  </tr>
+);
+
 // Composant Principal
 const LinkedInCommandCenter: React.FC = () => {
   const [mode, setMode] = useState<'copilot' | 'autopilot'>('copilot');
-  const [activeSubTab, setActiveSubTab] = useState('command');
+  const [scrapingInProgress, setScrapingInProgress] = useState(false);
+  const [analysisInProgress, setAnalysisInProgress] = useState(false);
   const [stats, setStats] = useState<StatsData>({
     toProcess: 23,
     todaysActivity: 45,
@@ -312,10 +352,28 @@ const LinkedInCommandCenter: React.FC = () => {
   const handleQuickAction = async (action: string) => {
     switch (action) {
       case 'scrape':
-        console.log('Force scraping...');
+        setScrapingInProgress(true);
+        try {
+          await linkedinService.triggerScraping();
+          // Rafraîchir les données après un délai
+          setTimeout(() => loadLeadsFromSupabase(), 3000);
+        } catch (error) {
+          console.error('Scraping failed:', error);
+        } finally {
+          setScrapingInProgress(false);
+        }
         break;
       case 'analyze':
-        await loadLeadsFromSupabase();
+        setAnalysisInProgress(true);
+        try {
+          await linkedinService.triggerReAnalysis();
+          // Rafraîchir les données après un délai plus long pour l'analyse
+          setTimeout(() => loadLeadsFromSupabase(), 5000);
+        } catch (error) {
+          console.error('Re-analysis failed:', error);
+        } finally {
+          setAnalysisInProgress(false);
+        }
         break;
       case 'persona':
         console.log('New persona...');
@@ -325,14 +383,6 @@ const LinkedInCommandCenter: React.FC = () => {
         break;
     }
   };
-
-  const subTabs = [
-    { id: 'command', label: 'Command Center', icon: 'grid_view' },
-    { id: 'generator', label: 'Générateur', icon: 'auto_fix_high' },
-    { id: 'campaign', label: 'Campagne', icon: 'campaign' },
-    { id: 'analytics', label: 'Analytics', icon: 'analytics' },
-    { id: 'config', label: 'Config', icon: 'settings' }
-  ];
 
   return (
     <div className="flex flex-col h-full">
@@ -375,23 +425,6 @@ const LinkedInCommandCenter: React.FC = () => {
         </div>
       </div>
 
-      {/* Sub Tabs */}
-      <div className="flex items-center gap-8 border-b border-gray-200 dark:border-gray-700 mb-6 px-2 overflow-x-auto">
-        {subTabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            className={`flex items-center gap-2 py-3 px-1 font-medium text-sm transition-all whitespace-nowrap ${
-              activeSubTab === tab.id
-                ? 'text-teal-500 border-b-2 border-teal-500'
-                : 'text-gray-500 dark:text-gray-400 hover:text-teal-500'
-            }`}
-          >
-            <span className="material-symbols-outlined text-xl">{tab.icon}</span> {tab.label}
-          </button>
-        ))}
-      </div>
-
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <StatCard
@@ -426,15 +459,23 @@ const LinkedInCommandCenter: React.FC = () => {
         <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto">
           <button
             onClick={() => handleQuickAction('scrape')}
-            className="whitespace-nowrap flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg text-xs font-medium transition-colors"
+            disabled={scrapingInProgress}
+            className="whitespace-nowrap flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="material-symbols-outlined text-gray-500 text-sm">refresh</span> Force Scraping
+            <span className={`material-symbols-outlined text-gray-500 text-sm ${scrapingInProgress ? 'animate-spin' : ''}`}>
+              {scrapingInProgress ? 'sync' : 'refresh'}
+            </span>
+            {scrapingInProgress ? 'Scraping...' : 'Force Scraping'}
           </button>
           <button
             onClick={() => handleQuickAction('analyze')}
-            className="whitespace-nowrap flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg text-xs font-medium transition-colors"
+            disabled={analysisInProgress}
+            className="whitespace-nowrap flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="material-symbols-outlined text-gray-500 text-sm">psychology</span> Re-Analyze Queue
+            <span className={`material-symbols-outlined text-gray-500 text-sm ${analysisInProgress ? 'animate-spin' : ''}`}>
+              {analysisInProgress ? 'sync' : 'psychology'}
+            </span>
+            {analysisInProgress ? 'Analyzing...' : 'Re-Analyze Queue'}
           </button>
           <button
             onClick={() => handleQuickAction('persona')}
@@ -531,16 +572,37 @@ const LinkedInCommandCenter: React.FC = () => {
             </button>
           </div>
         </div>
-        <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 overflow-y-auto max-h-[600px]">
-          {leads.map((lead, index) => (
-            <LeadCard
-              key={lead.id}
-              lead={lead}
-              onProcess={handleProcessLead}
-              priority={lead.score >= 8.5 ? 'high' : lead.score >= 7.5 ? 'medium' : 'low'}
-            />
-          ))}
-        </div>
+        {viewMode === 'grid' ? (
+          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 overflow-y-auto max-h-[600px]">
+            {leads.map((lead) => (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                onProcess={handleProcessLead}
+                priority={lead.score >= 8.5 ? 'high' : lead.score >= 7.5 ? 'medium' : 'low'}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-x-auto max-h-[600px]">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                <tr>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nom</th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Poste</th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Score</th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Description</th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leads.map((lead) => (
+                  <LeadListRow key={lead.id} lead={lead} onProcess={handleProcessLead} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Floating Help Button */}
