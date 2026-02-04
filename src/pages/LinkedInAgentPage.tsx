@@ -50,6 +50,7 @@ import mammoth from 'mammoth';
 import { BrowserFileStorage } from '@/lib/browserStorage';
 import { WebFileStorage } from '@/lib/webStorage';
 import LinkedInCommandCenter from '@/components/linkedin/LinkedInCommandCenter';
+import GhostwritingArena from '@/components/linkedin/GhostwritingArena';
 
 interface LinkedInCampaign {
   id: string;
@@ -1616,9 +1617,9 @@ export default function LinkedInAgentPage() {
           <VeilleSystem />
         </TabsContent>
 
-        {/* Onglet Générateur de Posts */}
+        {/* Onglet Générateur - Agent Arena Ghostwriting */}
         <TabsContent value="generator">
-          <PostGenerator />
+          <GhostwritingArena />
         </TabsContent>
 
         {/* Onglet Connecteurs */}
