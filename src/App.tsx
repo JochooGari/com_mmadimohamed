@@ -30,15 +30,17 @@ import AdminLinkedInPosts from './pages/AdminLinkedInPosts';
 import GEOAgentPage from './pages/GEOAgentPage';
 import WorkflowPage from './pages/WorkflowPage';
 import MCPDashboard from './pages/MCPDashboard';
+import TestimonialsPage from './pages/TestimonialsPage';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { useLocation } from 'react-router-dom';
 
 function App() {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith('/admin');
+  const isStandalone = location.pathname === '/testimonials';
   return (
     <ContentProvider>
-      {!isAdmin && <Header />}
+      {!isAdmin && !isStandalone && <Header />}
       <Routes>
         <Route path="/" element={<>
           <Hero />
@@ -56,6 +58,7 @@ function App() {
         <Route path="/pharma" element={<PharmaDemoPage />} />
         <Route path="/workflow" element={<WorkflowPage />} />
         <Route path="/mcp" element={<MCPDashboard />} />
+        <Route path="/testimonials" element={<TestimonialsPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/admin" element={<AdminDataProvider><AdminLayout /></AdminDataProvider>} >
           <Route index element={<AdminDashboard />} />
@@ -75,7 +78,7 @@ function App() {
           <Route path="content" element={<AdminPage />} />
         </Route>
       </Routes>
-      {!isAdmin && <Footer />}
+      {!isAdmin && !isStandalone && <Footer />}
     </ContentProvider>
   );
 }
