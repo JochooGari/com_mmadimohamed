@@ -91,6 +91,7 @@ interface ContentSource {
 
 export default function LinkedInAgentPage() {
   const [activeTab, setActiveTab] = useState('command');
+  const [pilotMode, setPilotMode] = useState<'copilot' | 'autopilot' | null>(null);
   const [campaigns, setCampaigns] = useState<LinkedInCampaign[]>([
     {
       id: '1',
@@ -684,24 +685,60 @@ export default function LinkedInAgentPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="flex items-center gap-2">
+          <Button
+            variant={pilotMode === 'copilot' ? 'default' : 'outline'}
+            className={`flex items-center gap-2 ${pilotMode === 'copilot' ? 'bg-blue-600 text-white hover:bg-blue-700' : ''}`}
+            onClick={() => setPilotMode(pilotMode === 'copilot' ? null : 'copilot')}
+          >
             <Eye className="h-4 w-4" />
             Mode Co-pilot
           </Button>
           <Button
-            variant="outline"
-            className="flex items-center gap-2 border-blue-500 text-blue-600 hover:bg-blue-50"
-            onClick={() => window.open('/admin/linkedin/dashboard', '_blank')}
+            variant={pilotMode === 'autopilot' ? 'default' : 'outline'}
+            className={`flex items-center gap-2 ${pilotMode === 'autopilot' ? 'bg-green-600 text-white hover:bg-green-700' : ''}`}
+            onClick={() => setPilotMode(pilotMode === 'autopilot' ? null : 'autopilot')}
           >
-            <Target className="h-4 w-4" />
-            Nouvelle Interface
-          </Button>
-          <Button className="flex items-center gap-2">
             <Zap className="h-4 w-4" />
             Mode Auto-pilot
           </Button>
         </div>
       </div>
+
+      {/* Mode Co-pilot: Zone de saisie manuelle */}
+      {pilotMode === 'copilot' && (
+        <Card className="mb-6 border-blue-200 bg-blue-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-700">
+              <Eye className="h-5 w-5" />
+              Mode Co-pilot - Saisie manuelle
+            </CardTitle>
+            <CardDescription>Collez un post LinkedIn pour générer des commentaires avec l'aide des 3 IA</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <GhostwritingArena />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Mode Auto-pilot: Posts scannés par IA */}
+      {pilotMode === 'autopilot' && (
+        <Card className="mb-6 border-green-200 bg-green-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-green-700">
+              <Zap className="h-5 w-5" />
+              Mode Auto-pilot - Posts pertinents
+            </CardTitle>
+            <CardDescription>Posts identifiés comme pertinents par les scans IA via n8n LinkedIn</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-8 text-gray-500">
+              <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin" />
+              <p>Connexion à l'API LinkedIn n8n en cours...</p>
+              <p className="text-sm mt-2">Les posts pertinents apparaîtront ici automatiquement</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-10">

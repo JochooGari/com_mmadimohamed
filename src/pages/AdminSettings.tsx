@@ -37,7 +37,7 @@ export default function AdminSettings() {
 
   // Chat test (unifié)
   const [chatProvider, setChatProvider] = useState<string>(getDefaultProvider() || 'openai');
-  const [chatModel, setChatModel] = useState<string>(getDefaultModel() || 'gpt-5');
+  const [chatModel, setChatModel] = useState<string>(getDefaultModel() || 'gpt-5.2');
   const [chatMemory, setChatMemory] = useState<boolean>(true);
   const [chatTemp, setChatTemp] = useState<number>(0.7);
   const [chatMaxTokens, setChatMaxTokens] = useState<number>(2000);
@@ -48,9 +48,9 @@ export default function AdminSettings() {
   const [chatTopP, setChatTopP] = useState<number>(0.9);
   const [chatFreqPenalty, setChatFreqPenalty] = useState<number>(0.3);
   const [chatPresencePenalty, setChatPresencePenalty] = useState<number>(0.1);
-  const allowedProviders = AI_PROVIDERS.filter(p=> ['openai','anthropic'].includes(p.id));
-  const isGpt5 = chatProvider === 'openai' && chatModel === 'gpt-5';
-  const providerModels = chatProvider === 'openai' ? ['gpt-5'] : (chatProvider === 'anthropic' ? ['claude-sonnet-4-5'] : (AI_PROVIDERS.find(p=>p.id===chatProvider)?.models || []));
+  const allowedProviders = AI_PROVIDERS;
+  const isGpt5 = chatProvider === 'openai' && chatModel.startsWith('gpt-5');
+  const providerModels = AI_PROVIDERS.find(p => p.id === chatProvider)?.models || [];
   // Reset transcript when provider/model changes and mémoire désactivée
   React.useEffect(() => {
     if (!chatMemory) setChatMessages([]);
@@ -139,7 +139,7 @@ export default function AdminSettings() {
               <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                 <div>
                   <Label>Fournisseur</Label>
-                  <select className="w-full p-2 border rounded-md" value={chatProvider} onChange={(e)=>{ setChatProvider(e.target.value); const first = (e.target.value==='openai' ? 'gpt-5' : 'claude-sonnet-4-5'); setChatModel(first); }}>
+                  <select className="w-full p-2 border rounded-md" value={chatProvider} onChange={(e)=>{ setChatProvider(e.target.value); const first = AI_PROVIDERS.find(p => p.id === e.target.value)?.models[0] || ''; setChatModel(first); }}>
                     {allowedProviders.map(p=> (<option key={p.id} value={p.id}>{p.name}</option>))}
                   </select>
                 </div>

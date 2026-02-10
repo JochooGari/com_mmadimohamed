@@ -63,7 +63,7 @@ export const getApiKey = (provider: string): string | null => {
     case 'anthropic':
       return import.meta.env.VITE_ANTHROPIC_API_KEY || null;
     case 'google':
-      return import.meta.env.VITE_GOOGLE_AI_API_KEY || null;
+      return import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_AI_API_KEY || null;
     case 'mistral':
       return import.meta.env.VITE_MISTRAL_API_KEY || null;
     case 'perplexity':
