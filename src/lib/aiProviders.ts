@@ -8,13 +8,14 @@ export interface AIProvider {
   models: string[];
 }
 
+// Modèles mis à jour - Février 2026
 export const AI_PROVIDERS: AIProvider[] = [
   {
     id: 'openai',
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     requiresAuth: true,
-    models: ['gpt-5.1', 'gpt-5', 'gpt-5-mini', 'gpt-5-nano']
+    models: ['gpt-5.2', 'gpt-5.2-pro', 'gpt-5.1', 'gpt-5', 'gpt-5-mini']
   },
   {
     id: 'anthropic',
@@ -22,10 +23,10 @@ export const AI_PROVIDERS: AIProvider[] = [
     baseUrl: 'https://api.anthropic.com/v1',
     requiresAuth: true,
     models: [
+      'claude-opus-4-6-20250201',
+      'claude-opus-4-5-20251101',
       'claude-sonnet-4-5-20250514',
-      'claude-3-5-sonnet-latest',
-      'claude-3-5-haiku-latest',
-      'claude-3-opus-latest'
+      'claude-3-5-haiku-latest'
     ]
   },
   {
@@ -33,21 +34,21 @@ export const AI_PROVIDERS: AIProvider[] = [
     name: 'Google AI',
     baseUrl: 'https://generativelanguage.googleapis.com/v1',
     requiresAuth: true,
-    models: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash']
+    models: ['gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-pro']
   },
   {
     id: 'mistral',
     name: 'Mistral AI',
     baseUrl: 'https://api.mistral.ai/v1',
     requiresAuth: true,
-    models: ['mistral-large-latest', 'mistral-medium-latest', 'mistral-small-latest', 'codestral-latest']
+    models: ['mistral-large-latest', 'mistral-medium-latest', 'codestral-latest']
   },
   {
     id: 'perplexity',
     name: 'Perplexity',
     baseUrl: 'https://api.perplexity.ai',
     requiresAuth: true,
-    models: ['sonar', 'sonar-pro', 'sonar-reasoning', 'sonar-reasoning-pro']
+    models: ['sonar-reasoning-pro', 'sonar-pro', 'sonar']
   }
 ];
 
@@ -71,6 +72,59 @@ export const getApiKey = (provider: string): string | null => {
       return null;
   }
 };
+
+// Récupérer les modèles disponibles depuis les APIs
+export async function fetchAvailableModels(provider: string): Promise<string[]> {
+  const apiKey = getApiKey(provider);
+  if (!apiKey) return [];
+
+  try {
+    switch (provider) {
+      case 'openai':
+        const openaiRes = await fetch('https://api.openai.com/v1/models', {
+          headers: { Authorization: `Bearer ${apiKey}` }
+        });
+        const openaiData = await openaiRes.json();
+        return openaiData.data
+          ?.filter((m: { id: string }) => m.id.startsWith('gpt-'))
+          .map((m: { id: string }) => m.id)
+          .sort()
+          .reverse() || [];
+
+      case 'anthropic':
+        // Anthropic n'a pas d'endpoint /models public - utiliser les versions connues
+        const claudeModels = [
+          'claude-opus-4-6-20250201',
+          'claude-opus-4-5-20251101',
+          'claude-sonnet-4-5-20250514',
+          'claude-3-5-haiku-latest'
+        ];
+        return claudeModels;
+
+      case 'google':
+        const googleRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`
+        );
+        const googleData = await googleRes.json();
+        return googleData.models
+          ?.filter((m: { name: string }) => m.name.includes('gemini'))
+          .map((m: { name: string }) => m.name.replace('models/', '')) || [];
+
+      case 'mistral':
+        const mistralRes = await fetch('https://api.mistral.ai/v1/models', {
+          headers: { Authorization: `Bearer ${apiKey}` }
+        });
+        const mistralData = await mistralRes.json();
+        return mistralData.data?.map((m: { id: string }) => m.id) || [];
+
+      default:
+        return [];
+    }
+  } catch (error) {
+    console.error(`Erreur récupération modèles ${provider}:`, error);
+    return [];
+  }
+}
 
 // Interface pour les messages de chat
 export interface ChatMessage {

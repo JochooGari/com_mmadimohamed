@@ -7,41 +7,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Settings, 
-  Key, 
-  Shield, 
-  Database, 
-  Bell, 
+import {
+  Settings,
+  Key,
+  Shield,
+  Database,
+  Bell,
   Globe,
-  Save,
-  Eye,
-  EyeOff,
-  CheckCircle,
-  AlertCircle
+  Save
 } from 'lucide-react';
-import { aiService, AI_PROVIDERS } from '@/lib/aiProviders';
+import { AI_PROVIDERS } from '@/lib/aiProviders';
 import ApiKeyDiagnostic from '@/components/ApiKeyDiagnostic';
 import { getDefaultProvider, getDefaultModel, setDefaultProviderModel, setDefaultParams } from '@/lib/appSettings';
 
 export default function AdminSettings() {
-  const [apiKeys, setApiKeys] = useState({
-    openai: '',
-    anthropic: '',
-    google: '',
-    mistral: ''
-  });
-  
-  const [showKeys, setShowKeys] = useState({
-    openai: false,
-    anthropic: false,
-    google: false,
-    mistral: false
-  });
-
-  const [testResults, setTestResults] = useState<Record<string, boolean | null>>({});
-  const [testing, setTesting] = useState<Record<string, boolean>>({});
-
   const [notifications, setNotifications] = useState({
     emailNotifications: true,
     agentFailures: true,
@@ -102,37 +81,6 @@ export default function AdminSettings() {
     setChatMessages(prev => [...prev, { role:'assistant', content: String(text) }]);
   };
 
-  const handleApiKeyChange = (provider: string, value: string) => {
-    setApiKeys(prev => ({ ...prev, [provider]: value }));
-    setTestResults(prev => ({ ...prev, [provider]: null }));
-  };
-
-  const toggleKeyVisibility = (provider: string) => {
-    setShowKeys(prev => ({ ...prev, [provider]: !prev[provider] }));
-  };
-
-  const testConnection = async (provider: string) => {
-    if (!apiKeys[provider]) return;
-    
-    setTesting(prev => ({ ...prev, [provider]: true }));
-    
-    const providerConfig = AI_PROVIDERS.find(p => p.id === provider);
-    if (!providerConfig) return;
-    
-    try {
-      const result = await aiService.testConnection(provider, providerConfig.models[0]);
-      setTestResults(prev => ({ ...prev, [provider]: result }));
-    } catch (error) {
-      setTestResults(prev => ({ ...prev, [provider]: false }));
-    } finally {
-      setTesting(prev => ({ ...prev, [provider]: false }));
-    }
-  };
-
-  const saveApiKeys = () => {
-    console.log('Sauvegarde des clés API:', apiKeys);
-  };
-
   const saveNotifications = () => {
     console.log('Sauvegarde des notifications:', notifications);
   };
@@ -178,98 +126,6 @@ export default function AdminSettings() {
         <TabsContent value="api-keys">
           <div className="space-y-6">
             <ApiKeyDiagnostic />
-            
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Key className="h-5 w-5" />
-                Configuration des fournisseurs IA
-              </CardTitle>
-              <CardDescription>
-                Configurez vos clés API pour les différents fournisseurs d'intelligence artificielle
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {AI_PROVIDERS.map(provider => (
-                <div key={provider.id} className="space-y-4 p-4 border rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-semibold">{provider.name}</h3>
-                      <Badge variant="secondary">{provider.models.length} modèles</Badge>
-                      {testResults[provider.id] === true && (
-                        <Badge variant="default" className="bg-green-100 text-green-700">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Connecté
-                        </Badge>
-                      )}
-                      {testResults[provider.id] === false && (
-                        <Badge variant="destructive">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          Erreur
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => testConnection(provider.id)}
-                        disabled={!apiKeys[provider.id] || testing[provider.id]}
-                      >
-                        {testing[provider.id] ? 'Test...' : 'Tester'}
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor={`${provider.id}-key`}>Clé API</Label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Input
-                          id={`${provider.id}-key`}
-                          type={showKeys[provider.id] ? 'text' : 'password'}
-                          value={apiKeys[provider.id]}
-                          onChange={(e) => handleApiKeyChange(provider.id, e.target.value)}
-                          placeholder={`Entrez votre clé API ${provider.name}`}
-                          className="pr-10"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3"
-                          onClick={() => toggleKeyVisibility(provider.id)}
-                        >
-                          {showKeys[provider.id] ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      URL de base: {provider.baseUrl}
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {provider.models.map(model => (
-                        <Badge key={model} variant="outline" className="text-xs">
-                          {model}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <div className="flex justify-end pt-4">
-                <Button onClick={saveApiKeys} className="flex items-center gap-2">
-                  <Save className="h-4 w-4" />
-                  Sauvegarder les clés API
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
           </div>
         </TabsContent>
 

@@ -45,7 +45,6 @@ import KnowledgeChat from '@/components/KnowledgeChat';
 import SkillsKB from '@/components/SkillsKB';
 import VeilleSystem from '@/components/VeilleSystem';
 import PostGenerator from '@/components/PostGenerator';
-import Connectors from '@/components/Connectors';
 import mammoth from 'mammoth';
 import { BrowserFileStorage } from '@/lib/browserStorage';
 import { WebFileStorage } from '@/lib/webStorage';
@@ -214,23 +213,6 @@ export default function LinkedInAgentPage() {
     language: 'fr'
   });
 
-  const [engagementRules, setEngagementRules] = useState([
-    {
-      id: '1',
-      trigger: 'question + sentiment_positive',
-      action: 'respond_helpful',
-      delay: '15min',
-      template: 'Excellente question ! Voici 3 points clés...'
-    },
-    {
-      id: '2',
-      trigger: 'objection_prix',
-      action: 'value_response',
-      delay: 'immediate',
-      template: 'Je comprends votre préoccupation. Nos clients voient un ROI de...'
-    }
-  ]);
-
   const [currentCampaign, setCurrentCampaign] = useState({
     name: '',
     objective: 'reach',
@@ -241,11 +223,6 @@ export default function LinkedInAgentPage() {
     hashtags: ['#ESN', '#Recrutement', '#IT'],
     schedule: { frequency: '3/week', times: ['09:00', '14:00', '17:00'] }
   });
-
-  const generateContent = async (step: number) => {
-    console.log(`Generating content - Step ${step}`);
-    // Simulation du pipeline en 3 étapes
-  };
 
   // useEffect pour sauvegarder en localStorage
   React.useEffect(() => {
@@ -727,7 +704,7 @@ export default function LinkedInAgentPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-12">
+        <TabsList className="grid w-full grid-cols-10">
           <TabsTrigger value="command" className="flex items-center gap-2 bg-teal-500/10 text-teal-600 data-[state=active]:bg-teal-500 data-[state=active]:text-white">
             <Target className="h-4 w-4" />
             Command
@@ -752,18 +729,9 @@ export default function LinkedInAgentPage() {
             <Zap className="h-4 w-4" />
             Générateur
           </TabsTrigger>
-          <TabsTrigger value="connectors">Connecteurs</TabsTrigger>
           <TabsTrigger value="campaign" className="flex items-center gap-2">
             <Target className="h-4 w-4" />
             Campagne
-          </TabsTrigger>
-          <TabsTrigger value="generation" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Génération
-          </TabsTrigger>
-          <TabsTrigger value="engagement" className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Engagement
           </TabsTrigger>
           <TabsTrigger value="analytics" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
@@ -1622,11 +1590,6 @@ export default function LinkedInAgentPage() {
           <GhostwritingArena />
         </TabsContent>
 
-        {/* Onglet Connecteurs */}
-        <TabsContent value="connectors">
-          <Connectors />
-        </TabsContent>
-
         {/* Onglet Campagne */}
         <TabsContent value="campaign">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1825,256 +1788,6 @@ export default function LinkedInAgentPage() {
                       <input type="checkbox" />
                       <span className="text-sm">Newsletter monthly</span>
                     </label>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Onglet Génération */}
-        <TabsContent value="generation">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Pipeline de génération */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Pipeline de génération</CardTitle>
-                <CardDescription>Processus automatisé en 3 étapes</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="text-center">
-                  <Button 
-                    size="lg" 
-                    className="text-lg px-8 py-4"
-                    onClick={() => generateContent(1)}
-                  >
-                    <Play className="h-5 w-5 mr-2" />
-                    Générer (Étape 1→2→3)
-                  </Button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-blue-600 font-semibold">1</span>
-                      </div>
-                      <h3 className="font-semibold">Analyse</h3>
-                      <Badge variant="outline">Ready</Badge>
-                    </div>
-                    <p className="text-sm text-gray-600 ml-11">
-                      Ingestion des transcripts/docs → extraction thèmes, problèmes, preuves
-                    </p>
-                  </div>
-
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                        <span className="text-orange-600 font-semibold">2</span>
-                      </div>
-                      <h3 className="font-semibold">Stratégie</h3>
-                      <Badge variant="secondary">Pending</Badge>
-                    </div>
-                    <p className="text-sm text-gray-600 ml-11">
-                      Génération de 6-12 angles par persona + briefs par format
-                    </p>
-                  </div>
-
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                        <span className="text-green-600 font-semibold">3</span>
-                      </div>
-                      <h3 className="font-semibold">Rédaction</h3>
-                      <Badge variant="secondary">Pending</Badge>
-                    </div>
-                    <p className="text-sm text-gray-600 ml-11">
-                      Génération posts LinkedIn (120-180 mots) avec QA automatique
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* QA et Score */}
-            <Card>
-              <CardHeader>
-                <CardTitle>QA automatique & Score</CardTitle>
-                <CardDescription>Vérification qualité avant publication</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      Longueur respectée
-                    </span>
-                    <Badge variant="default">✓</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 text-orange-600" />
-                      Jargon technique
-                    </span>
-                    <Badge variant="outline">2 termes</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      Promesse mesurable
-                    </span>
-                    <Badge variant="default">✓</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 text-yellow-600" />
-                      Preuves chiffrées
-                    </span>
-                    <Badge variant="outline">Manque 1</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      CTA présent
-                    </span>
-                    <Badge variant="default">✓</Badge>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-green-600 mb-2">87/100</div>
-                  <p className="text-sm text-gray-600">Score de publication</p>
-                  <Badge variant="default" className="mt-2">Recommandé</Badge>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Suggestions d'amélioration:</Label>
-                  <ul className="text-sm space-y-1 text-gray-600">
-                    <li>• Ajouter un chiffre dans le hook (ex: "47% des ESN...")</li>
-                    <li>• Simplifier "staffing bench" → "consultants disponibles"</li>
-                    <li>• Renforcer la promesse avec un cas client</li>
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Onglet Engagement */}
-        <TabsContent value="engagement">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Boîte de réception */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5" />
-                  Boîte de réception unifiée
-                </CardTitle>
-                <CardDescription>Comments & DMs à traiter</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div className="p-3 border rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">@jean.martin</span>
-                      <Badge variant="default">Question</Badge>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-2">
-                      "Comment gérez-vous le staffing en période creuse ?"
-                    </p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline">Répondre auto</Button>
-                      <Button size="sm" variant="outline">→ DM</Button>
-                      <Button size="sm" variant="ghost">Ignorer</Button>
-                    </div>
-                  </div>
-
-                  <div className="p-3 border rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">@marie.dubois</span>
-                      <Badge variant="secondary">Félicitations</Badge>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-2">
-                      "Excellent post ! Très pertinent pour notre contexte ESN"
-                    </p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline">Remercier</Button>
-                      <Button size="sm" variant="ghost">Liker seulement</Button>
-                    </div>
-                  </div>
-
-                  <div className="p-3 border border-red-200 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">@critique.pro</span>
-                      <Badge variant="destructive">Objection prix</Badge>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-2">
-                      "Encore un consultant qui vend du rêve à prix d'or..."
-                    </p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline">Valeur + Cas</Button>
-                      <Button size="sm" variant="outline">Escalader</Button>
-                    </div>
-                  </div>
-                </div>
-
-                <Button className="w-full">
-                  Traiter automatiquement (3 messages)
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Règles d'engagement */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Règles d'auto-réponse</CardTitle>
-                <CardDescription>Configuration des réponses automatiques</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {engagementRules.map(rule => (
-                  <div key={rule.id} className="p-4 border rounded-lg space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline">{rule.trigger}</Badge>
-                      <Button variant="ghost" size="sm">
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="text-sm space-y-1">
-                      <p><strong>Action:</strong> {rule.action}</p>
-                      <p><strong>Délai:</strong> {rule.delay}</p>
-                      <p><strong>Template:</strong> {rule.template}</p>
-                    </div>
-                  </div>
-                ))}
-
-                <Button variant="outline" className="w-full flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  Ajouter une règle
-                </Button>
-
-                <Separator />
-
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-sm font-semibold">Blacklist (mots/comptes)</Label>
-                    <div className="flex gap-2 mt-1">
-                      <Input placeholder="spam, inappropriate..." className="flex-1" />
-                      <Button size="sm">+</Button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-semibold">VIP (réponse prioritaire)</Label>
-                    <div className="flex gap-2 mt-1">
-                      <Input placeholder="@influenceur, @client..." className="flex-1" />
-                      <Button size="sm">+</Button>
-                    </div>
                   </div>
                 </div>
               </CardContent>
